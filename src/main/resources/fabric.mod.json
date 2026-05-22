@@ -8,7 +8,7 @@
   "contact": {
     "PyXiion": "me@pyxiion.ru"
   },
-  "license": "All-Rights-Reserved",
+  "license": "LGPL-3.0",
   "environment": "*",
   "entrypoints": {
     "main": [
