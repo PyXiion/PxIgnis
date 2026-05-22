@@ -4,17 +4,22 @@ import me.lucko.fabric.api.permissions.v0.Permissions
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
+import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.command.permission.PermissionLevel
 import net.minecraft.server.command.CommandManager
 import net.minecraft.text.Text
 import org.luaj.vm2.LuaError
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import ru.pyxiion.pxrp.storage.JsonBackend
+import ru.pyxiion.pxrp.storage.StorageManager
 
 class PxRp : ModInitializer {
     companion object {
         val logger: Logger = LoggerFactory.getLogger("PxRP")
         lateinit var instance: PxRp
+        var storageManager: StorageManager? = null
     }
 
     lateinit var luaLoader: LuaCmdLoader
@@ -24,11 +29,21 @@ class PxRp : ModInitializer {
         instance = this
         ServerLifecycleEvents.SERVER_STARTED.register(fun(server) {
             try {
-                luaLoader = LuaCmdLoader(server)
+                val storagePath = FabricLoader.getInstance().configDir.resolve("pxrp/storage")
+                storageManager = StorageManager(JsonBackend(storagePath))
+                luaLoader = LuaCmdLoader(server, storageManager!!)
                 luaLoader.reload()
             } catch (e: Throwable) {
                 logger.error("Ошибка при запуске PxRP: ${e.message}", e)
             }
+        })
+
+        ServerLifecycleEvents.SERVER_STOPPING.register(fun(server) {
+            storageManager?.close()
+        })
+
+        ServerPlayConnectionEvents.DISCONNECT.register(fun(handler, server) {
+            storageManager?.removePlayerData(handler.player.uuid.toString())
         })
 
         CommandRegistrationCallback.EVENT.register(fun(dispatcher, reg, env) {

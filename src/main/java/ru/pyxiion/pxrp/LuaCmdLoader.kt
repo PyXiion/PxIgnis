@@ -20,11 +20,10 @@ import org.luaj.vm2.lib.jse.JseBaseLib
 import org.luaj.vm2.lib.jse.JseMathLib
 import ru.pyxiion.pxrp.PxRp.Companion.logger
 import ru.pyxiion.pxrp.api.LuaMcApi
+import ru.pyxiion.pxrp.storage.StorageManager
 import ru.pyxiion.pxrp.types.LuaArgumentType
 import ru.pyxiion.pxrp.api.Player
 import java.io.FileOutputStream
-import java.io.Reader
-import java.util.concurrent.ConcurrentMap
 import kotlin.io.path.exists
 
 data class LuaCommandArgument(
@@ -33,7 +32,8 @@ data class LuaCommandArgument(
 )
 
 class LuaCmdLoader(
-    private val server: MinecraftServer
+    private val server: MinecraftServer,
+    private val storageManager: StorageManager
 ) {
     private lateinit var globals: Globals
     private val argumentTypes = mapOf(
@@ -62,7 +62,7 @@ class LuaCmdLoader(
 
     private var currentContext: CommandContext<ServerCommandSource>? = null
 
-    private val api = LuaMcApi(server)
+    private val api = LuaMcApi(server, storageManager)
 
     fun prepareGlobals() {
         globals = Globals()
@@ -92,14 +92,16 @@ class LuaCmdLoader(
         logger.info("PxRP зарегистрировал свои команды")
     }
 
-    private fun getLuaFile(): Reader {
+    private fun getLuaFile(): String {
         val path = FabricLoader.getInstance().configDir.resolve("pxrp.lua")
         if (!path.exists()) {
             logger.info("Файл pxrp.lua не найден, копируем файл по умолчанию...")
-            this::class.java.getResourceAsStream("/pxrp.lua")!!.copyTo(FileOutputStream(path.toFile()))
+            val resource = this::class.java.getResourceAsStream("/pxrp.lua")
+                ?: throw IllegalStateException("Default pxrp.lua not found in mod JAR")
+            resource.copyTo(FileOutputStream(path.toFile()))
         }
 
-        return path.toFile().bufferedReader()
+        return path.toFile().bufferedReader().use { it.readText() }
     }
 
 

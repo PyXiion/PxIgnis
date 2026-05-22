@@ -3,9 +3,7 @@ package ru.pyxiion.pxrp.api
 import net.minecraft.nbt.NbtCompound
 import net.minecraft.nbt.NbtOps
 import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket
-import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket
 import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket
-import net.minecraft.network.packet.s2c.play.TitleS2CPacket
 import net.minecraft.particle.ParticleEffect
 import net.minecraft.registry.Registries
 import net.minecraft.registry.Registry
@@ -24,9 +22,11 @@ import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import ru.pyxiion.pxrp.asVarArgFunction
 import ru.pyxiion.pxrp.luaTableOf
+import ru.pyxiion.pxrp.storage.StorageManager
 
 class LuaMcApi(
-    private val server: MinecraftServer
+    private val server: MinecraftServer,
+    private val storage: StorageManager
 ) {
     private fun <T> getRegistryKey(registryType: RegistryKey<Registry<T>>, key: String): RegistryKey<T> {
         return RegistryKey.of(registryType, Identifier.of(key))
@@ -37,7 +37,19 @@ class LuaMcApi(
         val registryKey = getRegistryKey(RegistryKeys.PARTICLE_TYPE, id)
         val particleType = Registries.PARTICLE_TYPE.get(registryKey)
         check(particleType != null) { "Failed to get particle $id. Particle type not found." }
-        return particleType.codec.codec().parse(server.registryManager.getOps(NbtOps.INSTANCE), NbtCompound()).orThrow
+
+        if (particleType is ParticleEffect) {
+            return particleType
+        }
+
+        return try {
+            particleType.codec.codec().parse(server.registryManager.getOps(NbtOps.INSTANCE), NbtCompound()).orThrow
+        } catch (e: IllegalStateException) {
+            throw IllegalArgumentException(
+                "Particle '$id' requires additional parameters and cannot be used with mc.particle(). " +
+                "Use simple particles like minecraft:gust or minecraft:campfire_cosmoke instead."
+            )
+        }
     }
 
     private fun requireWorld(arg: LuaValue): ServerWorld {
@@ -114,6 +126,10 @@ class LuaMcApi(
         }
     }
 
+    private fun luaTime(args: Varargs): Varargs {
+        return LuaValue.valueOf(System.currentTimeMillis() / 1000.0)
+    }
+
     private fun broadcast(args: Varargs) {
         require(args.narg() in 1..2) { "broadcast(text, overlay = false) requires 1..2 arguments" }
         val text = args.arg(1).checkjstring()
@@ -123,7 +139,7 @@ class LuaMcApi(
     }
 
     private fun broadcastInRange(args: Varargs) {
-        require(args.narg() in 6..7) { "broadcastInRange(text, x, y, z, range, world, overlay = false) requires 5..6 arguments" }
+        require(args.narg() in 6..7) { "broadcastInRange(text, x, y, z, range, world, overlay = false) requires 6..7 arguments" }
         val text = args.arg(1).checkjstring()
         val (x, y, z, range) = (2..5).map { args.arg(it).checkdouble() }
         val world = requireWorldKey(args.arg(6))
@@ -137,7 +153,9 @@ class LuaMcApi(
             "particle" to this::particle.asVarArgFunction(),
             "broadcast" to this::broadcast.asVarArgFunction(),
             "playSound" to this::playSound.asVarArgFunction(),
-            "broadcastInRange" to this::broadcastInRange.asVarArgFunction()
+            "broadcastInRange" to this::broadcastInRange.asVarArgFunction(),
+            "data" to storage.getGlobalData(),
+        "time" to this::luaTime.asVarArgFunction()
         )
     }
 }
