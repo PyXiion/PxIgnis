@@ -19,6 +19,7 @@ import org.luaj.vm2.lib.jse.CoerceJavaToLua
 import org.luaj.vm2.lib.jse.JseBaseLib
 import org.luaj.vm2.lib.jse.JseMathLib
 import ru.pyxiion.pxrp.PxRp.Companion.logger
+import ru.pyxiion.pxrp.api.Context
 import ru.pyxiion.pxrp.api.LuaMcApi
 import ru.pyxiion.pxrp.storage.StorageManager
 import ru.pyxiion.pxrp.types.LuaArgumentType
@@ -26,16 +27,22 @@ import ru.pyxiion.pxrp.api.Player
 import java.io.FileOutputStream
 import kotlin.io.path.exists
 
+// Represents a parsed Lua command argument with its name and argument type identifier (e.g. "text", "target")
 data class LuaCommandArgument(
     val name: String,
     val type: String
 )
 
+// Loads and manages Lua-based commands from the pxrp.lua configuration file.
+// Bridges Lua script functions with Minecraft's Brigadier command system.
 class LuaCmdLoader(
     private val server: MinecraftServer,
     private val storageManager: StorageManager
 ) {
+    // Lua global environment shared across all script executions
     private lateinit var globals: Globals
+
+    // Maps argument type names (used in Lua scripts) to their Brigadier node builders and runtime value extractors
     private val argumentTypes = mapOf(
         "text" to object : LuaArgumentType {
             override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): String {
@@ -58,12 +65,14 @@ class LuaCmdLoader(
         }
     )
 
+    // Manages the registered Brigadier command tree for all Lua-defined commands
     private var commandManager: LuaCommandManager? = null
 
-    private var currentContext: CommandContext<ServerCommandSource>? = null
-
+    // Provides the Minecraft API table exposed to Lua scripts
     private val api = LuaMcApi(server, storageManager)
 
+    // Sets up the Lua globals environment: installs standard libraries and registers
+    // the `register` function and `mc` API table for Lua scripts
     fun prepareGlobals() {
         globals = Globals()
         LuaC.install(globals)
@@ -80,6 +89,8 @@ class LuaCmdLoader(
         globals.set("mc", api.toTable())
     }
 
+    // (Re)loads the pxrp.lua script: reads the file, reinitializes globals,
+    // executes the script, and registers all commands defined in it
     fun reload() {
         if (commandManager == null)
             commandManager = LuaCommandManager(server)
@@ -92,6 +103,8 @@ class LuaCmdLoader(
         logger.info("PxRP зарегистрировал свои команды")
     }
 
+    // Reads the pxrp.lua file from the config directory. If it doesn't exist,
+    // copies the default bundled version from the mod JAR into the config directory
     private fun getLuaFile(): String {
         val path = FabricLoader.getInstance().configDir.resolve("pxrp.lua")
         if (!path.exists()) {
@@ -105,6 +118,9 @@ class LuaCmdLoader(
     }
 
 
+    // Called from Lua as `register(command, arguments, handler, permission)`.
+    // Parses the argument definitions, builds a Brigadier executor that dispatches
+    // to the Lua handler function, and registers the command with the command manager
     private fun register(args: Varargs): Varargs {
         require(args.narg() in 3..4) { "register(command, arguments, handler, permission = nil) requires 3..4 arguments" }
         val commandName = args.arg(1).checkjstring()
@@ -114,12 +130,12 @@ class LuaCmdLoader(
 
         require(handler.isfunction()) { "Command handler must be a function" }
 
-        val argsInfo = parseArgs(arguments)
+        val parsedArgs = parseArgs(arguments)
+
         val executor =
             fun(ctx: CommandContext<ServerCommandSource>): Int {
                 try {
-                    val luaArgs = getLuaArgs(ctx, argsInfo.map { LuaCommandArgument(it.second.name, it.first) })
-                    executeLuaWithCommandContext(ctx, luaArgs, handler.checkfunction())
+                    executeLuaCommand(ctx, parsedArgs, handler.checkfunction())
                     return 1
                 } catch (e: CommandSyntaxException) {
                     throw e
@@ -133,11 +149,13 @@ class LuaCmdLoader(
                 return 0
             }
 
-        commandManager!!.addCommand(commandName, argsInfo.map { it.second }, executor, permission)
+        commandManager!!.addCommand(commandName, parsedArgs.map { it.second }, executor, permission)
 
         return NIL
     }
 
+    // Parses Lua argument type strings (e.g. "target" or "msg:text") into pairs of
+    // [typeName, BrigadierArgumentNode]. Auto-generates unique names for unnamed arguments
     private fun parseArgs(args: List<String>): List<Pair<String, ArgumentCommandNode<ServerCommandSource, *>>> {
         val result = mutableListOf<Pair<String, ArgumentCommandNode<ServerCommandSource, *>>>()
         val usedNames = mutableMapOf<String, Int>()
@@ -158,29 +176,27 @@ class LuaCmdLoader(
         return result
     }
 
-    private fun getLuaArgs(ctx: CommandContext<ServerCommandSource>, argsInfo: List<LuaCommandArgument>): Array<LuaValue> {
-        return argsInfo.map {
+    // Prepares the Lua call arguments: first argument is a Context object (wrapping the
+    // executing player), followed by the resolved command argument values (e.g. strings or Players)
+    private fun prepareLuaArgAndContext(ctx: CommandContext<ServerCommandSource>, argsInfo: List<Pair<String, ArgumentCommandNode<ServerCommandSource, *>>>): Array<LuaValue> {
+        val args = argsInfo.map { LuaCommandArgument(it.second.name, it.first) }
+
+        val player = Player.fromMcPlayer(ctx.source.playerOrThrow)
+        val luaCtx = Context(player)
+
+        return arrayOf(CoerceJavaToLua.coerce(luaCtx)) + args.map {
             CoerceJavaToLua.coerce(argumentTypes[it.type]!!.getArg(ctx, it.name))
         }.toTypedArray()
     }
 
-    private fun executeLuaWithCommandContext(ctx: CommandContext<ServerCommandSource>, args: Array<LuaValue>, function: LuaFunction) {
-        val player = Player.fromMcPlayer(ctx.source.playerOrThrow)
-
-        // prepare vars
-        currentContext = ctx
-        globals.set("player", CoerceJavaToLua.coerce(player))
-
-        // call
+    // Invokes the Lua handler function with the prepared context and arguments,
+    // then clears temporary global state (`player` and `currentContext`)
+    private fun executeLuaCommand(ctx: CommandContext<ServerCommandSource>, argsInfo: List<Pair<String, ArgumentCommandNode<ServerCommandSource, *>>>, function: LuaFunction) {
         try {
-            function.invoke(args)
+            val luaArgs = prepareLuaArgAndContext(ctx, argsInfo)
+            function.invoke(luaArgs)
         } catch (e: LuaError) {
-//            error(e.message!!)
             throw e
         }
-
-        // unset vars
-        globals.set("player", NIL)
-        currentContext = null
     }
 }
