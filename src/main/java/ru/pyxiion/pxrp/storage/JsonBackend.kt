@@ -3,6 +3,8 @@ package ru.pyxiion.pxrp.storage
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -20,8 +22,13 @@ class JsonBackend(private val root: Path) : DataBackend {
                 fixIntegers((gson.fromJson(reader, type) as? Map<String, Any?>) ?: linkedMapOf())
             }
         } catch (_: Exception) {
+            logger.warn("Fauked to read: $file. The data will be emptied.")
             linkedMapOf()
         }
+    }
+
+    companion object {
+        private val logger: Logger = LoggerFactory.getLogger("PxRP/JsonBackend")
     }
 
     @Suppress("UNCHECKED_CAST")
