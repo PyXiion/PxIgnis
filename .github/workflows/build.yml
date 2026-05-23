@@ -53,5 +53,8 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: pxrp-*.jar
+          files: |
+            pxrp-*.jar
+            !pxrp-*-all.jar
+            !pxrp-*-sources.jar
           generate_release_notes: true

@@ -21,7 +21,7 @@
   "depends": {
     "fabricloader": ">=${loader_version}",
     "fabric": "*",
-    "minecraft": "${minecraft_version}",
+    "minecraft": ">=1.21-",
     "fabric-language-kotlin": ">=1.10.8+kotlin.1.9.0"
   },
   "accessWidener" : "pxrp.accesswidener",

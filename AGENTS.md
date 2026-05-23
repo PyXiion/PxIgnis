@@ -2,7 +2,7 @@
 
 ## What it is
 
-A Fabric mod (Minecraft 1.21.11) that lets server admins define chat commands via Lua scripts. No Java/Kotlin mod code needed. Kotlin-based, single-module Gradle project.
+A Fabric mod (Minecraft 1.21.x) that lets server admins define chat commands via Lua scripts. Kotlin-based, single-module Gradle project.
 
 ## Build & run
 
@@ -13,7 +13,6 @@ A Fabric mod (Minecraft 1.21.11) that lets server admins define chat commands vi
 ```
 
 - Java 21, Kotlin 2.2.21, Fabric Loom 1.16
-- Relies on `fabric-language-kotlin` ≥1.10.8
 - Shadow plugin relocates `org.luaj` → `ru.pyxiion.lib.luaj`
 - Access widener: `src/main/resources/pxrp.accesswidener` (empty v2 header — no entries yet)
 - `run/` is gitignored (dev server/client output)
@@ -80,13 +79,10 @@ src/main/
 
 **Kotlin-side log and user-facing messages are in Russian** — do not assume they are bugs. The bundled `pxrp.lua` example file is bilingual (English + Russian).
 
-## Lua tooling
-
-`.luarc.json` disables `undefined-global` diagnostic globally and whitelists `particle` as a known global. Relevant for LuaLS in editors.
-
 ## Notable conventions
 
 - Mixin accessors on `CommandNode` (`getChildren`, `getLiterals`, `getCommand`, `setCommand`, `setRequirement`) used to dynamically patch the Brigadier tree at runtime
 - `KotlinInstance.kt` and `coerce/` exist but `coerce/KotlinToLua.kt` is commented out — don't expect active coercion code
 - No test directory or test dependencies found
 - No CI workflow found
+- `fabric.mod.json` uses `"minecraft": ">=1.21-"` for version range (expanded from `gradle.properties` at build time)
