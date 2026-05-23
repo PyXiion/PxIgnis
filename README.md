@@ -1,6 +1,6 @@
 # PxRP
 
-> [!NOTICE]
+> [!NOTE]
 > Beware that this project is also coded by AI.
 
 A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define custom chat commands using Lua scripts — no Java or Kotlin mod code required.
