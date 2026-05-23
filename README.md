@@ -1,7 +1,9 @@
 # PxRP
 
 > [!NOTE]
-> Beware that this project is also coded by AI.
+> Beware that this project is also coded by AI. Humans included too.
+
+![version](https://img.shields.io/badge/version-0.2.2-blue)
 
 A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define custom chat commands using Lua scripts — no Java or Kotlin mod code required.
 
@@ -18,7 +20,7 @@ A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define
 
 ## Requirements
 
-- Minecraft 1.21.11
+- Minecraft 1.21.x
 - Fabric Loader ≥0.19.2
 - Fabric API ≥0.141.4
 - Fabric Language Kotlin ≥1.10.8
@@ -47,10 +49,17 @@ end)
 
 ### Arguments
 
+Argument types can be given custom names with the `name:type` syntax:
+
 ```lua
 register("rp kill", {"target"}, function(ctx, target)
     broadcastFormat "*{p.name} killed {t.name}*" {p = ctx.player, t = target}
 end, "rp.kill")
+
+-- Custom arg names are useful when you have multiple args of the same type:
+register("try", {"action:text"}, function(ctx, action)
+    mc.broadcast(ctx.player.name .. " tries to " .. action)
+end)
 ```
 
 ### Persistent player data
@@ -98,19 +107,69 @@ register("rp event", {}, function()
 end)
 ```
 
-### Higher-level API
+### Bundled Lua libraries
 
-The bundled `simple.lua` provides `registerSimple` for concise formatting:
+The mod ships with two Lua libraries loaded via `require`:
 
 ```lua
-registerSimple("wave", {}, "{ctx.player.name} waves at everyone!", 15)
+require "format"    -- provides format() and broadcastFormat()
+require "simple"    -- provides registerSimple()
 ```
 
-The bundled `format.lua` provides the `format` and `broadcastFormat` functions:
+Include these at the top of your `pxrp.lua` (or any script) to use them.
+
+#### `format.lua` — template engine
+
+Templates use `{expr}` placeholders with dot-notation access:
+
+```lua
+format(pattern)(args)              -- returns formatted string
+broadcastFormat(pattern)(args)     -- formats and broadcasts in one call
+```
 
 ```lua
 broadcastFormat "*{p.name} throws a fireball at {t.name}*" {p = ctx.player, t = target}
 ```
+
+#### `simple.lua` — concise command registration
+
+`registerSimple` creates a command that formats and broadcasts a template, passing `p = ctx.player` automatically:
+
+```lua
+registerSimple(cmd, args, template, range?, overlay?)
+```
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `cmd` | `string` | Command path |
+| `args` | `table` | Argument type list (same as `register`) |
+| `template` | `string` | Format template (`{p.name}`, `{argName}`, etc.) |
+| `range` | `number?` | If > 0, uses `broadcastInRange` with this radius |
+| `overlay` | `boolean\|number?` | Send as title overlay: `true` = 7s, or a custom tick count |
+
+```lua
+-- Global broadcast
+registerSimple("wave", {}, "*{p.name} waves at everyone*", 15)    -- range 15 blocks
+registerSimple("bow", {}, "*{p.name} bows*", nil, true)           -- title overlay
+registerSimple("cheer", {}, "*{p.name} cheers*", 20, 60)          -- both
+```
+
+### Built-in Lua standard libraries
+
+PxRP loads the following Lua standard libraries via [`luaj`](https://github.com/luaj/luaj) (targeting Lua 5.1):
+
+| Library | Globals | Reference |
+|---------|---------|-----------|
+| **Base** | `type`, `tostring`, `tonumber`, `pairs`, `ipairs`, `pcall`, `error`, `assert`, `select`, `unpack`, `_G`, etc. | [§2–6](https://www.lua.org/manual/5.1/manual.html#2) |
+| **math** | `math.random`, `math.randomseed`, `math.floor`, `math.ceil`, `math.sin`, `math.cos`, `math.sqrt`, `math.min`, `math.max`, `math.pi`, `math.huge` | [§5.6](https://www.lua.org/manual/5.1/manual.html#5.6) |
+| **string** | `string.format`, `string.sub`, `string.find`, `string.match`, `string.gmatch`, `string.gsub`, `string.len`, `string.byte`, `string.char`, `string.rep`, `string.lower`, `string.upper` | [§5.4](https://www.lua.org/manual/5.1/manual.html#5.4) |
+| **table** | `table.insert`, `table.remove`, `table.sort`, `table.concat`, `table.maxn` | [§5.5](https://www.lua.org/manual/5.1/manual.html#5.5) |
+| **bit32** | `bit32.band`, `bit32.bor`, `bit32.bxor`, `bit32.lshift`, `bit32.rshift`, `bit32.arshift`, `bit32.bnot` | [luaj wiki](https://github.com/luaj/luaj) |
+| **package** | `require`, `package.path`, `package.loaded`, `package.preload` | [§5.3](https://www.lua.org/manual/5.1/manual.html#5.3) |
+
+The following standard libraries are **not** loaded: `io`, `os`, `coroutine`, `debug`.
+
+See the complete [Lua 5.1 Reference Manual](https://www.lua.org/manual/5.1/) for detailed documentation.
 
 ## Lua API
 
@@ -119,7 +178,7 @@ broadcastFormat "*{p.name} throws a fireball at {t.name}*" {p = ctx.player, t = 
 Registers a Brigadier command.
 
 - `path` — Command path string, e.g. `"rp kill"`.
-- `arguments` — Table of argument types, e.g. `{"target", "text"}`.
+- `arguments` — Table of argument types, e.g. `{"target", "text"}`. Use `name:type` syntax for custom names (e.g. `"action:text"`), otherwise names are auto-generated.
 - `handler` — Lua function called when the command executes. The first argument is always a Context object (`ctx`); subsequent arguments are the parsed command arguments.
 - `permission` — Optional permission node string.
 
@@ -149,7 +208,7 @@ The player object is accessed via `ctx.player` inside a command handler:
 A Lua table that persists to disk (<config>/pxrp/storage/players/<uuid>.json). Data is written to disk when:
 - The server stops
 - A player disconnects
-- `/pxrp reload` is executed
+- `/pxrp reload` or F3+T is executed
 
 This batching approach improves performance for scripts that make multiple data assignments.
 
