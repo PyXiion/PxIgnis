@@ -89,15 +89,6 @@ class LuaCommandManager(
             dispatcher.root.addChild(v)
         }
         updateCommandLists()
-
-        val sb = StringBuilder()
-        lateinit var f: (CommandNode<ServerCommandSource>, Int) -> Unit
-        f = fun(node: CommandNode<ServerCommandSource>, depth: Int) {
-            sb.append("${" ".repeat(depth)} $node\n")
-            node.children.forEach { c -> f(c, depth + 2) }
-        }
-        f(dispatcher.root, 5);
-        PxRp.logger.info("Tree right now: \n{}", sb.toString());
     }
 
     /**
