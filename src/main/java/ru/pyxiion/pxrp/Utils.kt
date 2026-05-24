@@ -3,6 +3,8 @@ package ru.pyxiion.pxrp
 import me.lucko.fabric.api.permissions.v0.Permissions
 import net.minecraft.command.CommandSource
 import net.minecraft.entity.Entity
+import net.minecraft.util.math.BlockPos
+import net.minecraft.util.math.Vec3d
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
@@ -56,4 +58,17 @@ inline fun ((Varargs) -> Unit).asVarArgFunction() = object : VarArgFunction() {
         this@asVarArgFunction(args)
         return NIL
     }
+}
+
+fun LuaValue.toVec3d(): Vec3d {
+    val t = checktable()
+    val x = t.get("x").let { if (it.isnumber()) it.todouble() else t.get(1).checkdouble() }
+    val y = t.get("y").let { if (it.isnumber()) it.todouble() else t.get(2).checkdouble() }
+    val z = t.get("z").let { if (it.isnumber()) it.todouble() else t.get(3).checkdouble() }
+    return Vec3d(x, y, z)
+}
+
+fun LuaValue.toBlockPos(): BlockPos {
+    val v = toVec3d()
+    return BlockPos.ofFloored(v.x, v.y, v.z)
 }

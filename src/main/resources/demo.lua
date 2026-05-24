@@ -19,6 +19,7 @@
 --   8. Choice & optional  — choice=... syntax and [name:type] optional args
 --   9. Player info        — reading aggregate entity data
 --  10. Item & inventory   — kits, hats, rename, repair, invsee
+--  11. World & entity     — spawn, tags, time, weather
 -- ==========================================================================
 
 
@@ -63,7 +64,7 @@ function sethomeHandler(ctx, name)
         x     = pos.x,
         y     = pos.y,
         z     = pos.z,
-        world = player.world
+        world = player.world.name
     }
 
     -- Explicit re-assignment — required for nested data
@@ -226,7 +227,7 @@ function setspawnHandler(ctx)
         x     = player.pos.x,
         y     = player.pos.y,
         z     = player.pos.z,
-        world = player.world
+        world = player.world.name
     }
     ctx.player:sendMessage("§aSpawn point set!")
 end
@@ -339,7 +340,7 @@ function whoisHandler(ctx, target)
     ctx.player:sendMessage(
         "§6--- §e" .. p.name .. " §6---\n"
         .. "§7UUID:     §f" .. p.uuid .. "\n"
-        .. "§7World:    §f" .. p.world .. "\n"
+        .. "§7World:    §f" .. p.world.name .. "\n"
         .. "§7Position: §f" .. string.format("%.1f, %.1f, %.1f", pos.x, pos.y, pos.z) .. "\n"
         .. "§7Health:   §f" .. string.format("%.1f", p.health) .. "§7/§f" .. string.format("%.1f", p.maxHealth) .. "\n"
         .. "§7Food:     §f" .. p.food .. "\n"
@@ -473,6 +474,98 @@ end
 
 
 -- ==========================================================================
+-- Pattern 11: World & entity API
+-- ==========================================================================
+-- /spawnmob <entity:text>                — spawn an entity with custom name + equipment
+-- /tagself <tag:text>                    — add a command tag to yourself
+-- /worldinfo                             — show world time, weather, name
+-- /settime <time:choice=day,night,noon,midnight> — change world time
+--
+-- KEY PATTERNS:
+--   - player.world returns a World wrapper (name, time, raining, thundering)
+--   - world:spawn(id, pos, {overrides}) creates and returns an EntityWrapper
+--   - Spawned entities have full property access (health, type, uuid, tags, equipment)
+--   - entity.tags is a boolean proxy table backed by command tags
+--   - Setting equipment on spawned entities uses equipStack internally
+
+function spawnmobHandler(ctx, entityId)
+    local player = ctx.player
+    local world  = player.world
+    local pos    = player.pos
+
+    -- Spawn 3 blocks in front of the player
+    local dir = player.dir
+    local offset = { x = pos.x + dir.x * 3, y = pos.y + 1, z = pos.z + dir.z * 3 }
+
+    local mob = world:spawn(entityId, offset, {
+        custom_name = "§e" .. player.name .. "'s pet",
+        health = 40,
+    })
+
+    if not mob then
+        player:sendMessage("§cFailed to spawn '" .. entityId .. "'")
+        return
+    end
+
+    mob.head = mc.createItem("minecraft:diamond_helmet", { name = "§bCrown", unbreakable = true })
+    mob.mainhand = mc.createItem("minecraft:iron_sword", { name = "§bGuardian Blade", unbreakable = true })
+
+    player:sendMessage(
+        "§aSpawned §f" .. mob.type .. " §a(§f" .. string.format("%.0f", mob.health)
+        .. "§a HP, UUID: §f" .. mob.uuid .. "§a)"
+    )
+end
+
+function tagselfHandler(ctx, tag)
+    local player = ctx.player
+    player.tags[tag] = true
+
+    local tags = {}
+    for t, _ in pairs(player.tags) do
+        table.insert(tags, t)
+    end
+    table.sort(tags)
+
+    player:sendMessage("§aTag §f'" .. tag .. "'§a added. Tags: §f" .. table.concat(tags, "§7, §f"))
+end
+
+function worldinfoHandler(ctx)
+    local w = ctx.player.world
+
+    local period
+    local t = w.time % 24000
+    if t < 12000 then
+        period = "§eDay"
+    elseif t < 14000 then
+        period = "§6Sunset"
+    else
+        period = "§3Night"
+    end
+
+    ctx.player:sendMessage(
+        "§6--- World: §e" .. w.name .. " §6---\n"
+        .. "§7Time:     §f" .. math.floor(w.time) .. " §7(" .. period .. "§7)\n"
+        .. "§7Raining:  §f" .. tostring(w.raining) .. "\n"
+        .. "§7Thunder:  §f" .. tostring(w.thundering)
+    )
+end
+
+function settimeHandler(ctx, period)
+    local w = ctx.player.world
+
+    local offsets = {
+        day      = 1000,
+        noon     = 6000,
+        night    = 13000,
+        midnight = 18000,
+    }
+
+    w.time = w.time - (w.time % 24000) + (offsets[period] or 1000)
+    ctx.player:sendMessage("§aTime set to §f" .. period .. "§a.")
+end
+
+
+-- ==========================================================================
 -- Event integration
 -- ==========================================================================
 -- These handlers react to game events using state set by commands above.
@@ -529,4 +622,10 @@ register("rename <name:text>",                               renameHandler)
 register("repair",                                           repairHandler,    "pxrp.admin")
 register("cleararmor",                                       cleararmorHandler)
 register("invsee <target:player>",                           invseeHandler,    "pxrp.mod")
+
+-- World & entity API
+register("spawnmob <entity:text>",                                          spawnmobHandler,  "pxrp.admin")
+register("tagself <tag:text>",                                               tagselfHandler)
+register("worldinfo",                                                        worldinfoHandler)
+register("settime <time:choice=day,night,noon,midnight>",                   settimeHandler,   "pxrp.admin")
 

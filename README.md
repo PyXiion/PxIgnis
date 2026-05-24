@@ -12,7 +12,7 @@ A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define
 - **Event system** — React to player joins, leaves, deaths, chat messages, and server lifecycle with Lua handlers (join/chat events are cancellable).
 - **Dynamic reload** — `/pxrp reload` re-executes all Lua scripts instantly without restarting the server.
 - **Rich argument types** — Supports `text`, `word`, `target`/`player`, `int`, `double`, `float`, `bool`, `block_pos`, and custom choices (`choice=a,b,c`) with validation.
-- **Minecraft API exposed to Lua** — Trigger particles, sounds, global/range broadcasting, block manipulation (`set`/`get`/`fill`), and server time control.
+- **Minecraft API exposed to Lua** — Trigger particles, sounds, global/range broadcasting, block manipulation, entity spawning, world time/weather control, and server time access.
 - **Persistent data storage** — Key-value data per player (`ctx.player.data`) and globally (`mc.data`), auto-persisted to JSON.
 - **Permission system** — Integrates with the Fabric Permissions API (supports both OP-based and permissions plugins like LuckPerms).
 - **Player context** — Handlers receive a live `Player` wrapper object with readable properties (health, position, gamemode, etc.) and methods (`sendMessage`, `teleport`, `kick`, `give`).
@@ -42,8 +42,8 @@ register("fart", function(ctx)
     local dir = player.bodyDir
 
     broadcastFormat "*{p.name} farted*" {p = player}
-    mc.particle("minecraft:gust", pos.x - dir.x * 0.5, pos.y + 0.6, pos.z - dir.z * 0.5, player.world)
-    mc.playSound("minecraft:entity.slime.squish", pos.x, pos.y, pos.z, player.world, 10, 0.1)
+    mc.particle("minecraft:gust", pos.x - dir.x * 0.5, pos.y + 0.6, pos.z - dir.z * 0.5, player.world.name)
+    mc.playSound("minecraft:entity.slime.squish", pos.x, pos.y, pos.z, player.world.name, 10, 0.1)
 end)
 
 ```
@@ -240,7 +240,7 @@ end)
 
 ### Built-in Lua standard libraries
 
-PxRP loads the following Lua standard libraries via [`luaj`](https://www.google.com/search?q=https://github.com/luaj/luaj) (targeting Lua 5.1):
+PxRP loads the following Lua standard libraries via [luaj](https://github.com/luaj/luaj) (targeting Lua 5.2):
 
 | Library | Globals | Reference |
 | --- | --- | --- |
@@ -248,12 +248,12 @@ PxRP loads the following Lua standard libraries via [`luaj`](https://www.google.
 | **math** | `math.random`, `math.randomseed`, `math.floor`, `math.ceil`, `math.sin`, `math.cos`, `math.sqrt`, `math.min`, `math.max`, `math.pi`, `math.huge` | [§5.6](https://www.google.com/search?q=https://www.lua.org/manual/5.1/manual.html%235.6) |
 | **string** | `string.format`, `string.sub`, `string.find`, `string.match`, `string.gmatch`, `string.gsub`, `string.len`, `string.byte`, `string.char`, `string.rep`, `string.lower`, `string.upper` | [§5.4](https://www.google.com/search?q=https://www.lua.org/manual/5.1/manual.html%235.4) |
 | **table** | `table.insert`, `table.remove`, `table.sort`, `table.concat`, `table.maxn` | [§5.5](https://www.google.com/search?q=https://www.lua.org/manual/5.1/manual.html%235.5) |
-| **bit32** | `bit32.band`, `bit32.bor`, `bit32.bxor`, `bit32.lshift`, `bit32.rshift`, `bit32.arshift`, `bit32.bnot` | [luaj wiki](https://www.google.com/search?q=https://github.com/luaj/luaj) |
+| **bit32** | `bit32.band`, `bit32.bor`, `bit32.bxor`, `bit32.lshift`, `bit32.rshift`, `bit32.arshift`, `bit32.bnot` | [luaj docs](https://github.com/luaj/luaj#functions) |
 | **package** | `require`, `package.path`, `package.loaded`, `package.preload` | [§5.3](https://www.google.com/search?q=https://www.lua.org/manual/5.1/manual.html%235.3) |
 
 The following standard libraries are **not** loaded: `io`, `os`, `coroutine`, `debug`.
 
-See the complete [Lua 5.1 Reference Manual](https://www.google.com/search?q=https://www.lua.org/manual/5.1/) for detailed documentation.
+See the complete [Lua 5.2 Reference Manual](https://www.lua.org/manual/5.2/) for detailed documentation.
 
 ## Lua API
 
@@ -318,7 +318,7 @@ The Player object is accessed via `ctx.player` inside a command handler (or as t
 | --- | --- | --- | --- |
 | `name` | string | ❌ | Player name |
 | `uuid` | string | ❌ | UUID string |
-| `world` | string | ❌ | World path (e.g. `"overworld"`) |
+| `world` | World | ❌ | World wrapper (use `world.name` for the world path string) |
 | `pos` | `{x, y, z}` | ❌ | Position |
 | `dir` | `{x, y, z}` | ❌ | Look direction |
 | `bodyDir` | `{x, z}` | ❌ | Body yaw direction |
@@ -352,6 +352,14 @@ The Player object is accessed via `ctx.player` inside a command handler (or as t
 | `scale` | number | ✅ | Scale attribute |
 | `speed` | number | ✅ | Movement speed attribute |
 | `stepHeight` | number | ✅ | Step height attribute |
+| `mainhand` | ItemStack | ✅ | Active hotbar slot item |
+| `offhand` | ItemStack | ✅ | Offhand item |
+| `head` | ItemStack | ✅ | Helmet slot item |
+| `chest` | ItemStack | ✅ | Chestplate slot item |
+| `legs` | ItemStack | ✅ | Leggings slot item |
+| `feet` | ItemStack | ✅ | Boots slot item |
+| `customName` | string | ✅ | Custom entity name |
+| `tags` | table | ✅ | Scoreboard command tags proxy (`tags["foo"] = true`)
 
 Setting a read-only property logs a warning and does nothing.
 
@@ -489,35 +497,100 @@ mc.cancelTask(id)
 * Callback errors are caught and logged per-task without affecting other tasks.
 * **Important**: callbacks run on the server tick thread — do not perform blocking operations.
 
-### `mc.setBlock(x, y, z, blockId, world)`
+### `mc.world(name)` → World
 
-Places a block at the given position. `blockId` defaults to `minecraft:` namespace if omitted — `"stone"` is equivalent to `"minecraft:stone"`. Triggers full neighbor updates (redstone, water flow, observers), same as placing a block manually.
+Returns a World wrapper for the given dimension name (e.g. `"overworld"`, `"the_nether"`, `"the_end"`). The World object has properties and methods for world manipulation. You can also get the player's current world via `player.world`.
 
 ```lua
-mc.setBlock(0, 64, 0, "diamond_block", "minecraft:overworld")
-
+local w = mc.world("overworld")
+w.time = w.time - (w.time % 24000) + 6000  -- set to noon
 ```
 
-### `mc.getBlock(x, y, z, world)` → string
+## World API
+
+The World object is returned by `player.world` or `mc.world(name)`.
+
+### Properties
+
+| Property | Type | Settable | Description |
+|----------|------|----------|-------------|
+| `name` | string | ❌ | World path (e.g. `"overworld"`) |
+| `time` | number | ✅ | Game time (ticks). Set to specific tick values |
+| `raining` | boolean | ✅ | Whether rain/snow is falling |
+| `thundering` | boolean | ✅ | Whether a thunderstorm is active |
+
+```lua
+local w = player.world
+w.time = w.time - (w.time % 24000) + 1000   -- set to day
+w.raining = true
+w.thundering = false
+```
+
+### `world:spawn(entityId, pos, overrides?)` → Entity | nil
+
+Creates and spawns an entity at the given position. `pos` accepts `{x, y, z}` or `{x=..., y=..., z=...}` tables. `entityId` auto-prefixes `minecraft:` if no namespace is present. Returns an Entity wrapper, or `nil` if spawning failed.
+
+Optional `overrides` table:
+| Field | Type | Description |
+|-------|------|-------------|
+| `custom_name` | string | Custom name tag |
+| `health` | number | Health (for LivingEntity subclasses only). If the value exceeds the entity's default max health, `maxHealth` is automatically raised to match |
+
+```lua
+-- Spawn a zombie with 40 HP (normally max 20 — overrides bumps maxHealth)
+local mob = w:spawn("zombie", {x = 100, y = 64, z = 200}, {
+    health = 40,
+})
+if pig then
+    pig.head = mc.createItem("minecraft:diamond_helmet", {name = "§bCrown"})
+end
+```
+
+### Entity wrapper
+
+The Entity wrapper is returned by `world:spawn()` and also backs `ctx.player` internally.
+
+**Properties**: `uuid` (string), `type` (string), `name` (string), `displayName` (string), `customName` (string, rw), `pos` (`{x,y,z}`, rw), `dir` (`{x,y,z}`), `bodyDir` (`{x,z}`), `world` (World), `health` (number, rw), `maxHealth` (number, rw), `air` (number, rw), `maxAir` (number), `fallDistance` (number, rw), `fireTicks` (number, rw), `glowing` (boolean, rw), `invulnerable` (boolean, rw), `isSneaking` (boolean, rw), `isSprinting` (boolean, rw).
+
+**Equipment properties** (rw, ItemStack or nil): `mainhand`, `offhand`, `head`, `chest`, `legs`, `feet`. For players, writes sync the inventory screen. For non-player entities, uses entity equipment API (tracker handles sync). Entities that don't support a slot (e.g. pig) return `nil` on read and silently ignore writes.
+
+**Attribute properties** (rw, number): `speed`, `armor`, `armorToughness`, `attackDamage`, `attackSpeed`, `knockbackResistance`, `luck`, `stepHeight`, `blockBreakSpeed`, `gravity`, `scale`, `safeFallDistance`, `flyingSpeed`.
+
+**Tags**: Command tags are exposed via a proxy table — `entity.tags["tagName"] = true` adds a tag, `entity.tags["tagName"] = false` removes it. Iterate via `pairs(entity.tags)`.
+
+```lua
+local pig = w:spawn("pig", {x = 100, y = 64, z = 200})
+pig.tags["quest_mob"] = true
+pig.speed = 0.5
+pig.mainhand = mc.createItem("minecraft:stick", {name = "§eMagic Wand"})
+```
+
+### `world:setBlock(pos, blockId)`
+
+Places a block at the given position. `blockId` defaults to `minecraft:` namespace if omitted. `pos` accepts `{x, y, z}` or `{x=..., y=..., z=...}` tables. Triggers full neighbor updates (redstone, water flow, observers).
+
+```lua
+player.world:setBlock({x = 0, y = 64, z = 0}, "diamond_block")
+```
+
+### `world:getBlock(pos)` → string
 
 Returns the registry ID of the block at the given position, e.g. `"minecraft:stone"` or `"minecraft:air"`.
 
 ```lua
-local block = mc.getBlock(0, 4, 0, "minecraft:overworld")
+local block = player.world:getBlock({x = 0, y = 4, z = 0})
 if block == "minecraft:air" then
     mc.broadcast("The floor was broken!")
 end
-
 ```
 
-### `mc.fill(x1, y1, z1, x2, y2, z2, blockId, world)`
+### `world:fill(pos1, pos2, blockId)`
 
-Fills a cuboid region. No neighbor updates are sent — blocks appear instantly to clients without causing observer/redstone cascades. Volume capped at 32,768 blocks (≈ 32×32×32). Unloaded chunks are loaded on demand, same as vanilla `/fill`.
+Fills a cuboid region. No neighbor updates are sent — blocks appear instantly to clients without causing observer/redstone cascades. Volume capped at 32,768 blocks (≈ 32×32×32). `pos1`/`pos2` accept position tables.
 
 ```lua
 -- Reset an arena floor
-mc.fill(-10, 4, -10, 10, 4, 10, "glass", "minecraft:overworld")
-
+player.world:fill({x = -10, y = 4, z = -10}, {x = 10, y = 4, z = 10}, "glass")
 ```
 
 ### `mc.createItem(id, [count])` → ItemStack

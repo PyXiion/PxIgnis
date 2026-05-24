@@ -15,10 +15,8 @@ import net.minecraft.sound.SoundCategory
 import net.minecraft.sound.SoundEvent
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
-import net.minecraft.util.math.BlockPos
 import net.minecraft.util.math.Vec3d
 import net.minecraft.world.World
-import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
@@ -176,55 +174,12 @@ class LuaMcApi(
         return LuaValue.valueOf(removed)
     }
 
-    private fun resolveBlockId(id: String): String {
-        return if (id.contains(':')) id else "minecraft:$id"
-    }
-
-    private fun setBlock(args: Varargs) {
-        require(args.narg() == 5) { "setBlock(x, y, z, block, world) requires 5 arguments" }
-        val (x, y, z) = (1..3).map { args.arg(it).checkdouble() }
-        val blockId = resolveBlockId(args.arg(4).checkjstring())
-        val world = requireWorld(args.arg(5))
-
-        val block = Registries.BLOCK.get(Identifier.of(blockId))
-            ?: throw IllegalArgumentException("Block $blockId not found")
-        world.setBlockState(BlockPos.ofFloored(x, y, z), block.defaultState, 0x03)
-    }
-
-    private fun luaGetBlock(args: Varargs): Varargs {
-        require(args.narg() == 4) { "getBlock(x, y, z, world) requires 4 arguments" }
-        val (x, y, z) = (1..3).map { args.arg(it).checkdouble() }
-        val world = requireWorld(args.arg(4))
-
-        val pos = BlockPos.ofFloored(x, y, z)
-        val block = world.getBlockState(pos).block
-        return LuaValue.valueOf(Registries.BLOCK.getId(block).toString())
-    }
-
-    private fun fill(args: Varargs) {
-        require(args.narg() == 8) { "fill(x1, y1, z1, x2, y2, z2, block, world) requires 8 arguments" }
-        val (x1, y1, z1) = (1..3).map { args.arg(it).checkdouble() }
-        val (x2, y2, z2) = (4..6).map { args.arg(it).checkdouble() }
-        val blockId = resolveBlockId(args.arg(7).checkjstring())
-        val world = requireWorld(args.arg(8))
-
-        val block = Registries.BLOCK.get(Identifier.of(blockId))
-            ?: throw IllegalArgumentException("Block $blockId not found")
-
-        val minX = Math.floor(minOf(x1, x2)).toInt()
-        val minY = Math.floor(minOf(y1, y2)).toInt()
-        val minZ = Math.floor(minOf(z1, z2)).toInt()
-        val maxX = Math.floor(maxOf(x1, x2)).toInt()
-        val maxY = Math.floor(maxOf(y1, y2)).toInt()
-        val maxZ = Math.floor(maxOf(z1, z2)).toInt()
-
-        val volume = (maxX - minX + 1L) * (maxY - minY + 1L) * (maxZ - minZ + 1L)
-        require(volume <= 32768) { "fill volume ($volume) exceeds maximum (32768)" }
-
-        val state = block.defaultState
-        for (pos in BlockPos.iterate(BlockPos(minX, minY, minZ), BlockPos(maxX, maxY, maxZ))) {
-            world.setBlockState(pos, state, 0x02)
-        }
+    private fun luaGetWorld(args: Varargs): Varargs {
+        val name = args.arg(1).checkjstring()
+        val key = RegistryKey.of(RegistryKeys.WORLD, Identifier.of(name))
+        val world = server.getWorld(key)
+            ?: throw IllegalArgumentException("World '$name' not found")
+        return World(world).toLuaValue()
     }
 
     fun toTable(): LuaTable {
@@ -238,9 +193,7 @@ class LuaMcApi(
             "schedule" to this::luaSchedule.asVarArgFunction(),
             "scheduleRepeating" to this::luaScheduleRepeating.asVarArgFunction(),
             "cancelTask" to this::luaCancelTask.asVarArgFunction(),
-            "setBlock" to this::setBlock.asVarArgFunction(),
-            "getBlock" to this::luaGetBlock.asVarArgFunction(),
-            "fill" to this::fill.asVarArgFunction()
+            "world" to this::luaGetWorld.asVarArgFunction(),
         )
     }
 }

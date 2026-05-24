@@ -2,7 +2,6 @@ package ru.pyxiion.pxrp.api
 
 import net.minecraft.command.DefaultPermissions
 import net.minecraft.entity.EquipmentSlot
-import net.minecraft.entity.attribute.EntityAttributes
 import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.item.ItemStack
 import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket
@@ -26,7 +25,6 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
-import org.luaj.vm2.lib.jse.CoerceJavaToLua
 import ru.pyxiion.pxrp.PxRp
 
 class Player(private val entity: ServerPlayerEntity) {
@@ -37,23 +35,13 @@ class Player(private val entity: ServerPlayerEntity) {
     fun toLuaValue(): LuaValue {
         val e = entity
         val srv = server
+        val entityValue = EntityWrapper(e).toLuaValue()
 
         val metatable = LuaTable()
         metatable.set("__index", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val key = args.arg(2).tojstring()
                 return when (key) {
-                    "name" -> LuaValue.valueOf(e.name.literalString ?: e.name.string)
-                    "uuid" -> LuaValue.valueOf(e.uuid.toString())
-                    "world" -> LuaValue.valueOf(e.entityWorld.registryKey.value.path)
-                    "pos" -> CoerceJavaToLua.coerce(Vector.fromMc(e.entityPos))
-                    "dir" -> CoerceJavaToLua.coerce(Vector.fromMc(e.rotationVector))
-                    "bodyDir" -> CoerceJavaToLua.coerce(Vector.fromRotation(e.bodyYaw, 0.0f))
-                    "health" -> LuaValue.valueOf(e.health.toDouble())
-                    "maxHealth" -> {
-                        val attr = e.getAttributeInstance(EntityAttributes.MAX_HEALTH)
-                        LuaValue.valueOf(attr?.value ?: e.maxHealth.toDouble())
-                    }
                     "food" -> LuaValue.valueOf(e.hungerManager.foodLevel)
                     "saturation" -> LuaValue.valueOf(e.hungerManager.saturationLevel.toDouble())
                     "gamemode" -> LuaValue.valueOf(e.interactionManager.gameMode.id)
@@ -61,40 +49,9 @@ class Player(private val entity: ServerPlayerEntity) {
                     "xpLevel" -> LuaValue.valueOf(e.experienceLevel)
                     "xpProgress" -> LuaValue.valueOf(e.experienceProgress.toDouble())
                     "isOp" -> LuaValue.valueOf(e.getPermissions().hasPermission(DefaultPermissions.GAMEMASTERS))
-                    "displayName" -> LuaValue.valueOf(e.displayName?.string ?: e.name.literalString!!)
-                    "isSneaking" -> LuaValue.valueOf(e.isSneaking)
-                    "isSprinting" -> LuaValue.valueOf(e.isSprinting)
                     "selectedSlot" -> LuaValue.valueOf(e.inventory.selectedSlot)
-                    "fallDistance" -> LuaValue.valueOf(e.fallDistance.toDouble())
                     "isFlying" -> LuaValue.valueOf(e.abilities.flying)
-                    "air" -> LuaValue.valueOf(e.air)
-                    "maxAir" -> LuaValue.valueOf(e.maxAir)
-
-                    "head" -> {
-                        val s = e.inventory.getStack(EquipmentSlot.HEAD.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE))
-                        if (s.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(s)
-                    }
-                    "chest" -> {
-                        val s = e.inventory.getStack(EquipmentSlot.CHEST.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE))
-                        if (s.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(s)
-                    }
-                    "legs" -> {
-                        val s = e.inventory.getStack(EquipmentSlot.LEGS.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE))
-                        if (s.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(s)
-                    }
-                    "feet" -> {
-                        val s = e.inventory.getStack(EquipmentSlot.FEET.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE))
-                        if (s.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(s)
-                    }
-                    "mainhand" -> {
-                        val s = e.inventory.getStack(e.inventory.selectedSlot)
-                        if (s.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(s)
-                    }
-                    "offhand" -> {
-                        val s = e.inventory.getStack(PlayerInventory.OFF_HAND_SLOT)
-                        if (s.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(s)
-                    }
-                    else -> LuaValue.NIL
+                    else -> entityValue.get(key)
                 }
             }
         })
@@ -104,28 +61,7 @@ class Player(private val entity: ServerPlayerEntity) {
                 val key = args.arg(2).tojstring()
                 val value = args.arg(3)
                 when (key) {
-                    "health" -> e.health = value.tofloat()
                     "food" -> e.hungerManager.foodLevel = value.toint()
-                    "air" -> e.air = value.toint()
-                    "maxHealth" -> {
-                        e.getAttributeInstance(EntityAttributes.MAX_HEALTH)?.let { attr ->
-                            attr.baseValue = value.todouble()
-                            e.health = minOf(e.health, attr.value.toFloat())
-                        }
-                    }
-                    "speed" -> e.getAttributeInstance(EntityAttributes.MOVEMENT_SPEED)?.baseValue = value.todouble()
-                    "armor" -> e.getAttributeInstance(EntityAttributes.ARMOR)?.baseValue = value.todouble()
-                    "armorToughness" -> e.getAttributeInstance(EntityAttributes.ARMOR_TOUGHNESS)?.baseValue = value.todouble()
-                    "attackDamage" -> e.getAttributeInstance(EntityAttributes.ATTACK_DAMAGE)?.baseValue = value.todouble()
-                    "attackSpeed" -> e.getAttributeInstance(EntityAttributes.ATTACK_SPEED)?.baseValue = value.todouble()
-                    "knockbackResistance" -> e.getAttributeInstance(EntityAttributes.KNOCKBACK_RESISTANCE)?.baseValue = value.todouble()
-                    "luck" -> e.getAttributeInstance(EntityAttributes.LUCK)?.baseValue = value.todouble()
-                    "stepHeight" -> e.getAttributeInstance(EntityAttributes.STEP_HEIGHT)?.baseValue = value.todouble()
-                    "blockBreakSpeed" -> e.getAttributeInstance(EntityAttributes.BLOCK_BREAK_SPEED)?.baseValue = value.todouble()
-                    "gravity" -> e.getAttributeInstance(EntityAttributes.GRAVITY)?.baseValue = value.todouble()
-                    "scale" -> e.getAttributeInstance(EntityAttributes.SCALE)?.baseValue = value.todouble()
-                    "safeFallDistance" -> e.getAttributeInstance(EntityAttributes.SAFE_FALL_DISTANCE)?.baseValue = value.todouble()
-                    "flyingSpeed" -> e.getAttributeInstance(EntityAttributes.FLYING_SPEED)?.baseValue = value.todouble()
                     "gamemode" -> {
                         GameMode.byId(value.tojstring())?.let { e.changeGameMode(it) }
                     }
@@ -135,12 +71,7 @@ class Player(private val entity: ServerPlayerEntity) {
                     "feet" -> setSlot(e, EquipmentSlot.FEET.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE), value)
                     "mainhand" -> setSlot(e, e.inventory.selectedSlot, value)
                     "offhand" -> setSlot(e, PlayerInventory.OFF_HAND_SLOT, value)
-                    else -> {
-                        PxRp.logger.warn(
-                            "[PxRP] Попытка записи в read-only свойство '{}' игрока {}",
-                            key, e.name.literalString
-                        )
-                    }
+                    else -> entityValue.set(key, value)
                 }
                 return LuaValue.NIL
             }
@@ -245,7 +176,7 @@ class Player(private val entity: ServerPlayerEntity) {
         private fun damage(e: ServerPlayerEntity) = object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val amount = args.arg(2).checkdouble().toFloat()
-                e.serverDamage(e.entityWorld.damageSources.generic(), amount)
+                e.damage(e.entityWorld, e.entityWorld.damageSources.generic(), amount)
                 return LuaValue.NIL
             }
         }
