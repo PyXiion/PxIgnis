@@ -1,86 +1,83 @@
 package ru.pyxiion.pxrp
 
-import com.mojang.brigadier.tree.ArgumentCommandNode
-import net.minecraft.server.command.ServerCommandSource
 import ru.pyxiion.pxrp.types.LuaArgumentType
+
+sealed interface SyntaxNode {
+    data class Literal(val value: String) : SyntaxNode
+    data class Argument(val name: String, val typeDef: String, val isOptional: Boolean) : SyntaxNode
+}
 
 data class ArgDef(
     val luaType: LuaArgumentType,
-    val node: ArgumentCommandNode<ServerCommandSource, *>,
-    val isOptional: Boolean
-)
-
-data class ArgToken(
-    val name: String,
-    val typeDef: String,
     val isOptional: Boolean
 )
 
 class SyntaxParser(private val syntax: String) {
     private var pos = 0
 
-    fun parse(): Pair<List<String>, List<ArgToken>> {
-        val commandParts = mutableListOf<String>()
-        val argTokens = mutableListOf<ArgToken>()
-
+    fun parse(): List<SyntaxNode> {
+        val nodes = mutableListOf<SyntaxNode>()
         skipWhitespace()
         while (pos < syntax.length) {
-            when (syntax[pos]) {
-                '<' -> argTokens.add(parseArg(required = true))
-                '[' -> argTokens.add(parseArg(required = false))
-                else -> commandParts.add(parseLiteral())
-            }
+            nodes.add(
+                when (syntax[pos]) {
+                    '<' -> parseRequiredArg()
+                    '[' -> parseOptionalArg()
+                    else -> parseLiteral()
+                }
+            )
             skipWhitespace()
         }
-
-        return Pair(commandParts, argTokens)
+        return nodes
     }
 
-    private fun parseLiteral(): String {
+    private fun parseLiteral(): SyntaxNode.Literal {
         val start = pos
-        while (pos < syntax.length && syntax[pos] !in " \t<[") pos++
+        while (pos < syntax.length && !syntax[pos].isWhitespace() && syntax[pos] !in "<[") pos++
         if (pos == start) error("Expected literal, argument, or end at position $pos")
-        return syntax.substring(start, pos)
+        return SyntaxNode.Literal(syntax.substring(start, pos))
     }
 
-    private fun parseArg(required: Boolean): ArgToken {
-        val open = syntax[pos]
-        val close = if (required) '>' else ']'
+    private fun parseRequiredArg(): SyntaxNode.Argument {
+        return parseBracketedContent('<', '>', isOptional = false)
+    }
 
-        if (open != if (required) '<' else '[') {
-            error("Expected '$open' at position $pos")
-        }
+    private fun parseOptionalArg(): SyntaxNode.Argument {
+        return parseBracketedContent('[', ']', isOptional = true)
+    }
+
+    private fun parseBracketedContent(open: Char, close: Char, isOptional: Boolean): SyntaxNode.Argument {
+        val argStart = pos
+        require(syntax[pos] == open) { "Expected '$open' at position $pos" }
         pos++
 
         val nameStart = pos
-        var nameEnd = -1
+        var colonPos = -1
 
         while (pos < syntax.length && syntax[pos] != close) {
-            if (syntax[pos] == ':' && nameEnd == -1) {
-                nameEnd = pos
-            }
+            if (syntax[pos] == ':' && colonPos == -1) colonPos = pos
             pos++
         }
 
-        if (pos >= syntax.length) {
-            error("Missing closing '$close' for argument starting at position $nameStart")
-        }
-        if (nameEnd == -1) {
-            error("Argument '${syntax.substring(nameStart, pos)}' is missing type specification. Use <name:type>.")
+        require(pos < syntax.length) { "Missing closing '$close' for argument starting at position $argStart" }
+        require(colonPos != -1) {
+            "Argument '${syntax.substring(nameStart, pos)}' is missing type specification. Use <name:type>."
         }
 
-        val name = syntax.substring(nameStart, nameEnd)
-        val typeDef = syntax.substring(nameEnd + 1, pos)
+        var name = syntax.substring(nameStart, colonPos)
+        var typeDef = syntax.substring(colonPos + 1, pos)
 
-        if (name.isEmpty()) error("Argument has empty name at position $nameStart")
-        if (typeDef.isEmpty()) error("Argument '$name' has empty type at position $nameStart")
+        if (isOptional && name.startsWith("<") && typeDef.endsWith(">")) {
+            name = name.substring(1)
+            typeDef = typeDef.substring(0, typeDef.length - 1)
+        }
 
-        val cleanName = if (!required && name.startsWith("<")) name.substring(1) else name
-        val cleanTypeDef = if (!required && typeDef.endsWith(">")) typeDef.substring(0, typeDef.length - 1) else typeDef
+        require(name.isNotEmpty()) { "Argument has empty name at position $argStart" }
+        require(typeDef.isNotEmpty()) { "Argument '$name' has empty type at position $argStart" }
 
         pos++
 
-        return ArgToken(cleanName, cleanTypeDef, !required)
+        return SyntaxNode.Argument(name, typeDef, isOptional)
     }
 
     private fun skipWhitespace() {
@@ -88,28 +85,35 @@ class SyntaxParser(private val syntax: String) {
     }
 }
 
-fun parseSyntaxString(syntax: String): Pair<List<String>, List<ArgToken>> {
-    val (commandParts, argTokens) = SyntaxParser(syntax).parse()
+fun generateCommandPaths(syntax: String): List<List<SyntaxNode>> {
+    val nodes = SyntaxParser(syntax).parse()
 
     var optionalStarted = false
-    for (token in argTokens) {
-        if (!token.isOptional && optionalStarted) {
-            throw IllegalArgumentException("Required argument '${token.name}' cannot follow optional arguments")
+    for (node in nodes) {
+        if (node is SyntaxNode.Argument) {
+            if (node.isOptional) {
+                optionalStarted = true
+            } else if (optionalStarted) {
+                throw IllegalArgumentException("Required argument '${node.name}' cannot follow optional arguments.")
+            }
         }
-        if (token.isOptional) optionalStarted = true
     }
 
-    return Pair(commandParts, argTokens)
+    return buildSyntaxVariants(nodes)
 }
 
-fun buildVariants(argDefs: List<ArgDef>): List<List<ArgDef>> {
-    if (argDefs.isEmpty() || argDefs.none { it.isOptional }) {
-        return listOf(argDefs)
+private fun buildSyntaxVariants(nodes: List<SyntaxNode>): List<List<SyntaxNode>> {
+    val optionalIndices = nodes.indices.filter { i ->
+        val arg = nodes[i] as? SyntaxNode.Argument
+        arg != null && arg.isOptional
     }
 
-    val firstOptional = argDefs.indexOfFirst { it.isOptional }
-    val required = argDefs.take(firstOptional)
-    val optional = argDefs.drop(firstOptional)
+    if (optionalIndices.isEmpty()) return listOf(nodes)
 
-    return (0..optional.size).map { i -> required + optional.take(i) }
+    return (0..optionalIndices.size).map { keepCount ->
+        val omit = optionalIndices.drop(keepCount).toSet()
+        nodes.filterIndexed { index, _ -> index !in omit }
+    }
 }
+
+

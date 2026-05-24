@@ -28,43 +28,77 @@ class LuaCommandManager(
     }
 
     fun addCommand(
-        command: String,
-        arguments: List<ArgumentCommandNode<ServerCommandSource, *>>,
+        nodes: List<SyntaxNode>,
+        argDefs: Map<String, ArgDef>,
         executor: (ctx: CommandContext<ServerCommandSource>) -> Int,
         permission: String?
     ) {
         check(!isRegistered) { "You can't add commands until you unregister the current commands" }
 
-        val commandParts = command.split(" ")
-        require(commandParts.isNotEmpty()) { "Command must not be empty" }
-        require(commandParts.first() !in RESERVED_COMMANDS) {
-            "Команда '${commandParts.first()}' является зарезервированной и не может быть переопределена через Lua"
+        val firstLiteral = nodes.firstOrNull() as? SyntaxNode.Literal
+            ?: throw IllegalArgumentException("Command syntax must start with a literal")
+        require(firstLiteral.value !in RESERVED_COMMANDS) {
+            "Команда '${firstLiteral.value}' является зарезервированной и не может быть переопределена через Lua"
         }
 
-        val cmd = getOrCreateNodeByCmdPath(commandParts)
+        var currentNode: CommandNode<ServerCommandSource>? = null
+        val pathBuilder = mutableListOf<String>()
 
-        // Propagate permission to all literal nodes along the command path
-        for (i in commandParts.indices) {
-            val prefix = commandParts.take(i + 1).joinToString(" ")
-            val perms = pathPermissions.getOrPut(prefix) { mutableSetOf() }
+        for (node in nodes) {
+            val next = when (node) {
+                is SyntaxNode.Literal -> {
+                    if (currentNode == null) {
+                        getOrCreateNodeByCmdPath(listOf(node.value))
+                    } else {
+                        var child = currentNode.getChild(node.value)
+                        if (child == null) {
+                            child = CommandManager.literal(node.value).build()
+                            currentNode.addChild(child)
+                        }
+                        child
+                    }
+                }
+                is SyntaxNode.Argument -> {
+                    val argDef = argDefs[node.name]
+                        ?: throw IllegalArgumentException("Unknown argument '${node.name}' in variant")
+                    val argNode = (currentNode as CommandNodeMixin).children.values
+                        .filterIsInstance<ArgumentCommandNode<*, *>>()
+                        .find { it.name == node.name }
+                        ?: argDef.luaType.getBrigadierArgument(node.name).also {
+                            currentNode.addChild(it)
+                        }
+                    argNode as CommandNode<ServerCommandSource>
+                }
+            }
+            currentNode = next
+
+            pathBuilder.add(
+                when (node) {
+                    is SyntaxNode.Literal -> node.value
+                    is SyntaxNode.Argument -> "<${node.name}>"
+                }
+            )
+
+            val pathKey = pathBuilder.joinToString(" ")
+            val perms = pathPermissions.getOrPut(pathKey) { mutableSetOf() }
             perms.add(permission)
 
             val snapshot = perms.toSet()
-            val node = getNodeByPath(commandParts.take(i + 1))
-
             if (null in snapshot) {
-                (node as CommandNodeMixin).setRequirement { true }
+                (next as CommandNodeMixin).setRequirement { true }
             } else {
-                (node as CommandNodeMixin).setRequirement { source ->
+                (next as CommandNodeMixin).setRequirement { source ->
                     snapshot.any { perm -> source.checkPermission(perm!!) }
                 }
             }
         }
 
-        val lastArg = mergeOrBuildArgsFrom(cmd, arguments)
-        (lastArg as CommandNodeMixin).command = Command { ctx -> executor(ctx) }
+        (currentNode as CommandNodeMixin).command = Command { ctx -> executor(ctx) }
 
-        PxRp.logger.debug("/{} was added to the LuaCommandManager with arguments = {}, permission = {}", command, arguments, permission)
+        PxRp.logger.debug("/{} was added to the LuaCommandManager with arguments = {}, permission = {}",
+            nodes.filterIsInstance<SyntaxNode.Literal>().joinToString(" ") { it.value },
+            nodes.filterIsInstance<SyntaxNode.Argument>().map { it.name },
+            permission)
     }
 
     private fun getOrCreateNodeByCmdPath(path: List<String>): LiteralCommandNode<ServerCommandSource> {
@@ -80,43 +114,6 @@ class LuaCommandManager(
         }
 
         return node
-    }
-
-    private fun getNodeByPath(path: List<String>): LiteralCommandNode<ServerCommandSource> {
-        var node = commands[path.first()]!!
-        for (i in 1..<path.size) {
-            node = node.getChild(path[i]) as LiteralCommandNode<ServerCommandSource>
-        }
-        return node
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun mergeOrBuildArgsFrom(
-        node: LiteralCommandNode<ServerCommandSource>,
-        args: List<ArgumentCommandNode<ServerCommandSource, *>>
-    ): CommandNode<ServerCommandSource> {
-        var currentNode: CommandNode<ServerCommandSource> = node
-        for (arg in args) {
-            val existing = (currentNode as CommandNodeMixin).children.values.find {
-                it is ArgumentCommandNode<*, *> && it.name == arg.name
-            }
-            val argNode = if (existing != null && existing !== arg) {
-                PxRp.logger.warn(
-                    "[PxRP] Несколько скриптов регистрируют аргумент '{}' с одинаковым типом под одним путём. " +
-                            "Будет использована конфигурация первого скрипта.",
-                    arg.name
-                )
-                existing
-            } else if (existing != null) {
-                existing
-            } else {
-                currentNode.addChild(arg)
-                arg
-            }
-            currentNode = argNode as CommandNode<ServerCommandSource>
-        }
-
-        return currentNode
     }
 
     fun registerAll() {

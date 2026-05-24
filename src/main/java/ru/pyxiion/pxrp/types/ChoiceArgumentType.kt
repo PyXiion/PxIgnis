@@ -1,7 +1,5 @@
 package ru.pyxiion.pxrp.types
 
-import com.mojang.brigadier.StringReader
-import com.mojang.brigadier.arguments.ArgumentType
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import com.mojang.brigadier.exceptions.CommandSyntaxException
@@ -17,35 +15,19 @@ class ChoiceArgumentType(private val choices: List<String>) : LuaArgumentType {
     }
 
     override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
-        return StringArgumentType.getString(ctx, name)
+        val value = StringArgumentType.getString(ctx, name)
+        if (value !in choices) {
+            throw CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownArgument().create()
+        }
+        return value
     }
 
     override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-        return CommandManager.argument(name, ChoiceType(choices))
+        return CommandManager.argument(name, StringArgumentType.word())
             .suggests(SuggestionProvider { _, builder ->
                 choices.forEach { builder.suggest(it) }
                 builder.buildFuture()
             })
             .build()
-    }
-
-    internal class ChoiceType(val choices: List<String>) : ArgumentType<String> {
-        override fun parse(reader: StringReader): String {
-            val start = reader.cursor
-            val word = StringArgumentType.word().parse(reader)
-            if (word in choices) return word
-            reader.cursor = start
-            throw CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownArgument().createWithContext(reader)
-        }
-
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other !is ChoiceType) return false
-            return choices == other.choices
-        }
-
-        override fun hashCode(): Int = choices.hashCode()
-
-        override fun getExamples(): Collection<String> = choices
     }
 }

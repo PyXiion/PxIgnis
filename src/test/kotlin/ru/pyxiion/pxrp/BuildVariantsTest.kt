@@ -1,100 +1,135 @@
 package ru.pyxiion.pxrp
 
-import com.mojang.brigadier.arguments.StringArgumentType
-import com.mojang.brigadier.builder.RequiredArgumentBuilder
-import com.mojang.brigadier.context.CommandContext
-import com.mojang.brigadier.tree.ArgumentCommandNode
-import net.minecraft.server.command.ServerCommandSource
 import kotlin.test.Test
-import ru.pyxiion.pxrp.types.LuaArgumentType
 import kotlin.test.assertEquals
-
-private fun argNode(name: String): ArgumentCommandNode<ServerCommandSource, *> =
-    RequiredArgumentBuilder.argument<ServerCommandSource, String>(name, StringArgumentType.word()).build()
-
-private val dummyType = object : LuaArgumentType {
-    override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any = "test"
-    override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> = argNode(name)
-}
-
-private fun req(name: String = "x") = ArgDef(dummyType, argNode(name), false)
-private fun opt(name: String = "y") = ArgDef(dummyType, argNode(name), true)
 
 class BuildVariantsTest {
 
     @Test
-    fun `empty list returns single empty variant`() {
-        val result = buildVariants(emptyList())
-        assertEquals(listOf(emptyList<ArgDef>()), result)
-    }
-
-    @Test
-    fun `all required returns single variant`() {
-        val args = listOf(req("a"), req("b"))
-        val result = buildVariants(args)
-        assertEquals(1, result.size)
-        assertEquals(args, result[0])
+    fun `no optional returns single variant`() {
+        val variants = generateCommandPaths("cmd <a:text> <b:text>")
+        assertEquals(1, variants.size)
+        val variant = variants[0]
+        assertEquals(3, variant.size)
+        assertEquals(SyntaxNode.Literal("cmd"), variant[0])
+        assertEquals(SyntaxNode.Argument("a", "text", false), variant[1])
+        assertEquals(SyntaxNode.Argument("b", "text", false), variant[2])
     }
 
     @Test
     fun `single optional generates two variants`() {
-        val result = buildVariants(listOf(opt("a")))
-        assertEquals(2, result.size)
-        assertEquals(0, result[0].size)
-        assertEquals(1, result[1].size)
-        assertEquals(true, result[1][0].isOptional)
+        val variants = generateCommandPaths("cmd [a:text]")
+        assertEquals(2, variants.size)
+        assertEquals(listOf(SyntaxNode.Literal("cmd")), variants[0])
+        assertEquals(
+            listOf(SyntaxNode.Literal("cmd"), SyntaxNode.Argument("a", "text", true)),
+            variants[1]
+        )
     }
 
     @Test
     fun `required plus one optional`() {
-        val r = req("a")
-        val o = opt("b")
-        val result = buildVariants(listOf(r, o))
-        assertEquals(2, result.size)
-        assertEquals(listOf(r), result[0])
-        assertEquals(listOf(r, o), result[1])
+        val variants = generateCommandPaths("cmd <a:text> [b:text]")
+        assertEquals(2, variants.size)
+        assertEquals(
+            listOf(SyntaxNode.Literal("cmd"), SyntaxNode.Argument("a", "text", false)),
+            variants[0]
+        )
+        assertEquals(
+            listOf(
+                SyntaxNode.Literal("cmd"),
+                SyntaxNode.Argument("a", "text", false),
+                SyntaxNode.Argument("b", "text", true)
+            ),
+            variants[1]
+        )
     }
 
     @Test
     fun `required plus two optional`() {
-        val r = req("a")
-        val o1 = opt("b")
-        val o2 = opt("c")
-        val result = buildVariants(listOf(r, o1, o2))
-        assertEquals(3, result.size)
-        assertEquals(listOf(r), result[0])
-        assertEquals(listOf(r, o1), result[1])
-        assertEquals(listOf(r, o1, o2), result[2])
+        val variants = generateCommandPaths("cmd <a:text> [b:text] [c:text]")
+        assertEquals(3, variants.size)
+        assertEquals(
+            listOf(SyntaxNode.Literal("cmd"), SyntaxNode.Argument("a", "text", false)),
+            variants[0]
+        )
+        assertEquals(
+            listOf(
+                SyntaxNode.Literal("cmd"),
+                SyntaxNode.Argument("a", "text", false),
+                SyntaxNode.Argument("b", "text", true)
+            ),
+            variants[1]
+        )
+        assertEquals(
+            listOf(
+                SyntaxNode.Literal("cmd"),
+                SyntaxNode.Argument("a", "text", false),
+                SyntaxNode.Argument("b", "text", true),
+                SyntaxNode.Argument("c", "text", true)
+            ),
+            variants[2]
+        )
     }
 
     @Test
     fun `all optional generates N plus 1 variants`() {
-        val o1 = opt("a")
-        val o2 = opt("b")
-        val o3 = opt("c")
-        val result = buildVariants(listOf(o1, o2, o3))
-        assertEquals(4, result.size)
-        assertEquals(emptyList<ArgDef>(), result[0])
-        assertEquals(listOf(o1), result[1])
-        assertEquals(listOf(o1, o2), result[2])
-        assertEquals(listOf(o1, o2, o3), result[3])
+        val variants = generateCommandPaths("cmd [a:text] [b:text] [c:text]")
+        assertEquals(4, variants.size)
+        assertEquals(listOf(SyntaxNode.Literal("cmd")), variants[0])
+        assertEquals(
+            listOf(SyntaxNode.Literal("cmd"), SyntaxNode.Argument("a", "text", true)),
+            variants[1]
+        )
+        assertEquals(
+            listOf(
+                SyntaxNode.Literal("cmd"),
+                SyntaxNode.Argument("a", "text", true),
+                SyntaxNode.Argument("b", "text", true)
+            ),
+            variants[2]
+        )
+        assertEquals(
+            listOf(
+                SyntaxNode.Literal("cmd"),
+                SyntaxNode.Argument("a", "text", true),
+                SyntaxNode.Argument("b", "text", true),
+                SyntaxNode.Argument("c", "text", true)
+            ),
+            variants[3]
+        )
+    }
+
+    @Test
+    fun `literal after optional is preserved in all variants`() {
+        val variants = generateCommandPaths("test [opt:int] confirm")
+        assertEquals(2, variants.size)
+        assertEquals(
+            listOf(SyntaxNode.Literal("test"), SyntaxNode.Literal("confirm")),
+            variants[0]
+        )
+        assertEquals(
+            listOf(
+                SyntaxNode.Literal("test"),
+                SyntaxNode.Argument("opt", "int", true),
+                SyntaxNode.Literal("confirm")
+            ),
+            variants[1]
+        )
     }
 
     @Test
     fun `single required returns single variant`() {
-        val r = req()
-        val result = buildVariants(listOf(r))
-        assertEquals(1, result.size)
-        assertEquals(listOf(r), result[0])
+        val variants = generateCommandPaths("cmd <a:text>")
+        assertEquals(1, variants.size)
+        assertEquals(2, variants[0].size)
+        assertEquals(SyntaxNode.Literal("cmd"), variants[0][0])
+        assertEquals(SyntaxNode.Argument("a", "text", false), variants[0][1])
     }
 
     @Test
-    fun `variants preserve arg objects`() {
-        val r = req("a")
-        val o = opt("b")
-        val result = buildVariants(listOf(r, o))
-        assertEquals(r, result[0][0])
-        assertEquals(r, result[1][0])
-        assertEquals(o, result[1][1])
+    fun `generates empty literal-only variant when all optional`() {
+        val variants = generateCommandPaths("cmd [a:text]")
+        assertEquals(listOf(SyntaxNode.Literal("cmd")), variants[0])
     }
 }

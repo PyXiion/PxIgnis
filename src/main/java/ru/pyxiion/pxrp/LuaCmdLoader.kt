@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.BoolArgumentType
 import com.mojang.brigadier.arguments.DoubleArgumentType
 import com.mojang.brigadier.arguments.FloatArgumentType
 import com.mojang.brigadier.arguments.IntegerArgumentType
+import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import com.mojang.brigadier.exceptions.CommandSyntaxException
 import com.mojang.brigadier.tree.ArgumentCommandNode
@@ -22,6 +23,7 @@ import org.luaj.vm2.lib.*
 import org.luaj.vm2.lib.jse.JseBaseLib
 import org.luaj.vm2.lib.jse.JseMathLib
 import ru.pyxiion.pxrp.PxRp.Companion.logger
+import ru.pyxiion.pxrp.api.ItemStackWrapper
 import ru.pyxiion.pxrp.api.LuaMcApi
 import ru.pyxiion.pxrp.api.Player
 import ru.pyxiion.pxrp.storage.StorageManager
@@ -50,6 +52,15 @@ class LuaCmdLoader(
 
             override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
                 return CommandManager.argument(name, MessageArgumentType.message()).build()
+            }
+        },
+        "word" to object : LuaArgumentType {
+            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
+                return StringArgumentType.getString(ctx, name)
+            }
+
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
+                return CommandManager.argument(name, StringArgumentType.word()).build()
             }
         },
         "player" to object : LuaArgumentType {
@@ -157,6 +168,14 @@ class LuaCmdLoader(
             LuaValue.NIL
         }
         mcTable.set("on", onHandler.asVarArgFunction())
+        mcTable.set("createItem", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val id = args.arg(1).checkjstring()
+                val countOrTable = if (args.narg() >= 2) args.arg(2) else null
+                val stack = ItemStackWrapper.createItem(id, countOrTable)
+                return ItemStackWrapper.wrap(stack)
+            }
+        })
         globals.set("mc", mcTable)
     }
 
@@ -232,14 +251,13 @@ class LuaCmdLoader(
 
         require(handler.isfunction()) { "Command handler must be a function" }
 
-        val (commandParts, argDefs) = parseSyntax(syntax)
-        val variants = buildVariants(argDefs)
+        val (variants, argDefs) = parseSyntax(syntax)
         val function = handler.checkfunction()
 
         for (variant in variants) {
             val executor = fun(ctx: CommandContext<ServerCommandSource>): Int {
                 try {
-                    executeLuaCommand(ctx, variant, function)
+                    executeLuaCommand(ctx, variant, argDefs, function)
                     return 1
                 } catch (e: CommandSyntaxException) {
                     throw e
@@ -252,23 +270,22 @@ class LuaCmdLoader(
                 }
                 return 0
             }
-            commandManager!!.addCommand(commandParts.joinToString(" "), variant.map { it.node }, executor, permission)
+            commandManager!!.addCommand(variant, argDefs, executor, permission)
         }
 
         return NIL
     }
 
-    private fun parseSyntax(syntax: String): Pair<List<String>, List<ArgDef>> {
-        val (commandParts, argTokens) = parseSyntaxString(syntax)
-        val argDefs = argTokens.map { token ->
-            val luaType = resolveType(token.typeDef)
-            ArgDef(
-                luaType = luaType,
-                node = luaType.getBrigadierArgument(token.name),
-                isOptional = token.isOptional
+    private fun parseSyntax(syntax: String): Pair<List<List<SyntaxNode>>, Map<String, ArgDef>> {
+        val variants = generateCommandPaths(syntax)
+        val allArgNodes = variants.flatten().filterIsInstance<SyntaxNode.Argument>().distinctBy { it.name }
+        val argDefs = allArgNodes.associate { arg ->
+            arg.name to ArgDef(
+                luaType = resolveType(arg.typeDef),
+                isOptional = arg.isOptional
             )
         }
-        return Pair(commandParts, argDefs)
+        return Pair(variants, argDefs)
     }
 
     private fun resolveType(typeDef: String): LuaArgumentType {
@@ -290,24 +307,36 @@ class LuaCmdLoader(
         }
     }
 
-    private fun prepareLuaArgAndContext(ctx: CommandContext<ServerCommandSource>, argDefs: List<ArgDef>): Array<LuaValue> {
+    private fun prepareLuaArgAndContext(
+        ctx: CommandContext<ServerCommandSource>,
+        variant: List<SyntaxNode>,
+        argDefs: Map<String, ArgDef>
+    ): Array<LuaValue> {
         val player = Player(ctx.source.playerOrThrow).toLuaValue()
         val ctxTable = luaTableOf("player" to player)
 
         val result = mutableListOf<LuaValue>()
         result.add(ctxTable)
-        for (def in argDefs) {
-            val arg = def.luaType.getArg(ctx, def.node.name)
-            result.add(toLuaValue(arg))
+        for (node in variant) {
+            if (node is SyntaxNode.Argument) {
+                val def = argDefs[node.name]!!
+                val arg = def.luaType.getArg(ctx, node.name)
+                result.add(toLuaValue(arg))
+            }
         }
         return result.toTypedArray()
     }
 
     // Invokes the Lua handler function with the prepared context and resolved arguments.
     // Missing optional arguments are simply not passed — Lua sees nil for those params.
-    private fun executeLuaCommand(ctx: CommandContext<ServerCommandSource>, argDefs: List<ArgDef>, function: LuaFunction) {
+    private fun executeLuaCommand(
+        ctx: CommandContext<ServerCommandSource>,
+        variant: List<SyntaxNode>,
+        argDefs: Map<String, ArgDef>,
+        function: LuaFunction
+    ) {
         try {
-            val luaArgs = prepareLuaArgAndContext(ctx, argDefs)
+            val luaArgs = prepareLuaArgAndContext(ctx, variant, argDefs)
             function.invoke(luaArgs)
         } catch (e: LuaError) {
             throw e
