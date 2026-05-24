@@ -44,7 +44,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: artifacts
-          path: build/libs/pxrp-*.jar
+          path: build/libs/*.jar
           if-no-files-found: error
 
   release:
@@ -54,16 +54,27 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: artifacts
 
+      - name: Clean up unwanted JARs
+        run: rm -f *-all.jar *-sources.jar
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            pxrp-*.jar
-            !pxrp-*-all.jar
-            !pxrp-*-sources.jar
+          files: PxRP-*.jar
           generate_release_notes: true
+
+      - name: Publish to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: SYYlZZEi
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: PxRP-*.jar
+          loaders: fabric
+          version-type: release
