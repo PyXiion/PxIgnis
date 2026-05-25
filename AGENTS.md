@@ -29,7 +29,7 @@ Fabric mod (MC 1.21.11) — server admins define chat commands via Lua. Kotlin 2
 
 ```
 src/main/java/ru/pyxiion/pxrp/
-  PxRp.kt               # lifecycle + event wiring
+  PxRp.kt               # lifecycle + event wiring (incl. player_block_break / player_block_place via Fabric API events)
   LuaCmdLoader.kt        # Lua runtime, register() bridge, type map
   LuaCommandManager.kt   # dynamic Brigadier tree management
   CommandSyntax.kt       # SyntaxParser, buildVariants — standalone, no Minecraft deps
@@ -135,6 +135,19 @@ Returned by `world:spawn()`. Also backs `ctx.player` internally (player-only key
 - `mc.cancelTask(id)` — returns `false` if `id >= nextId` (never scheduled) or already cancelled
 - All tasks cleared on `/pxrp reload` and server stop
 - Individual callback errors caught and logged
+
+## Events
+
+### Fabric API events (no mixins)
+
+Block interaction events use Fabric API callbacks, **not** mixins:
+
+| Lua event | Fabric callback | Wiring in `PxRp.kt` |
+|-----------|----------------|---------------------|
+| `player_block_break` | `PlayerBlockBreakEvents.BEFORE` | Line 117 |
+| `player_block_place` | `UseBlockCallback.EVENT` (guarded by `stack.item is BlockItem`) | Line 128 |
+
+Both fire with `(player, pos{x,y,z}, blockId)` and are cancellable via `return false`. Server-side only (checks `player is ServerPlayerEntity`).
 
 ## Lua environment
 

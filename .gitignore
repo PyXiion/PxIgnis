@@ -4,3 +4,5 @@ build/**
 .idea/**
 run/**
 .luarc.json
+.classpath
+bin/**

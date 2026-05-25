@@ -9,7 +9,7 @@ A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define
 ## Features
 
 - **Lua-driven commands** — Write `.lua` files to register Brigadier commands with tab completion, argument parsing, and permission checks.
-- **Event system** — React to player joins, leaves, deaths, chat messages, and server lifecycle with Lua handlers (join/chat events are cancellable).
+- **Event system** — React to player joins, leaves, deaths, chat messages, block break/place, and server lifecycle with Lua handlers (join, chat, and block events are cancellable).
 - **Dynamic reload** — `/pxrp reload` re-executes all Lua scripts instantly without restarting the server.
 - **Rich argument types** — Supports `text`, `word`, `target`/`player`, `int`, `double`, `float`, `bool`, `block_pos`, and custom choices (`choice=a,b,c`) with validation.
 - **Minecraft API exposed to Lua** — Trigger particles, sounds, global/range broadcasting, block manipulation, entity spawning, world time/weather control, and server time access.
@@ -197,6 +197,18 @@ mc.on("server_stop", function()
     mc.data.lastUptime = uptime
 end)
 
+mc.on("player_block_break", function(player, pos, block)
+    if block == "minecraft:bedrock" then
+        return false  -- prevent breaking bedrock
+    end
+end)
+
+mc.on("player_block_place", function(player, pos, block)
+    if block == "minecraft:tnt" then
+        return false  -- prevent placing TNT
+    end
+end)
+
 ```
 
 | Event | Handler args | Fires | Cancellable |
@@ -205,12 +217,14 @@ end)
 | `player_leave` | `player` | Player disconnects | ❌ |
 | `player_death` | `player`, `damageType` | Player dies (`"fall"`, `"player_attack"`, etc.) | ❌ |
 | `player_chat` | `player`, `message` | Player sends a chat message | ✅ |
+| `player_block_break` | `player`, `pos`, `block` | Player is about to break a block | ✅ |
+| `player_block_place` | `player`, `pos`, `block` | Player is about to place a block | ✅ |
 | `server_start` | — | Server finishes starting (after Lua reload) | ❌ |
 | `server_stop` | — | Server is stopping (before save) | ❌ |
 
 ### Cancelling events
 
-For `player_join` and `player_chat`, returning `false` from the handler cancels the action:
+For `player_join`, `player_chat`, `player_block_break`, and `player_block_place`, returning `false` from the handler cancels the action:
 
 ```lua
 -- Kick the player if they're banned
@@ -233,8 +247,10 @@ end)
 
 ```
 
-* `player_join`: fires before the player fully connects . Returning `false` disconnects them.
+* `player_join`: fires before the player fully connects. Returning `false` disconnects them.
 * `player_chat`: fires before the message is broadcast. Returning `false` blocks the message.
+* `player_block_break`: fires before the block is removed. Returning `false` cancels the break.
+* `player_block_place`: fires before the block is placed. Returning `false` cancels the placement.
 * Other events (`player_leave`, `player_death`, `server_start`, `server_stop`) are observational only — return values are ignored.
 * Note: disconnecting a rejected player during `player_join` triggers `player_leave` as well. Scripts that broadcast on leave may show a ghost message for rejected players.
 

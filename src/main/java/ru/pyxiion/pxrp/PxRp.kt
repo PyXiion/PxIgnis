@@ -6,10 +6,14 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents
+import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.command.permission.PermissionLevel
+import net.minecraft.item.BlockItem
+import net.minecraft.registry.Registries
 import net.minecraft.server.command.CommandManager
 import net.minecraft.text.Text
 import org.luaj.vm2.LuaError
@@ -18,6 +22,7 @@ import org.luaj.vm2.LuaValue
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import ru.pyxiion.pxrp.api.Player
+import ru.pyxiion.pxrp.api.Vector
 import ru.pyxiion.pxrp.storage.JsonBackend
 import ru.pyxiion.pxrp.storage.StorageManager
 
@@ -108,6 +113,32 @@ class PxRp : ModInitializer {
             }
             return true
         })
+
+        PlayerBlockBreakEvents.BEFORE.register { world, player, pos, state, _ ->
+            if (storageManager != null && player is net.minecraft.server.network.ServerPlayerEntity) {
+                val luaPlayer = Player(player).toLuaValue()
+                val posTable = Vector(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
+                val blockId = LuaValue.valueOf(Registries.BLOCK.getId(state.block).toString())
+                val results = luaLoader.eventManager.fireWithResults("player_block_break", luaPlayer, posTable, blockId)
+                if (results.any { it.isboolean() && !it.toboolean() }) return@register false
+            }
+            true
+        }
+
+        UseBlockCallback.EVENT.register { player, world, hand, hitResult ->
+            if (storageManager != null && player is net.minecraft.server.network.ServerPlayerEntity && !world.isClient) {
+                val stack = player.getStackInHand(hand)
+                if (stack.item is BlockItem) {
+                    val luaPlayer = Player(player).toLuaValue()
+                    val pos = hitResult.blockPos
+                    val posTable = Vector(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
+                    val blockId = LuaValue.valueOf(Registries.BLOCK.getId((stack.item as BlockItem).block).toString())
+                    val results = luaLoader.eventManager.fireWithResults("player_block_place", luaPlayer, posTable, blockId)
+                    if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
+                }
+            }
+            net.minecraft.util.ActionResult.PASS
+        }
 
         CommandRegistrationCallback.EVENT.register(fun(dispatcher, reg, env) {
             dispatcher.register(
