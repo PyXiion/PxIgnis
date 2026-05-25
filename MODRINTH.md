@@ -32,8 +32,8 @@ register("fart", {}, function(ctx)
     local player = ctx.player
     local pos = player.pos
     broadcastFormat "*{p.name} farted*" {p = player}
-    mc.particle("minecraft:gust", pos.x, pos.y + 0.6, pos.z, player.world)
-    mc.playSound("minecraft:entity.slime.squish", pos.x, pos.y, pos.z, player.world, 10, 0.1)
+    player.world:particle("minecraft:gust", pos.x, pos.y + 0.6, pos.z)
+    mc.playSound("minecraft:entity.slime.squish", pos.x, pos.y, pos.z, player.world.name, 10, 0.1)
 end)
 ```
 

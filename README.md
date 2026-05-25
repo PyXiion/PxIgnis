@@ -42,7 +42,7 @@ register("fart", function(ctx)
     local dir = player.bodyDir
 
     broadcastFormat "*{p.name} farted*" {p = player}
-    mc.particle("minecraft:gust", pos.x - dir.x * 0.5, pos.y + 0.6, pos.z - dir.z * 0.5, player.world.name)
+    player.world:particle("minecraft:gust", pos.x - dir.x * 0.5, pos.y + 0.6, pos.z - dir.z * 0.5)
     mc.playSound("minecraft:entity.slime.squish", pos.x, pos.y, pos.z, player.world.name, 10, 0.1)
 end)
 
@@ -426,10 +426,6 @@ mc.data.totalPlayers = (mc.data.totalPlayers or 0) + 1
 
 ```
 
-### `mc.particle(id, x, y, z, world)`
-
-Spawns a particle at the given coordinates for all online players.
-
 ### `mc.playSound(id, x, y, z, world, volume?, pitch?)`
 
 Plays a sound at the given coordinates.
@@ -437,10 +433,6 @@ Plays a sound at the given coordinates.
 ### `mc.broadcast(text, overlay?)`
 
 Sends a chat message to all players. If `overlay` is a number, sends a title overlay for that many ticks.
-
-### `mc.broadcastInRange(text, x, y, z, range, world, overlay?)`
-
-Sends a message only to players within the given radius in the given world.
 
 ### `mc.time()`
 
@@ -497,6 +489,26 @@ mc.cancelTask(id)
 * Callback errors are caught and logged per-task without affecting other tasks.
 * **Important**: callbacks run on the server tick thread — do not perform blocking operations.
 
+### `mc.players()` → table
+
+Returns an array of [Player](#player-object) wrappers for all online players. Wrappers are cached per player UUID — repeated calls in hot loops reuse the same Lua objects without re-allocation.
+
+```lua
+for i, p in ipairs(mc.players()) do
+    print(p.name, p.health)
+end
+```
+
+### `mc.onlineCount` → number
+
+The current number of online players. Lightweight — no table allocation, suitable for hot loops:
+
+```lua
+if mc.onlineCount == 0 then
+    mc.broadcast("Server is empty!")
+end
+```
+
 ### `mc.world(name)` → World
 
 Returns a World wrapper for the given dimension name (e.g. `"overworld"`, `"the_nether"`, `"the_end"`). The World object has properties and methods for world manipulation. You can also get the player's current world via `player.world`.
@@ -518,6 +530,7 @@ The World object is returned by `player.world` or `mc.world(name)`.
 | `time` | number | ✅ | Game time (ticks). Set to specific tick values |
 | `raining` | boolean | ✅ | Whether rain/snow is falling |
 | `thundering` | boolean | ✅ | Whether a thunderstorm is active |
+| `players` | table | ❌ | Array of Player wrappers currently in this world |
 
 ```lua
 local w = player.world
@@ -591,6 +604,21 @@ Fills a cuboid region. No neighbor updates are sent — blocks appear instantly 
 ```lua
 -- Reset an arena floor
 player.world:fill({x = -10, y = 4, z = -10}, {x = 10, y = 4, z = 10}, "glass")
+
+### `world:particle(particle, x, y, z)`
+
+Spawns a particle at position visible to all players in that world.
+
+```lua
+player.world:particle("minecraft:gust", 0, 64, 0)
+```
+
+### `world:broadcastInRange(text, x, y, z, range, overlay?)`
+
+Broadcasts text to players within range in that world.
+
+```lua
+player.world:broadcastInRange("Someone is nearby!", 0, 64, 0, 10)
 ```
 
 ### `mc.createItem(id, [count])` → ItemStack

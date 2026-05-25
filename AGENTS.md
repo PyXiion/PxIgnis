@@ -40,7 +40,7 @@ src/main/java/ru/pyxiion/pxrp/
     Player.kt            # Lua-facing Player wrapper (delegates to EntityWrapper)
     EntityWrapper.kt     # Universal entity wrapper — properties, tags proxy, equipment
     World.kt             # ServerWorld wrapper — spawn, setBlock, getBlock, fill, time/weather
-    LuaMcApi.kt          # mc table factory — particle, broadcast, time, schedule, world(name)
+    LuaMcApi.kt          # mc table factory — particles, sounds, broadcast, time, schedule, world(name), players(), onlineCount, player wrapper cache
     ItemStackWrapper.kt  # ItemStack ↔ LuaTable conversion, createItem factory, copy() on unwrap
     Vector.kt            # {x, y, z} Lua table helper
   types/
@@ -62,6 +62,7 @@ src/main/java/ru/pyxiion/pxrp/
 - **`__index`/`__newindex` arg indexing**: When called via Lua `:` syntax, arg(1) is `self`, actual params start at arg(2). World companion methods (`spawn`, `setBlock`, `getBlock`, `fill`) use `args.arg(2)`+ for this reason.
 - **Tags proxy must be cached**: `tagsTable(e)` creates a new proxy table. Storing via `t.rawset("tags", tagsProxy)` in `toLuaValue()` ensures the same table instance is returned every time. Accessing `player.tags` via `__index` creates ephemeral tables — writes appear to work but iterate over stale data.
 - **Position coercion**: `toVec3d()` and `toBlockPos()` in root `Utils.kt` accept `{x, y, z}` or `{x=, y=, z=}` tables.
+- **Player wrapper cache**: `LuaMcApi` maintains `mutableMapOf<UUID, LuaValue>()` — `mc.players()` and `world.players` (when World came from `mc.world(name)`) reuse cached wrappers. Invalidated on `DISCONNECT` via `api.invalidatePlayer(uuid)`. Allocated once per player join.
 - **`minecraft:` auto-prefix**: `resolveBlockId` in World.kt adds `minecraft:` if no namespace present. Used by both block methods and `world:spawn()`.
 - **ItemStack mutation shield**: `ItemStackWrapper.unwrap()` always calls `copy()`. Never leak raw references to Lua.
 - **Encapsulated client sync**: Player equipment writes call `e.currentScreenHandler.sendContentUpdates()`. Non-player entity equipment uses `liv.equipStack()` (entity tracker handles sync).
@@ -95,7 +96,7 @@ register("cmd <name:type> [<name:type>]", handler, permission?)
 
 `player.world` returns a World wrapper (not a string — use `player.world.name`).
 
-**Properties**: `name` (ro), `time` (rw), `raining` (rw), `thundering` (rw).
+**Properties**: `name` (ro), `time` (rw), `raining` (rw), `thundering` (rw), `players` (ro).
 - `time` is game ticks (long, Lua number). `w.time = w.time - (w.time % 24000) + 6000` sets to noon.
 - `raining`/`thundering` are booleans. Setting toggles weather via `ServerWorld.setWeather()`.
 
@@ -104,6 +105,8 @@ register("cmd <name:type> [<name:type>]", handler, permission?)
 - `world:setBlock(pos, blockId)` — flag `0x03` (notify clients + update neighbors).
 - `world:getBlock(pos)` → string like `"minecraft:stone"`.
 - `world:fill(pos1, pos2, blockId)` — flag `0x02` (neighbors only, no block updates). Volume capped at 32,768 blocks.
+- `world:particle(particle, x, y, z)` — spawns a particle at position visible to all players in that world.
+- `world:broadcastInRange(text, x, y, z, range, overlay?)` — broadcasts text to players within range in that world.
 
 ## EntityWrapper
 
