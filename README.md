@@ -1,6 +1,6 @@
 # PxRP
 
-![version](https://img.shields.io/badge/version-0.4.0-blue)
+![version](https://img.shields.io/badge/version-0.5.0-blue)
 
 A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define custom chat commands and complex server logic using Lua scripts — no Java or Kotlin mod code required.
 
