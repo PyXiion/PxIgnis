@@ -78,3 +78,9 @@ jobs:
           files: PxRP-*.jar
           loaders: fabric
           version-type: release
+          game-versions: |
+            1.21.11
+          dependencies: |
+            fabric-api
+            fabric-language-kotlin
+            fabric-permissions-api(optional)
