@@ -51,9 +51,52 @@ class Player(private val entity: ServerPlayerEntity) {
                     "isOp" -> LuaValue.valueOf(e.getPermissions().hasPermission(DefaultPermissions.GAMEMASTERS))
                     "selectedSlot" -> LuaValue.valueOf(e.inventory.selectedSlot)
                     "isFlying" -> LuaValue.valueOf(e.abilities.flying)
-                    "sidebar" -> sidebarProxy(e)
-                    else -> entityValue.get(key)
+                    "sidebar" -> {
+                        val manager = PxRp.instance.luaLoader.personalSidebarManager
+                        if (manager.getSidebar(e) != null) sidebarProxy(e) else LuaValue.NIL
+                    }
+                    else -> {
+                        val metaVal = MetaTableRegistry.PLAYER.get(key)
+                        if (!metaVal.isnil()) metaVal else entityValue.get(key)
+                    }
                 }
+            }
+        })
+
+        metatable.set("__pairs", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val self = args.arg(1)
+                val playerKeys = kotlin.collections.listOf(
+                    "food", "saturation", "gamemode", "ping", "xpLevel", "xpProgress",
+                    "isOp", "selectedSlot", "isFlying", "sidebar", "data",
+                    "sendMessage", "sendActionBar", "sendTitle", "kick",
+                    "teleport", "damage", "heal", "playSound", "give", "setItem", "getItem", "clear",
+                )
+                val entityKeys = kotlin.collections.listOf(
+                    "uuid", "type", "name", "displayName", "customName",
+                    "world", "pos", "dir", "bodyDir",
+                    "fallDistance", "fireTicks", "glowing", "invulnerable",
+                    "isSneaking", "isSprinting", "air", "maxAir",
+                    "health", "maxHealth",
+                    "speed", "armor", "armorToughness", "attackDamage", "attackSpeed",
+                    "knockbackResistance", "luck", "stepHeight", "blockBreakSpeed",
+                    "gravity", "scale", "safeFallDistance", "flyingSpeed",
+                    "mainhand", "offhand", "head", "chest", "legs", "feet",
+                    "tags",
+                    "readNbt", "writeNbt",
+                )
+                val allKeys = playerKeys + entityKeys
+                val iterator = object : VarArgFunction() {
+                    private var index = 0
+                    override fun invoke(args: Varargs): Varargs {
+                        if (index >= allKeys.size) return LuaValue.NIL
+                        val key = allKeys[index]
+                        index++
+                        val value = self.get(key)
+                        return LuaValue.varargsOf(arrayOf(LuaValue.valueOf(key), value))
+                    }
+                }
+                return LuaValue.varargsOf(arrayOf(iterator, self, LuaValue.NIL))
             }
         })
 
@@ -80,11 +123,15 @@ class Player(private val entity: ServerPlayerEntity) {
                             val t = value.checktable()
                             val title = t.get("title").optjstring(null)
                             val lines = mutableListOf<String>()
-                            var i = 1
-                            while (true) {
-                                val v = t.rawget(i++)
-                                if (v.isnil()) break
-                                if (v.isstring()) lines.add(v.tojstring())
+                            val linesTable = t.get("lines")
+                            if (linesTable.istable()) {
+                                val lt = linesTable.checktable()
+                                var i = 1
+                                while (true) {
+                                    val v = lt.rawget(i++)
+                                    if (v.isnil()) break
+                                    if (v.isstring()) lines.add(v.tojstring())
+                                }
                             }
                             manager.setSidebar(e, lines, title)
                         }

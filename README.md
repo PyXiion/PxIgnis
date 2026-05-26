@@ -26,16 +26,18 @@ A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define
 ## Features
 
 - **Lua-driven commands** — Write `.lua` files to register Brigadier commands with tab completion, argument parsing, and permission checks.
-- **Event system** — React to player joins, leaves, deaths, chat messages, block break/place, and server lifecycle with Lua handlers (join, chat, and block events are cancellable).
-- **Dynamic reload** — `/pxrp reload` re-executes all Lua scripts instantly without restarting the server.
+- **Event system** — React to 17 game events: player join/leave/death/chat/kill/damage/hurt, block break/place, item use, entity attack/interact, entity hurt/damage, and server lifecycle with Lua handlers (9 cancellable).
+- **Dynamic reload** — `/pxrp reload` re-executes all Lua scripts instantly without restarting the server. All Lua state is torn down and rebuilt — persistent data must use `mc.data`/`player.data`.
 - **Rich argument types** — Supports `text`, `word`, `target`/`player`, `int`, `double`, `float`, `bool`, `block_pos`, and custom choices (`choice=a,b,c`) with validation.
 - **Minecraft API exposed to Lua** — Trigger particles, sounds, global/range broadcasting, block manipulation, entity spawning, world time/weather control, and server time access.
 - **Persistent data storage** — Key-value data per player (`ctx.player.data`) and globally (`mc.data`), auto-persisted to JSON.
 - **Permission system** — Integrates with the Fabric Permissions API (supports both OP-based and permissions plugins like LuckPerms).
 - **Player context** — Handlers receive a live `Player` wrapper object with readable properties (health, position, gamemode, etc.) and methods (`sendMessage`, `teleport`, `kick`, `give`).
 - **Structure loading** — Load and place Minecraft structure files with rotation, mirroring, and per-entity Lua callbacks.
+- **Entity API** — `entity:damage(amount, source?)`, `entity:raycast(range)`, `entity:addEffect/removeEffect/hasEffect`, `entity:setOnFireFor(ticks)`, `entity:readNbt()/writeNbt(table)`.
 - **Debug dumping** — `mc.dump(obj, depth?)` prints any Lua value as readable nested output with cycle detection.
-- **Entity NBT access** — `entity:readNbt()` and `entity:writeNbt(table)` for full serialization control.
+- **Metatable extensions** — `mc.getMetatable("player"/"entity"/"world"/"structure")` allows adding custom methods to all wrappers of that type.
+- **Per-player sidebar** — `player.sidebar = {title = "...", lines = {...}}` for packet-based scoreboard display.
 - **Lua libraries** — Bundled `format.lua` (f-string-like templating) and `simple.lua` (concise command registration).
 
 ## Quick Start
@@ -276,6 +278,17 @@ if mc.onlineCount == 0 then
 end
 ```
 
+### `mc.getEntity(uuid)` → Entity
+
+Looks up an entity by UUID across all worlds. Returns an [EntityWrapper](#entity-wrapper) or `nil` if not found.
+
+```lua
+local e = mc.getEntity("a1b2c3d4-...")
+if e ~= nil then
+    e:damage(10)
+end
+```
+
 ### `mc.world(name)` → World
 
 Returns a [World](#world-api) wrapper for the given dimension name (e.g. `"overworld"`, `"the_nether"`, `"the_end"`). Also accessible via `player.world`.
@@ -305,15 +318,16 @@ s:place(player.world, {x = 0, y = 64, z = 0})
 
 ### `mc.createItem(id, [count | components])` → ItemStack
 
-Creates an ItemStack. Short form: `mc.createItem(id, count)`. Extended form with a components table:
+Creates an ItemStack. Short form: `mc.createItem(id, count)`. Extended form with a components table (returned ItemStacks expose `id`, `count`, and `custom_model_data` as read-only properties):
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `count` | int | Stack count (default 1) |
 | `name` | string | Custom item name |
 | `lore` | string[] | Lore lines |
-| `custom_model_data` | int | Custom model data |
+| `custom_model_data` | int | Custom model data value |
 | `unbreakable` | bool | Makes item unbreakable |
+| `attackDamage` | number | Sets base attack damage (adds attribute modifier) |
 
 ```lua
 local arrows = mc.createItem("minecraft:arrow", 64)
@@ -335,6 +349,25 @@ A server-wide persistent table (`config/pxrp/storage/global.json`). Data is writ
 mc.data.eventActive = true
 mc.data.totalPlayers = (mc.data.totalPlayers or 0) + 1
 ```
+
+### `mc.getMetatable(name)` → table
+
+Returns a singleton LuaTable for one of 4 wrapper types. Functions set on these tables become available on all wrappers of that type via `__index` fallthrough.
+
+| Name | Affects |
+|------|---------|
+| `"player"` | Player wrappers (checked before entity) |
+| `"entity"` | Entity wrappers (Player delegates here) |
+| `"world"` | World wrappers |
+| `"structure"` | Structure wrappers |
+
+```lua
+local meta = mc.getMetatable("entity")
+meta.myFunc = function(self) return self.name end
+-- Now `entity:myFunc()` works on ALL entities
+```
+
+Methods are colon-callable (receive `self` as arg1).
 
 ### `mc.on(event, handler)`
 
@@ -366,12 +399,15 @@ The Player object is accessed via `ctx.player` inside a command handler, or as t
 | `xpProgress` | number | ❌ | XP progress (0–1) |
 | `isOp` | boolean | ❌ | Operator status |
 | `displayName` | string | ❌ | Display name |
-| `isSneaking` | boolean | ❌ | Sneaking state |
-| `isSprinting` | boolean | ❌ | Sprinting state |
+| `customName` | string | ✅ | Custom name tag (nil clears) |
+| `isSneaking` | boolean | ✅ | Sneaking state |
+| `isSprinting` | boolean | ✅ | Sprinting state |
 | `selectedSlot` | number | ❌ | Hotbar slot |
-| `fallDistance` | number | ❌ | Fall distance |
+| `fallDistance` | number | ✅ | Fall distance |
 | `isFlying` | boolean | ❌ | Flying state |
 | `air` | number | ✅ | Air ticks (max 300) |
+| `removed` | boolean | ❌ | Entity removed from world |
+| `tags` | table | ✅ | Command tags proxy (`tags["foo"] = true`) |
 | `maxAir` | number | ❌ | Max air ticks |
 | `armor` | number | ✅ | Armor attribute |
 | `armorToughness` | number | ✅ | Armor toughness attribute |
@@ -410,16 +446,37 @@ ctx.player:teleport(100, 64, 200)
 |--------|------|-------------|
 | `sendMessage` | text | Sends a chat message |
 | `sendActionBar` | text | Action bar overlay |
-| `sendTitle` | title, [subtitle=nil] | Title + optional subtitle |
+| `sendTitle` | title, [subtitle=nil] | Title + optional subtitle (fade 20/60/20 ticks) |
 | `kick` | [reason="Kicked"] | Disconnects the player |
 | `teleport` | x, y, z, [worldName=nil] | Teleport (intra-world or cross-dimension) |
 | `damage` | amount | Deal generic damage |
 | `heal` | amount | Heal health |
 | `playSound` | id, [volume=1], [pitch=1] | Play a sound to the player |
-| `give` | itemId/[item], [count=1] | Give item (string+count or ItemStack) |
-| `setItem` | slot, item | Set item in slot (ItemStack from `mc.createItem`) |
+| `give` | item | Give item — either a string (e.g. `"minecraft:diamond 5"`) or an ItemStack wrapper |
+| `setItem` | slot, item | Set item in inventory slot (ItemStack or nil) |
 | `getItem` | slot | Get item from slot → ItemStack or nil |
-| `clear` | — | Clear inventory |
+| `clear` | — | Clear entire inventory |
+
+### Per-player sidebar (`player.sidebar`)
+
+A packet-based per-player scoreboard sidebar that does not affect the global scoreboard.
+
+```lua
+-- Create sidebar
+player.sidebar = {
+    title = "My Server",
+    lines = {"Line 1", "Line 2", "Line 3"}
+}
+
+-- Update parts
+player.sidebar.title = "New Title"
+player.sidebar.lines = {"Updated!"}
+
+-- Remove
+player.sidebar = nil
+```
+
+The sidebar persists across worlds and reconnects (restored 2 ticks after join).
 
 ### Per-player persistent storage (`ctx.player.data`)
 
@@ -521,6 +578,17 @@ Broadcasts text to players within range in that world.
 player.world:broadcastInRange("Someone is nearby!", 0, 64, 0, 10)
 ```
 
+#### `world:getEntities(pos, radius, typeFilter?)` → table
+
+Returns an array of [EntityWrapper](#entity-wrapper) for entities within a radius. Optionally filters by entity type ID.
+
+```lua
+local mobs = w:getEntities({x = 0, y = 64, z = 0}, 10, "minecraft:zombie")
+for i, e in ipairs(mobs) do
+    e:damage(10)
+end
+```
+
 ---
 
 ## Entity Wrapper
@@ -550,6 +618,7 @@ Returned by `world:spawn()` and also backs `ctx.player` internally (player-only 
 | `invulnerable` | boolean | ✅ | Invulnerability |
 | `isSneaking` | boolean | ✅ | Sneaking state |
 | `isSprinting` | boolean | ✅ | Sprinting state |
+| `removed` | boolean | ❌ | Entity removed from world |
 
 ### Equipment properties
 
@@ -576,6 +645,52 @@ Command tags are exposed via a proxy table — `entity.tags["tagName"] = true` a
 
 ```lua
 entity.tags["quest_mob"] = true
+```
+
+### Methods
+
+#### `entity:damage(amount, sourceEntity?)`
+
+Damages the entity. If `sourceEntity` (a table/EntityWrapper with a `uuid` field) is provided, enables knockback via player/mob attack source.
+
+```lua
+entity:damage(10)                      -- generic damage, no knockback
+entity:damage(10, ctx.player)          -- player attack with knockback
+```
+
+#### `entity:raycast(range, includeFluids?)` → Entity | `{x, y, z}` | nil
+
+Raycasts from the entity's eyes. Returns the closest LivingEntity hit, a position table `{x, y, z}` if a block is hit, or `nil`.
+
+```lua
+local target = entity:raycast(50)
+if target and target.type == "minecraft:villager" then
+    mc.broadcast("Looking at a villager!")
+end
+```
+
+#### `entity:addEffect(effectId, duration, amplifier?, particles?, icon?)` → boolean
+
+Adds a status effect. All params after `duration` are optional.
+
+```lua
+entity:addEffect("minecraft:speed", 100, 2)  -- speed III for 5 seconds
+```
+
+#### `entity:removeEffect(effectId)` → boolean
+
+Removes a status effect by ID.
+
+#### `entity:hasEffect(effectId)` → boolean
+
+Checks if the entity has a specific effect.
+
+#### `entity:setOnFireFor(ticks)`
+
+Sets the entity on fire. Instantly syncs the fire visual to clients (unlike setting `fireTicks` directly).
+
+```lua
+entity:setOnFireFor(100)  -- 5 seconds of fire
 ```
 
 ### NBT methods
@@ -742,18 +857,32 @@ end)
 
 | Event | Handler args | Fires | Cancellable |
 |-------|--------------|-------|:-----------:|
+| `server_start` | — | Server finishes starting (after Lua reload) | ❌ |
+| `server_stop` | — | Server is stopping (before save) | ❌ |
 | `player_join` | `player` | Player joins the server | ✅ |
 | `player_leave` | `player` | Player disconnects | ❌ |
 | `player_death` | `player`, `damageType` | Player dies (`"fall"`, `"player_attack"`, etc.) | ❌ |
 | `player_chat` | `player`, `message` | Player sends a chat message | ✅ |
 | `player_block_break` | `player`, `pos`, `block` | Player is about to break a block | ✅ |
 | `player_block_place` | `player`, `pos`, `block` | Player is about to place a block | ✅ |
-| `server_start` | — | Server finishes starting (after Lua reload) | ❌ |
-| `server_stop` | — | Server is stopping (before save) | ❌ |
+| `player_use_item` | `player`, `hand`, `itemStack`, `itemId` | Player right-clicks with item | ✅ |
+| `player_attack_entity` | `player`, `entity` | Left-click on entity | ✅ |
+| `player_interact_entity` | `player`, `entity` | Right-click on entity | ✅ |
+| `player_hurt` | `player`, `damageType`, `amount` | Before player takes damage | ✅ |
+| `entity_hurt` | `entity`, `damageType`, `amount` | Before entity (non-player) takes damage | ✅ |
+| `player_damage` | `player`, `damageType`, `damageTaken`, `blocked` | After player takes damage | ❌ |
+| `entity_damage` | `entity`, `damageType`, `damageTaken`, `blocked` | After entity (non-player) takes damage | ❌ |
+| `player_kill` | `player`, `killedEntity`, `damageType` | Player kills another entity | ❌ |
+
+**Notes**:
+- `hand` is `"main"` or `"off"`
+- `itemStack` is an [ItemStack](#mc-createitem-id-count-components---itemstack) wrapper or `nil`
+- `damageType` is the last segment after `.` (e.g. `"fall"`, `"player_attack"`, `"generic"`)
+- `blocked` is a boolean — `true` if a shield was used
 
 ### Cancelling events
 
-For `player_join`, `player_chat`, `player_block_break`, and `player_block_place`, returning `false` cancels the action:
+For cancellable events (marked ✅ above), returning `false` cancels the action:
 
 ```lua
 -- Kick banned players on join
@@ -779,7 +908,11 @@ end)
 * `player_chat`: fires before the message is broadcast. Returning `false` blocks the message.
 * `player_block_break`: fires before the block is removed. Returning `false` cancels the break.
 * `player_block_place`: fires before the block is placed. Returning `false` cancels the placement.
-* Other events (`player_leave`, `player_death`, `server_start`, `server_stop`) are observational only — return values are ignored.
+* `player_use_item`: fires before item use. Returning `false` prevents using the item.
+* `player_attack_entity`: fires before attack. Returning `false` cancels the attack.
+* `player_interact_entity`: fires before interaction. Returning `false` cancels the interaction.
+* `player_hurt`/`entity_hurt`: fires before damage is applied. Returning `false` makes the entity immune to that damage.
+* Other events (`player_leave`, `player_death`, `player_damage`, `entity_damage`, `player_kill`, `server_start`, `server_stop`) are observational only — return values are ignored.
 * Disconnecting a rejected player during `player_join` triggers `player_leave` as well. Scripts that broadcast on leave may show a ghost message for rejected players.
 
 ---

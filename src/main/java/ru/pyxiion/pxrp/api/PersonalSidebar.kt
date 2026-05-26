@@ -1,15 +1,12 @@
 package ru.pyxiion.pxrp.api
 
 import net.minecraft.network.packet.s2c.play.ScoreboardDisplayS2CPacket
-import net.minecraft.network.packet.s2c.play.ScoreboardObjectiveUpdateS2CPacket
-import net.minecraft.network.packet.s2c.play.ScoreboardScoreUpdateS2CPacket
+import net.minecraft.scoreboard.ScoreHolder
 import net.minecraft.scoreboard.ScoreboardCriterion
 import net.minecraft.scoreboard.ScoreboardDisplaySlot
-import net.minecraft.scoreboard.ScoreboardObjective
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.text.Text
-import java.util.Optional
 import java.util.UUID
 
 class PersonalSidebarManager(private val server: MinecraftServer) {
@@ -30,7 +27,24 @@ class PersonalSidebarManager(private val server: MinecraftServer) {
         val sideData = PersonalSidebarData(objectiveName, displayTitle, lines)
         sidebars[player.uuid] = sideData
 
-        sendCreatePackets(player, sideData)
+        val scoreboard = server.scoreboard
+        var objective = scoreboard.getNullableObjective(objectiveName)
+        if (objective == null) {
+            objective = scoreboard.addObjective(objectiveName, ScoreboardCriterion.DUMMY, Text.literal(displayTitle), ScoreboardCriterion.RenderType.INTEGER, false, null)
+        } else {
+            objective.displayName = Text.literal(displayTitle)
+        }
+
+        for ((index, line) in lines.withIndex()) {
+            val holder = ScoreHolder.fromName("_l$index")
+            val scoreObj = scoreboard.getOrCreateScore(holder, objective)
+            scoreObj.setScore(lines.size - index)
+            scoreObj.setDisplayText(Text.literal(line))
+        }
+
+        player.networkHandler.sendPacket(
+            ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, objective)
+        )
     }
 
     fun getSidebar(player: ServerPlayerEntity): PersonalSidebarData? {
@@ -42,18 +56,30 @@ class PersonalSidebarManager(private val server: MinecraftServer) {
         val newData = data.copy(title = title)
         sidebars[player.uuid] = newData
 
-        val objective = makeObjective(newData.objectiveName, newData.title)
-        player.networkHandler.sendPacket(
-            ScoreboardObjectiveUpdateS2CPacket(objective, ScoreboardObjectiveUpdateS2CPacket.UPDATE_MODE)
-        )
+        val objective = server.scoreboard.getNullableObjective(data.objectiveName) ?: return
+        objective.displayName = Text.literal(title)
     }
 
     fun setSidebarLines(player: ServerPlayerEntity, lines: List<String>) {
         val data = sidebars[player.uuid] ?: return
-        sendRemovePackets(player, data)
         val newData = data.copy(lines = lines)
         sidebars[player.uuid] = newData
-        sendCreatePackets(player, newData)
+
+        val scoreboard = server.scoreboard
+        val objective = scoreboard.getNullableObjective(data.objectiveName) ?: return
+
+        val prevCount = data.lines.size
+        if (lines.size < prevCount) {
+            for (i in lines.size until prevCount) {
+                scoreboard.removeScore(ScoreHolder.fromName("_l$i"), objective)
+            }
+        }
+        for ((index, line) in lines.withIndex()) {
+            val holder = ScoreHolder.fromName("_l$index")
+            val scoreObj = scoreboard.getOrCreateScore(holder, objective)
+            scoreObj.setScore(lines.size - index)
+            scoreObj.setDisplayText(Text.literal(line))
+        }
     }
 
     fun clearSidebar(player: ServerPlayerEntity) {
@@ -62,63 +88,19 @@ class PersonalSidebarManager(private val server: MinecraftServer) {
 
     fun restoreForPlayer(player: ServerPlayerEntity) {
         val data = sidebars[player.uuid] ?: return
-        sendCreatePackets(player, data)
+        val objective = server.scoreboard.getNullableObjective(data.objectiveName)
+        if (objective != null) {
+            player.networkHandler.sendPacket(
+                ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, objective)
+            )
+        }
     }
 
     fun removeForPlayer(player: ServerPlayerEntity) {
         val data = sidebars.remove(player.uuid) ?: return
-        sendRemovePackets(player, data)
-    }
-
-    private fun sendCreatePackets(player: ServerPlayerEntity, data: PersonalSidebarData) {
-        val objective = makeObjective(data.objectiveName, data.title)
-
-        // Remove first to avoid "already exists" errors if the objective is already on the client
-        // (e.g. from a previous sendCreatePackets, race with restoreForPlayer, etc.)
-        player.networkHandler.sendPacket(
-            ScoreboardObjectiveUpdateS2CPacket(objective, ScoreboardObjectiveUpdateS2CPacket.REMOVE_MODE)
-        )
-
-        player.networkHandler.sendPacket(
-            ScoreboardObjectiveUpdateS2CPacket(objective, ScoreboardObjectiveUpdateS2CPacket.ADD_MODE)
-        )
-
-        for ((index, line) in data.lines.withIndex()) {
-            val score = data.lines.size - index
-            player.networkHandler.sendPacket(
-                ScoreboardScoreUpdateS2CPacket(
-                    "_l$index",
-                    data.objectiveName,
-                    score,
-                    Optional.of(Text.literal(line)),
-                    Optional.empty()
-                )
-            )
+        val objective = server.scoreboard.getNullableObjective(data.objectiveName)
+        if (objective != null) {
+            server.scoreboard.removeObjective(objective)
         }
-
-        player.networkHandler.sendPacket(
-            ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, objective)
-        )
-    }
-
-    private fun sendRemovePackets(player: ServerPlayerEntity, data: PersonalSidebarData) {
-        player.networkHandler.sendPacket(
-            ScoreboardObjectiveUpdateS2CPacket(
-                makeObjective(data.objectiveName, data.title),
-                ScoreboardObjectiveUpdateS2CPacket.REMOVE_MODE
-            )
-        )
-    }
-
-    private fun makeObjective(name: String, title: String): ScoreboardObjective {
-        return ScoreboardObjective(
-            server.scoreboard,
-            name,
-            ScoreboardCriterion.DUMMY,
-            Text.literal(title),
-            ScoreboardCriterion.RenderType.INTEGER,
-            false,
-            null
-        )
     }
 }

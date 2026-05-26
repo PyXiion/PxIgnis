@@ -172,6 +172,16 @@ class LuaCmdLoader(
             LuaValue.NIL
         }
         mcTable.set("on", onHandler.asVarArgFunction())
+        val emitHandler: (Varargs) -> Varargs = { args ->
+            require(args.narg() >= 1) { "emit(event, ...) requires at least 1 argument" }
+            val eventName = args.checkjstring(1)
+            val eventArgs = if (args.narg() >= 2) {
+                (2..args.narg()).map { args.arg(it) }.toTypedArray()
+            } else emptyArray<LuaValue>()
+            eventManager.fire(eventName, *eventArgs)
+            LuaValue.NIL
+        }
+        mcTable.set("emit", emitHandler.asVarArgFunction())
         mcTable.set("createItem", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val id = args.arg(1).checkjstring()

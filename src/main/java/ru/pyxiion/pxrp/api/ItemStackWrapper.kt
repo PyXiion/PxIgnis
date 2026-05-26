@@ -1,8 +1,12 @@
 package ru.pyxiion.pxrp.api
 
 import net.minecraft.component.DataComponentTypes
+import net.minecraft.component.type.AttributeModifierSlot
+import net.minecraft.component.type.AttributeModifiersComponent
 import net.minecraft.component.type.CustomModelDataComponent
 import net.minecraft.component.type.LoreComponent
+import net.minecraft.entity.attribute.EntityAttributeModifier
+import net.minecraft.entity.attribute.EntityAttributes
 import net.minecraft.item.ItemStack
 import net.minecraft.registry.Registries
 import net.minecraft.text.Text
@@ -23,6 +27,13 @@ object ItemStackWrapper {
         t.rawset("count", LuaValue.valueOf(stack.count))
         t.rawset(MARKER, LuaValue.valueOf(true))
         t.rawset(STORAGE, CoerceJavaToLua.coerce(stack))
+        val cmd = stack.get(DataComponentTypes.CUSTOM_MODEL_DATA)
+        if (cmd != null) {
+            val first = cmd.floats.firstOrNull()
+            if (first != null) {
+                t.rawset("custom_model_data", LuaValue.valueOf(first.toInt()))
+            }
+        }
         return t
     }
 
@@ -83,6 +94,24 @@ object ItemStackWrapper {
         table.get("unbreakable").let { v ->
             if (v.toboolean()) {
                 stack.set(DataComponentTypes.UNBREAKABLE, Unit.INSTANCE)
+            }
+        }
+
+        table.get("attackDamage").let { v ->
+            if (v.isnumber()) {
+                val attrMod = EntityAttributeModifier(
+                    Identifier.of("pxrp", "attack_damage"),
+                    v.todouble() - 1.0,
+                    EntityAttributeModifier.Operation.ADD_VALUE
+                )
+                val current = stack.getOrDefault(
+                    DataComponentTypes.ATTRIBUTE_MODIFIERS,
+                    AttributeModifiersComponent.DEFAULT
+                )
+                stack.set(
+                    DataComponentTypes.ATTRIBUTE_MODIFIERS,
+                    current.with(EntityAttributes.ATTACK_DAMAGE, attrMod, AttributeModifierSlot.MAINHAND)
+                )
             }
         }
 

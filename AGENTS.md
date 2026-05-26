@@ -1,6 +1,6 @@
 # PxRP — Agent instructions
 
-Fabric mod (MC 1.21.11) — server admins define chat commands via Lua. Kotlin 2.2.21, Fabric Loom 1.16, Yarn, Java 21.
+Fabric mod (MC 1.21.11) — server admins define chat commands via Lua. Kotlin 2.3.21, Fabric Loom 1.16, Yarn, Java 21.
 
 ## Build, test, run
 
@@ -21,7 +21,7 @@ Fabric mod (MC 1.21.11) — server admins define chat commands via Lua. Kotlin 2
 
 ## Testing
 
-`src/test/kotlin/ru/pyxiion/pxrp/` — JUnit 5 via `kotlin-test-junit5`. 3 files: `SyntaxParserTest`, `BuildVariantsTest`, `BrigadierTreeTest`. Pure logic, no Minecraft runtime.
+`src/test/kotlin/ru/pyxiion/pxrp/` — 5 files: `SyntaxParserTest`, `BuildVariantsTest`, `BrigadierTreeTest`, `EventManagerTest`, `MetaTableRegistryTest`. JUnit 5 via `kotlin-test-junit5`. Pure logic, no Minecraft runtime.
 
 `BrigadierTreeTest` reflects `CommandNode.children` field directly — `getChildren()` returns a non-Map type on this classpath. Use `childrenField.get(node) as Map<*, *>`.
 
@@ -29,29 +29,33 @@ Fabric mod (MC 1.21.11) — server admins define chat commands via Lua. Kotlin 2
 
 ```
 src/main/java/ru/pyxiion/pxrp/
-  PxRp.kt               # lifecycle + event wiring (incl. player_block_break / player_block_place via Fabric API events)
-  LuaCmdLoader.kt        # Lua runtime, register() bridge, type map
+  PxRp.kt               # lifecycle + ALL event wiring (no mixins for events)
+  LuaCmdLoader.kt        # Lua runtime, register() bridge, type map, reload sequence
   LuaCommandManager.kt   # dynamic Brigadier tree management
   CommandSyntax.kt       # SyntaxParser, buildVariants — standalone, no Minecraft deps
   LuaEventManager.kt     # mc.on() event bus
   Scheduler.kt           # mc.schedule/mc.scheduleRepeating/mc.cancelTask
   Utils.kt               # luaTableOf(), checkPermission(), asVarArgFunction(), toVec3d(), toBlockPos()
-  api/
-    Player.kt            # Lua-facing Player wrapper (delegates to EntityWrapper)
-    EntityWrapper.kt     # Universal entity wrapper — properties, tags proxy, equipment
-    World.kt             # ServerWorld wrapper — spawn, setBlock, getBlock, fill, time/weather
-    LuaMcApi.kt          # mc table factory — particles, sounds, broadcast, time, schedule, world(name), players(), onlineCount, player wrapper cache
-    ItemStackWrapper.kt  # ItemStack ↔ LuaTable conversion, createItem factory, copy() on unwrap
-    Vector.kt            # {x, y, z} Lua table helper
-  types/
-    LuaArgumentType.kt   # Interface for Brigadier arg type adapters
-    ChoiceArgumentType.kt# StringArgumentType.word() + runtime validation + SuggestionProvider
-    Utils.kt             # toLuaValue() — Any→LuaValue coercion
-  storage/               # DataTable, DataBackend, JsonBackend, StorageManager
-  mixins/
-    CommandNodeMixin.java  # @Accessor on Brigadier CommandNode fields (children, command, requirement)
-    MinecraftServerMixin   # @Inject on reloadResources → luaLoader.reload()
-  coerce/                # DEAD CODE — entirely commented out
+   api/
+     Player.kt            # Lua-facing Player wrapper (delegates to EntityWrapper)
+     EntityWrapper.kt     # Universal entity wrapper — properties, tags proxy, equipment, readNbt/writeNbt, nbtToLua/luaToNbt, damage, setOnFireFor
+     World.kt             # ServerWorld wrapper — spawn, setBlock, getBlock, fill, time/weather
+     LuaMcApi.kt          # mc table factory — particles, sounds, broadcast, time, schedule, world(name), players(), onlineCount, loadStructure, loadStructureFile, dump, getMetatable
+     StructureWrapper.kt  # Structure template wrapper — size, place(rotation/mirror/on_entity)
+     ItemStackWrapper.kt  # ItemStack ↔ LuaTable conversion, createItem factory, copy() on unwrap
+     Vector.kt            # {x, y, z} Lua table helper
+     PersonalSidebar.kt   # Per-player scoreboard sidebar (packet-based, avoids global scoreboard)
+     MetaTableRegistry.kt # Global Lua metatable store — mc.getMetatable() backed by 4 singletons
+   types/
+     LuaArgumentType.kt   # Interface for Brigadier arg type adapters
+     ChoiceArgumentType.kt# StringArgumentType.word() + runtime validation + SuggestionProvider
+     Utils.kt             # toLuaValue() — Any→LuaValue coercion
+   storage/               # DataTable, DataBackend, JsonBackend, StorageManager
+   mixins/
+     CommandNodeMixin.java  # @Accessor on Brigadier CommandNode fields
+     MinecraftServerMixin   # @Inject on reloadResources → luaLoader.reload()
+     StructureTemplateMixin.java  # @Accessor on StructureTemplate.entities field
+   coerce/                # DEAD CODE — entirely commented out
 ```
 
 ## Key conventions
@@ -74,6 +78,17 @@ src/main/java/ru/pyxiion/pxrp/
 - **Choice args**: `ChoiceArgumentType` implements `LuaArgumentType` (not Brigadier's `ArgumentType`). Uses `StringArgumentType.word()` + runtime validation in `getArg()`. `SuggestionProvider` provides tab completions. Different choice sets share the same class.
 - **Reserved commands**: `pxrp`, `stop`, `reload`, `op`, `deop`, `ban`, `ban-ip`, `pardon`, `pardon-ip`, `save-all`, `save-on`, `save-off`, `whitelist` — blocked in `addCommand()`.
 - **Fresh nodes per variant**: `ArgDef` stores only `luaType` + `isOptional`. `LuaCommandManager.addCommand` creates fresh `ArgumentCommandNode` instances on demand via `argDef.luaType.getBrigadierArgument(name)`.
+- **`__pairs` for all wrapper types**: `EntityWrapper`, `World`, `Player`, and `StructureWrapper` implement `__pairs` metamethods so `pairs()` works. Each returns a static key list + dynamic value lookup via `self.get(key)`. Uses `kotlin.collections.listOf(...)` to avoid clash with LuaJ's `VarArgFunction.listOf`.
+- **`mc.dump(obj, depth?)`**: Recursive value printer with cycle detection via `System.identityHashCode()`. Respects `__pairs` metamethods. Prints to stdout and returns the string. Max depth defaults to 3.
+- **`mc.getMetatable(name)`**: Returns one of 4 singleton LuaTables — `"player"`, `"entity"`, `"world"`, `"structure"`. Functions set on these are available on any wrapper of that type via `__index` fallthrough. Player metatable delegates to entity metatable (not vice versa). Colon-callable (receives self as arg1).
+- **`player.sidebar`**: Proxy table backed by `PersonalSidebarManager` (packet-based per-player scoreboard). `player.sidebar = { title = "...", lines = {...} }` creates; `player.sidebar.title`/`player.sidebar.lines` update; `player.sidebar = nil` clears. Persists across worlds/reconnects (restored 2 ticks after join via scheduler delay).
+- **Structure loading**: `StructureWrapper` stores `StructureTemplate` + `MinecraftServer`. `.place()` creates a fresh `StructurePlacementData` per call. When `on_entity` callback is provided, sets `ignoreEntities=true`, manually iterates `StructureTemplateMixin.entities`, transforms positions, loads entities via `EntityType.loadEntityWithPassengers()`, applies rotation/mirror transforms via `applyRotation()`/`applyMirror()`, clears UUIDs (auto-generated on spawn), calls the callback, and only spawns if callback doesn't return `false`. Without callback, uses standard `StructureTemplate.place()` with `ignoreEntities=false`.
+- **`readNbt`/`writeNbt`**: Explicit serialization pair — no automatic `nbt` proxy. `readNbt` creates an `NbtWriteView`, calls `entity.saveData(writeView)`, retrieves compound via `.getNbt()`, converts to Lua table. `writeNbt` converts Lua table to `NbtCompound`, creates an `NbtReadView`, calls `entity.readData(readView)`. Uses Yarn 1.21.11's `NbtWriteView`/`NbtReadView` API with `ErrorReporter.EMPTY`.
+- **NBT conversion**: `nbtToLua()` handles all 12 NBT element types. `luaToNbt()` detects array tables (int keys 1..n, no string keys) → `NbtList`, else `NbtCompound`. Booleans → `NbtByte`. Lua numbers: `isint()` → `NbtInt`, `islong()` → `NbtLong`, else `NbtDouble`. Throws on functions/userdata/threads.
+- **Structure entity callback**: Entity UUIDs are explicitly removed from NBT before `loadEntityWithPassengers()` (auto-regenerated). Transform applies `applyRotation(rotation) + applyMirror(mirror) - entity.yaw` for yaw correction. Positions are transformed via `StructureTemplate.transformAround()` with pivot at `((size.x-1)/2, 0, (size.z-1)/2)`.
+- **`entity:damage(amount, sourceEntity?)`**: Optional source entity enables knockback via `playerAttack()`/`mobAttack()`. Source is looked up via UUID from the Lua table. Falls back to `damageSources.generic()` (no knockback) when absent.
+- **`entity:setOnFireFor(ticks)`**: Sets `e.fireTicks = ticks` AND immediately calls `e.setOnFire(true)` to sync the ON_FIRE flag via data tracker (bypasses 1-tick `baseTick()` delay). Use instead of writing `fireTicks` directly for instant client-side fire visual.
+- **Wrapper `__index` fallback chain**: Key not found on the Lua table → `MetaTableRegistry` (player checks PLAYER then ENTITY; world checks WORLD; structure checks STRUCTURE). This is how `mc.getMetatable()` extensions work.
 
 ## Register syntax
 
@@ -120,6 +135,39 @@ Returned by `world:spawn()`. Also backs `ctx.player` internally (player-only key
 
 **Tags**: `entity.tags[tag] = true/false` — backed by `Entity.getCommandTags()`. Iterable via `pairs()`. Proxy table is cached and shared — not created fresh per access.
 
+## Events (all Fabric API callbacks, no mixins)
+
+| Lua event | Wired in `PxRp.kt` | Fires | Cancellable |
+|-----------|--------------------|-------|:-----------:|
+| `server_start` | `SERVER_STARTED` | After Lua reload | No |
+| `server_stop` | `SERVER_STOPPING` | Before save | No |
+| `player_join` | `ServerPlayConnectionEvents.INIT` | Player connecting | Yes (disconnects player) |
+| `player_leave` | `DISCONNECT` | Player disconnects | No |
+| `player_death` | `AFTER_DEATH` (LivingEntity) | Player dies | No |
+| `player_chat` | `ALLOW_CHAT_MESSAGE` | Player sends message | Yes |
+| `player_block_break` | `PlayerBlockBreakEvents.BEFORE` | Before block break | Yes |
+| `player_block_place` | `UseBlockCallback.EVENT` | Before block place (only when held item is BlockItem) | Yes |
+| `player_use_item` | `UseItemCallback.EVENT` | Right-click with item | Yes |
+| `player_attack_entity` | `AttackEntityCallback.EVENT` | Left-click on entity | Yes |
+| `player_interact_entity` | `UseEntityCallback.EVENT` | Right-click on entity | Yes |
+| `player_hurt` | `ALLOW_DAMAGE` (players) | Before damage applied | Yes |
+| `entity_hurt` | `ALLOW_DAMAGE` (non-players) | Before damage applied | Yes |
+| `player_damage` | `AFTER_DAMAGE` (players) | After damage applied | No |
+| `entity_damage` | `AFTER_DAMAGE` (non-players) | After damage applied | No |
+| `player_kill` | `AFTER_KILLED_OTHER_ENTITY` | Player kills entity | No |
+
+**Handler signatures**:
+- `player_block_break(player, pos{x,y,z}, blockId)`
+- `player_block_place(player, pos{x,y,z}, blockId)`
+- `player_use_item(player, hand, itemStack, itemId)` — hand is `"main"`/`"off"`, itemStack is wrapper or nil
+- `player_attack_entity(player, entity)` / `player_interact_entity(player, entity)`
+- `player_hurt(player, damageType, amount)` / `entity_hurt(entity, damageType, amount)` — pre-damage (cancellable)
+- `player_damage(player, damageType, damageTaken, blocked)` / `entity_damage(entity, damageType, damageTaken, blocked)` — post-damage
+- `player_death(player, damageType)` — damageType is last segment after `.` (e.g. `"fall"`, `"player_attack"`)
+- `player_kill(player, killedEntity, damageType)`
+
+Cancellable events: return `false` to cancel the action.
+
 ## Storage
 
 - JSON at `config/pxrp/storage/global.json` and `config/pxrp/storage/players/<uuid>.json`
@@ -127,6 +175,7 @@ Returned by `world:spawn()`. Also backs `ctx.player` internally (player-only key
 - DataTable validates types (no cyclic refs, no functions/userdata/threads)
 - Nested table assignments require re-assignment: `data.nested = t` not `data.nested.key = v`
 - **Saved on**: server stop, player disconnect, `/pxrp reload`. Not saved on every write.
+- Per-player data removed from storage map on disconnect
 
 ## Scheduler
 
@@ -136,19 +185,6 @@ Returned by `world:spawn()`. Also backs `ctx.player` internally (player-only key
 - All tasks cleared on `/pxrp reload` and server stop
 - Individual callback errors caught and logged
 
-## Events
-
-### Fabric API events (no mixins)
-
-Block interaction events use Fabric API callbacks, **not** mixins:
-
-| Lua event | Fabric callback | Wiring in `PxRp.kt` |
-|-----------|----------------|---------------------|
-| `player_block_break` | `PlayerBlockBreakEvents.BEFORE` | Line 117 |
-| `player_block_place` | `UseBlockCallback.EVENT` (guarded by `stack.item is BlockItem`) | Line 128 |
-
-Both fire with `(player, pos{x,y,z}, blockId)` and are cancellable via `return false`. Server-side only (checks `player is ServerPlayerEntity`).
-
 ## Lua environment
 
 - Runtime: `org.luaj:luaj-jse:3.0.1` (Lua 5.2 targeting)
@@ -157,3 +193,4 @@ Both fire with `(player, pos{x,y,z}, blockId)` and are cancellable via `return f
 - Loaded std libs: `math`, `string`, `table`, `bit32`, `package`, base lib. **Not loaded**: `io`, `os`, `coroutine`, `debug`
 - `require "format"` → `format(template)` / `broadcastFormat(template)`
 - `require "simple"` → `registerSimple(syntax, template, range?, overlay?)`
+- Reload completely tears down and rebuilds globals — all global Lua state is lost. Persistent state must use `mc.data`, `player.data`, or external storage.

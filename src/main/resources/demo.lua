@@ -779,6 +779,21 @@ mc.on("player_leave", function(player)
     player.data.lastSeen = mc.time()
 end)
 
+mc.on("player_block_place", function(player, pos, blockId)
+    player.data.blockNumber = (player.data.blockNumber or 0) + 1
+    if player.data.blockNumber % 10 == 0 then
+        player:sendMessage("Вы поставили уже " .. player.data.blockNumber .. " блоков")
+    end
+end)
+
+mc.on("player_block_break", function(player, pos, blockId)
+    player.data.blockNumber = (player.data.blockNumber or 0) - 1
+
+    if player.data.blockNumber % 10 == 0 then
+        player:sendMessage("Вы поставили уже " .. player.data.blockNumber .. " блоков")
+    end
+end)
+
 
 -- ==========================================================================
 -- Command registrations

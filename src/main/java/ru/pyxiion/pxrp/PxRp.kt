@@ -21,6 +21,13 @@ import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaValue
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback
+import net.fabricmc.fabric.api.event.player.UseEntityCallback
+import net.fabricmc.fabric.api.event.player.UseItemCallback
+import net.minecraft.util.Hand
+import ru.pyxiion.pxrp.api.EntityWrapper
+import ru.pyxiion.pxrp.api.ItemStackWrapper
 import ru.pyxiion.pxrp.api.Player
 import ru.pyxiion.pxrp.api.Vector
 import ru.pyxiion.pxrp.storage.JsonBackend
@@ -138,6 +145,80 @@ class PxRp : ModInitializer {
                 }
             }
             net.minecraft.util.ActionResult.PASS
+        }
+
+        UseItemCallback.EVENT.register { player, world, hand ->
+            if (storageManager != null && player is net.minecraft.server.network.ServerPlayerEntity && !world.isClient) {
+                val luaPlayer = Player(player).toLuaValue()
+                val handStr = if (hand == Hand.MAIN_HAND) "main" else "off"
+                val itemStack = player.getStackInHand(hand)
+                val itemWrapper = if (itemStack.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(itemStack)
+                val itemId = LuaValue.valueOf(net.minecraft.registry.Registries.ITEM.getId(itemStack.item).toString())
+                val results = luaLoader.eventManager.fireWithResults("player_use_item", luaPlayer, LuaValue.valueOf(handStr), itemWrapper, itemId)
+                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
+            }
+            net.minecraft.util.ActionResult.PASS
+        }
+
+        AttackEntityCallback.EVENT.register { player, world, hand, entity, hitResult ->
+            if (storageManager != null && player is net.minecraft.server.network.ServerPlayerEntity && !world.isClient) {
+                val luaPlayer = Player(player).toLuaValue()
+                val luaEntity = EntityWrapper(entity).toLuaValue()
+                val results = luaLoader.eventManager.fireWithResults("player_attack_entity", luaPlayer, luaEntity)
+                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
+            }
+            net.minecraft.util.ActionResult.PASS
+        }
+
+        UseEntityCallback.EVENT.register { player, world, hand, entity, hitResult ->
+            if (storageManager != null && player is net.minecraft.server.network.ServerPlayerEntity && !world.isClient) {
+                val luaPlayer = Player(player).toLuaValue()
+                val luaEntity = EntityWrapper(entity).toLuaValue()
+                val results = luaLoader.eventManager.fireWithResults("player_interact_entity", luaPlayer, luaEntity)
+                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
+            }
+            net.minecraft.util.ActionResult.PASS
+        }
+
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register { entity, source, amount ->
+            if (storageManager != null) {
+                if (entity is net.minecraft.server.network.ServerPlayerEntity) {
+                    val luaPlayer = Player(entity).toLuaValue()
+                    val results = luaLoader.eventManager.fireWithResults("player_hurt", luaPlayer, LuaValue.valueOf(source.name), LuaValue.valueOf(amount.toDouble()))
+                    if (results.any { it.isboolean() && !it.toboolean() }) return@register false
+                } else {
+                    val luaEntity = EntityWrapper(entity).toLuaValue()
+                    val results = luaLoader.eventManager.fireWithResults("entity_hurt", luaEntity, LuaValue.valueOf(source.name), LuaValue.valueOf(amount.toDouble()))
+                    if (results.any { it.isboolean() && !it.toboolean() }) return@register false
+                }
+            }
+            true
+        }
+
+        ServerLivingEntityEvents.AFTER_DAMAGE.register { entity, source, _, damageTaken, blocked ->
+            if (storageManager != null) {
+                if (entity is net.minecraft.server.network.ServerPlayerEntity) {
+                    val luaPlayer = Player(entity).toLuaValue()
+                    luaLoader.eventManager.fire("player_damage", luaPlayer,
+                        LuaValue.valueOf(source.name),
+                        LuaValue.valueOf(damageTaken.toDouble()),
+                        LuaValue.valueOf(blocked))
+                } else {
+                    val luaEntity = EntityWrapper(entity).toLuaValue()
+                    luaLoader.eventManager.fire("entity_damage", luaEntity,
+                        LuaValue.valueOf(source.name),
+                        LuaValue.valueOf(damageTaken.toDouble()),
+                        LuaValue.valueOf(blocked))
+                }
+            }
+        }
+
+        ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register { world, entity, killedEntity, damageSource ->
+            if (storageManager != null && entity is net.minecraft.server.network.ServerPlayerEntity) {
+                val luaPlayer = Player(entity).toLuaValue()
+                val luaKilled = EntityWrapper(killedEntity).toLuaValue()
+                luaLoader.eventManager.fire("player_kill", luaPlayer, luaKilled, LuaValue.valueOf(damageSource.name))
+            }
         }
 
         CommandRegistrationCallback.EVENT.register(fun(dispatcher, reg, env) {

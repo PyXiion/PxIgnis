@@ -1,5 +1,6 @@
 package ru.pyxiion.pxrp.api
 
+import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.SpawnReason
 import net.minecraft.entity.attribute.EntityAttributes
@@ -15,6 +16,7 @@ import net.minecraft.server.world.ServerWorld
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
+import net.minecraft.util.math.Box
 import net.minecraft.util.math.Vec3d
 import net.minecraft.world.World as McWorld
 import org.luaj.vm2.LuaError
@@ -53,8 +55,26 @@ class World(private val world: ServerWorld, private val playerCache: Map<UUID, L
                         }
                         t
                     }
-                    else -> LuaValue.NIL
+                    else -> MetaTableRegistry.WORLD.get(key)
                 }
+            }
+        })
+
+        metatable.set("__pairs", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val self = args.arg(1)
+                val keys = kotlin.collections.listOf("name", "time", "raining", "thundering", "players")
+                val iterator = object : VarArgFunction() {
+                    private var index = 0
+                    override fun invoke(args: Varargs): Varargs {
+                        if (index >= keys.size) return LuaValue.NIL
+                        val key = keys[index]
+                        index++
+                        val value = self.get(key)
+                        return LuaValue.varargsOf(arrayOf(LuaValue.valueOf(key), value))
+                    }
+                }
+                return LuaValue.varargsOf(arrayOf(iterator, self, LuaValue.NIL))
             }
         })
 
@@ -92,6 +112,7 @@ class World(private val world: ServerWorld, private val playerCache: Map<UUID, L
         t.rawset("fill", fill(w))
         t.rawset("particle", particle(w))
         t.rawset("broadcastInRange", broadcastInRange(w))
+        t.rawset("getEntities", getEntities(w))
 
         return t
     }
@@ -221,6 +242,35 @@ class World(private val world: ServerWorld, private val playerCache: Map<UUID, L
                     w.spawnParticles(player, effect, true, false, x, y, z, 1, 0.0, 0.0, 0.0, 0.0)
                 }
                 return LuaValue.NIL
+            }
+        }
+
+        private fun getEntities(w: ServerWorld) = object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val pos = args.arg(2).toVec3d()
+                val radius = args.arg(3).checkdouble()
+                val typeFilter = if (args.narg() >= 4 && args.arg(4).isstring()) args.arg(4).tojstring() else null
+
+                val box = Box(
+                    pos.x - radius, pos.y - radius, pos.z - radius,
+                    pos.x + radius, pos.y + radius, pos.z + radius
+                )
+
+                val nearby = w.getOtherEntities(null, box)
+
+                val entities = if (typeFilter != null) {
+                    val targetType = Registries.ENTITY_TYPE.get(Identifier.of(typeFilter))
+                        ?: throw LuaError("Тип сущности '$typeFilter' не найден")
+                    nearby.filter { it.type == targetType }
+                } else {
+                    nearby
+                }
+
+                val list = LuaTable()
+                entities.forEachIndexed { i, entity ->
+                    list.set(i + 1, EntityWrapper(entity).toLuaValue())
+                }
+                return list
             }
         }
 

@@ -1,5 +1,7 @@
 package ru.pyxiion.pxrp.api
 
+import net.minecraft.nbt.NbtIo
+import net.minecraft.nbt.NbtSizeTracker
 import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket
 import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket
 import net.minecraft.registry.Registries
@@ -10,10 +12,12 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.sound.SoundCategory
 import net.minecraft.sound.SoundEvent
+import net.minecraft.structure.StructureTemplate
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
 import net.minecraft.util.math.Vec3d
 import net.minecraft.world.World
+import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
@@ -21,6 +25,9 @@ import ru.pyxiion.pxrp.Scheduler
 import ru.pyxiion.pxrp.asVarArgFunction
 import ru.pyxiion.pxrp.luaTableOf
 import ru.pyxiion.pxrp.storage.StorageManager
+import ru.pyxiion.pxrp.api.EntityWrapper
+import java.nio.file.Path
+import java.util.HashSet
 import java.util.UUID
 
 class LuaMcApi(
@@ -152,6 +159,125 @@ class LuaMcApi(
         return World(world, playerCache).toLuaValue()
     }
 
+    private fun luaLoadStructure(args: Varargs): Varargs {
+        val id = args.arg(1).checkjstring()
+        val manager = server.structureTemplateManager
+        val template = manager.getTemplate(Identifier.of(id))
+            .orElseThrow { LuaError("Структура '$id' не найдена") }
+        return StructureWrapper(template, server).toLuaValue()
+    }
+
+    private fun luaLoadStructureFile(args: Varargs): Varargs {
+        val path = args.arg(1).checkjstring()
+        val nbt = NbtIo.readCompressed(Path.of(path), NbtSizeTracker.ofUnlimitedBytes())
+        val template = server.structureTemplateManager.createTemplate(nbt)
+        return StructureWrapper(template, server).toLuaValue()
+    }
+
+    private fun luaGetMetatable(args: Varargs): Varargs {
+        val name = args.arg(1).checkjstring()
+        return MetaTableRegistry.get(name)
+    }
+
+    private fun luaDump(args: Varargs): Varargs {
+        val maxDepth = args.arg(2).optint(3)
+        val sb = StringBuilder()
+        val seen = HashSet<Int>()
+        dumpValue(args.arg(1), sb, 0, maxDepth, seen)
+        println(sb.toString())
+        return LuaValue.valueOf(sb.toString())
+    }
+
+    private fun dumpValue(value: LuaValue, sb: StringBuilder, depth: Int, maxDepth: Int, seen: HashSet<Int>) {
+        if (depth > maxDepth) {
+            sb.append("...")
+            return
+        }
+        when {
+            value.isnil() -> sb.append("nil")
+            value.isboolean() -> sb.append(value.toboolean())
+            value.isnumber() -> sb.append(value.todouble())
+            value.isstring() -> {
+                sb.append('"')
+                sb.append(value.tojstring())
+                sb.append('"')
+            }
+            value.istable() -> {
+                val table = value.checktable()
+                val hash = System.identityHashCode(table)
+                if (hash in seen) {
+                    sb.append("{...}")
+                    return
+                }
+                seen.add(hash)
+                sb.append("{\n")
+                val indent = "  ".repeat(depth + 1)
+
+                val meta = table.getmetatable()
+                val pairsFn = meta?.get("__pairs")
+
+                if (pairsFn != null && pairsFn.isfunction()) {
+                    val triple = pairsFn.invoke(LuaValue.varargsOf(arrayOf(table)))
+                    val iter = triple.arg(1)
+                    val state = triple.arg(2)
+                    var key = triple.arg(3)
+                    while (true) {
+                        val next = iter.invoke(LuaValue.varargsOf(arrayOf(state, key)))
+                        val nextKey = next.arg(1)
+                        if (nextKey.isnil()) break
+                        key = nextKey
+                        val v = next.arg(2)
+                        sb.append(indent)
+                        if (key.isstring()) {
+                            sb.append(key.tojstring())
+                        } else {
+                            sb.append('[')
+                            dumpValue(key, sb, depth, maxDepth, seen)
+                            sb.append(']')
+                        }
+                        sb.append(" = ")
+                        dumpValue(v, sb, depth + 1, maxDepth, seen)
+                        sb.append(",\n")
+                    }
+                } else {
+                    var key = LuaValue.NIL
+                    while (true) {
+                        val next = table.next(key)
+                        if (next.arg(1).isnil()) break
+                        key = next.arg(1)
+                        val v = next.arg(2)
+                        sb.append(indent)
+                        if (key.isstring()) {
+                            sb.append(key.tojstring())
+                        } else {
+                            sb.append('[')
+                            dumpValue(key, sb, depth, maxDepth, seen)
+                            sb.append(']')
+                        }
+                        sb.append(" = ")
+                        dumpValue(v, sb, depth + 1, maxDepth, seen)
+                        sb.append(",\n")
+                    }
+                }
+
+                sb.append("  ".repeat(depth))
+                sb.append('}')
+            }
+            value.isfunction() -> sb.append("function")
+            value.isuserdata() -> sb.append("userdata")
+            value.isthread() -> sb.append("thread")
+            else -> sb.append(value.typename())
+        }
+    }
+
+    private fun luaGetEntity(args: Varargs): Varargs {
+        val uuid = UUID.fromString(args.arg(1).checkjstring())
+        for (world in server.worlds) {
+            world.getEntity(uuid)?.let { return EntityWrapper(it).toLuaValue() }
+        }
+        return LuaValue.NIL
+    }
+
     fun toTable(): LuaTable {
         return luaTableOf(
             "broadcast" to this::broadcast.asVarArgFunction(),
@@ -163,7 +289,12 @@ class LuaMcApi(
             "cancelTask" to this::luaCancelTask.asVarArgFunction(),
             "world" to this::luaGetWorld.asVarArgFunction(),
             "players" to this::luaGetPlayers.asVarArgFunction(),
+            "getEntity" to this::luaGetEntity.asVarArgFunction(),
             "onlineCount" to LuaValue.valueOf(server.playerManager.currentPlayerCount.toDouble()),
+            "loadStructure" to this::luaLoadStructure.asVarArgFunction(),
+            "loadStructureFile" to this::luaLoadStructureFile.asVarArgFunction(),
+            "dump" to this::luaDump.asVarArgFunction(),
+            "getMetatable" to this::luaGetMetatable.asVarArgFunction(),
         )
     }
 }
