@@ -1,62 +1,86 @@
-# PxRP
+**PxRP** embeds a hot-swappable Lua runtime directly into the Fabric server lifecycle. No need to compile Java mods just to handle server-side logic, custom commands, or basic event manipulation. 
+Write your logic in Lua, save the file, reload instantly, and see the changes live.
 
-**Lua-scriptable roleplay command framework for Minecraft Fabric servers.** Define custom chat commands and server logic using Lua scripts — no Java or Kotlin mod code required.
+---
 
-[⚙️ GitHub & Documentation](https://github.com/PyXiion/PxRP)
+Right now, I am using PxRP to develop a complex, fully Vanilla custom Roguelike server. 
+If an action felt clunky or required too much boilerplate during my own design phases, I changed the core engine to fix it. 
+The result is a development loop explicitly streamlined for rapid, practical deployment.
 
-## Features
+---
 
-- **Lua-driven commands** — Write `.lua` files to register Brigadier commands with tab completion, argument parsing, optional args, and permission checks.
-- **Event system** — React to player joins, leaves, deaths, chat messages, and server lifecycle with Lua handlers (join/chat events are cancellable).
-- **Dynamic reload** — Use `/pxrp reload` to instantly re-execute all Lua scripts without restarting the server.
-- **Rich argument types** — Supports `player`/`target`, `text`, `int`, `double`, `float`, `bool`, `block_pos`, and `choice=a,b,c` with parse-time validation and tab completion.
-- **Minecraft API exposed to Lua** — Trigger particles, sounds, broadcasting (global and range-limited), block manipulation (set/get/fill), and server time control.
-- **Scheduler** — Built-in `mc.schedule()` and `mc.scheduleRepeating()` for delayed or repeating tasks measured in ticks.
-- **Persistent storage** — Per-player (`ctx.player.data`) and global (`mc.data`) key-value data automatically persisted to JSON.
-- **Full Player API** — Live entity wrapper with readable properties (pos, health, food, gamemode, ping, xp, etc.) and methods (sendMessage, teleport, kick, playSound, give, damage, heal, clear).
-- **Permission system** — Integrates seamlessly with the Fabric Permissions API (works with LuckPerms, OP-based systems, etc.).
-- **Reserved command protection** — 13 critical server commands cannot be accidentally shadowed or broken by scripts.
+## Key Features
 
-## Quick Start
+* **Simple command registration:** They hook straight into Minecraft's native Brigadier system. You get tab completion, type validation (`block_pos`, `player`, `int`, etc.) with a simple API.
+* **Fast Hot-Reloading:** Running `/pxrp reload` completely reloads the Lua state in memory within milliseconds. Registered commands are hot-patched into the live dispatcher without restarting the server.
+* **Simple API:** 
 
-1. Install PxRP on your Fabric server along with its dependencies.
-2. On the first run, a `config/pxrp/demo.lua` file will be created with example scripts.
-3. Edit the scripts and run `/pxrp reload` (requires OP level 4 or `pyxiion.pxrp` permission) to apply changes!
+---
 
-## Examples
+## Some Snippets
 
-### Creating a Command
+### 1. Commands
 
 ```lua
-register("fart", {}, function(ctx)
-    local player = ctx.player
-    local pos = player.pos
-    broadcastFormat "*{p.name} farted*" {p = player}
-    player.world:particle("minecraft:gust", pos.x, pos.y + 0.6, pos.z)
-    mc.playSound("minecraft:entity.slime.squish", pos.x, pos.y, pos.z, player.world.name, 10, 0.1)
-end)
+-- Simple registration
+register("pay <amount:int> <target:player>", function(ctx, amount, target)
+    local bal = ctx.player.data.balance or 100
+    if bal < amount then
+        mc.broadcast(ctx.player.name .. " has insufficient funds.", true)
+        return
+    end
+    ctx.player.data.balance = bal - amount
+    target.data.balance = (target.data.balance or 0) + amount
+    mc.broadcast(target.name .. " transferred " .. amount .. " coins to " .. target.name)
+end, "pxrp.economy")
+
 ```
 
-### Event handling
+### 2. Events & cancellation
 
 ```lua
-mc.on("player_join", function(player)
-    mc.broadcast("Welcome, " .. player.name .. "!")
+mc.on("player_block_break", function(player, pos, blockId)
+    if blockId ~= "minecraft:white_wool" then
+        return false -- Cancels the block break if it's not a wool block
+    end
 end)
 
-mc.on("player_death", function(player, damageType)
-    mc.broadcast(player.name .. " died to " .. damageType)
-end)
 ```
 
-### Arguments & permissions
+### 3. Structure Placement
+
 ```lua
-register("gamemode <mode:choice=creative,survival,adventure,spectator> [<target:player>]", function(ctx, mode, target)
-    local p = target or ctx.player
-    p.gamemode = mode
-    mc.broadcast(p.name .. " is now in " .. mode .. " mode")
-end, "pxrp.admin")
+register("paste <id:text>", function(ctx, id)
+    local s = mc.loadStructure(id) or mc.loadStructureFile(id .. ".nbt")
+    if not s then return mc.broadcast("Structure not found!", true) end
+    
+    s:place(ctx.player.world, ctx.player.pos, {
+        rotation = "CLOCKWISE_90",
+        mirror = "LEFT_RIGHT",
+        
+        -- Iterate structure entities
+        on_entity = function(entity, pos)
+            entity.customName = "Summoned " .. entity.type
+            entity.health = 50
+        end
+    })
+end)
+
 ```
+
+## Installation & Requirements
+
+1. Install PxRP on your Fabric server.
+2. The first boot generates a `config/pxrp/demo.lua` configuration file containing basic usage examples.
+3. Edit your scripts and use `/pxrp reload` to apply changes instantly.
+
+* **Minecraft:** `1.21.x`
+* **Fabric Loader:** `≥0.19.2`
+* **Fabric API:** `≥0.141.4`
+* **Fabric Language Kotlin `≥1.10.8`**
+
+---
 
 ## License
-This project is licensed under the GNU Lesser General Public License v3.0.
+
+GNU Lesser General Public License v3.0

@@ -9,18 +9,30 @@
 -- All messages use § color codes for visual clarity (works in Minecraft chat).
 --
 -- Contents:
---   1. Private messaging  — cross-player direct messages
---   2. Home system        — persisted named locations per player
---   3. Teleport requests  — time-limited cross-player state
---   4. Mute / moderation  — command + event integration
---   5. Global config      — data-driven runtime settings
---   6. Report cooldown    — per-player throttle + notifications
---   7. New arg types      — int, double, bool, block_pos
---   8. Choice & optional  — choice=... syntax and [name:type] optional args
---   9. Player info        — reading aggregate entity data
---  10. Item & inventory   — kits, hats, rename, repair, invsee
---  11. World & entity     — spawn, tags, time, weather, particle, broadcastInRange
---  12. Scheduler          — mc.schedule, mc.scheduleRepeating, mc.cancelTask
+--   1. Private messaging      — cross-player direct messages
+--   2. Home system            — persisted named locations per player
+--   3. Teleport requests      — time-limited cross-player state
+--   4. Mute / moderation      — command + event integration
+--   5. Global config          — data-driven runtime settings
+--   6. Report cooldown        — per-player throttle + notifications
+--   7. New arg types          — int, double, bool, block_pos
+--   8. Choice & optional      — choice=... syntax and [name:type] optional args
+--   9. Player info            — reading aggregate entity data
+--  10. Item & inventory       — kits, hats, rename, repair, invsee
+--  11. World & entity         — spawn, tags, time, weather, particle, broadcastInRange
+--  12. Scheduler              — mc.schedule, mc.scheduleRepeating, mc.cancelTask
+--  13. Personal sidebar       — per-player scoreboard display
+--  14. Vector arithmetic      — Vec(), +, -, *, /, ==, tostring
+--  15. World block manip.     — setBlock, getBlock, fill
+--  16. Particles, sounds, …   — particle, playSound, getEntities, raycast
+--  17. Advanced mc API        — world(), players(), getEntity(), dump(), getMetatable()
+--  18. Advanced player meth.  — action bar, title, effects, damage, heal, raycast
+--  19. Entity NBT & ops       — readNbt, writeNbt, damage, effects, setOnFire
+--  20. Structure API          — loadStructure, loadStructureFile, place
+--  21. Item details & ser.    — properties, serialise, deserialise
+--  22. Module system          — require "format", require "simple"
+--  23. Chest GUI              — chestgui.create(), grid-based interactive GUI
+--  24. Shared inventory       — serialise/deserialise, persist across reloads
 -- ==========================================================================
 
 
@@ -489,7 +501,7 @@ end
 --   - Spawned entities have full property access (health, type, uuid, tags, equipment)
 --   - entity.tags is a boolean proxy table backed by command tags
 --   - Setting equipment on spawned entities uses equipStack internally
---   - world:particle(id, x, y, z) spawns particles visible to all players in that world
+--   - world:particle(id, pos, {data?, count?, spread?, speed?}) spawns particles (pos is Vec or {x,y,z})
 
 function spawnmobHandler(ctx, entityId)
     local player = ctx.player
@@ -757,6 +769,481 @@ end)
 
 
 -- ==========================================================================
+-- Pattern 14: Vector arithmetic — Vec(), +, -, *, /, ==, tostring
+-- ==========================================================================
+-- /vecadd <x1:int> <y1:int> <z1:int> <x2:int> <y2:int> <z2:int>
+-- /veceq <x1:int> <y1:int> <z1:int> <x2:int> <y2:int> <z2:int>
+
+function vecaddHandler(ctx, x1, y1, z1, x2, y2, z2)
+    local a = Vec(x1, y1, z1)
+    local b = Vec(x2, y2, z2)
+    ctx.player:sendMessage("§a" .. tostring(a) .. " + " .. tostring(b) .. " = " .. tostring(a + b))
+end
+
+function veceqHandler(ctx, x1, y1, z1, x2, y2, z2)
+    local a = Vec(x1, y1, z1)
+    local b = Vec(x2, y2, z2)
+    ctx.player:sendMessage("§a" .. tostring(a) .. " == " .. tostring(b) .. " §7→ §f" .. tostring(a == b))
+end
+
+
+-- ==========================================================================
+-- Pattern 15: World block manipulation — setBlock, getBlock, fill
+-- ==========================================================================
+-- /setblock <pos:block_pos> <block:text>
+-- /getblock <pos:block_pos>
+-- /fillblock <pos1:block_pos> <pos2:block_pos> <block:text>
+
+function setblockHandler(ctx, pos, blockId)
+    ctx.player.world:setBlock(pos, blockId)
+    ctx.player:sendMessage("§aSet §f" .. blockId .. " §aat " .. pos.x .. ", " .. pos.y .. ", " .. pos.z)
+end
+
+function getblockHandler(ctx, pos)
+    local id = ctx.player.world:getBlock(pos)
+    ctx.player:sendMessage("§aBlock at " .. pos.x .. ", " .. pos.y .. ", " .. pos.z .. " §7→ §f" .. id)
+end
+
+function fillblockHandler(ctx, pos1, pos2, blockId)
+    ctx.player.world:fill(pos1, pos2, blockId)
+    ctx.player:sendMessage("§aFilled area with §f" .. blockId)
+end
+
+
+-- ==========================================================================
+-- Pattern 16: Particles, sounds, entity queries, world raycasting
+-- ==========================================================================
+-- /particle <id:text> [<count:int>]
+-- /playsound <id:text> [<volume:double>]
+-- /nearby <radius:double> [<type:text>]
+-- /worldraycast <range:double>
+
+function particleHandler(ctx, id, count)
+    local p = ctx.player
+    p.world:particle(id, p.pos, {
+        count = count or 10,
+        spread = Vec(0.5, 0.5, 0.5),
+        speed = 0.1,
+    })
+    p:sendMessage("§aSpawned §f" .. (count or 10) .. " §aof §f" .. id)
+end
+
+function playsoundHandler(ctx, id, volume)
+    local p = ctx.player
+    local pos = p.pos
+    p.world:playSound(id, pos.x, pos.y, pos.z, volume or 1.0, 1.0)
+    p:sendMessage("§aPlaying §f" .. id)
+end
+
+function nearbyHandler(ctx, radius, entityType)
+    local p = ctx.player
+    local entities = p.world:getEntities(p.pos, radius, entityType)
+    local names = {}
+    for _, e in ipairs(entities) do
+        table.insert(names, e.name .. " §7(§f" .. e.type .. "§7)")
+    end
+    if #names == 0 then p:sendMessage("§cNo entities within §f" .. radius .. " §cblocks"); return end
+    p:sendMessage("§aNearby (§f" .. #names .. "§a): §f" .. table.concat(names, "§7, §f"))
+end
+
+function worldraycastHandler(ctx, range)
+    local p = ctx.player
+    local r = p.world:raycast(p.pos, p.dir, range, false, true)
+    if r then
+        local msg = "§aHit §f" .. string.format("%.1f, %.1f, %.1f", r.hit.x, r.hit.y, r.hit.z)
+        if r.entity then msg = msg .. " §7→ §f" .. r.entity.name end
+        p:sendMessage(msg)
+    else
+        p:sendMessage("§cNothing in range")
+    end
+end
+
+
+-- ==========================================================================
+-- Pattern 17: Advanced mc API — world(), players(), getEntity(), dump()
+-- ==========================================================================
+-- /worldlist                  — iterate loaded worlds
+-- /playerlist                 — list online players
+-- /onlinecount                — show mc.onlineCount
+-- /entitylookup <uuid:text>   — lookup any entity by UUID
+-- /dumpentity                 — dump yourself with mc.dump()
+-- /metatables                 — list available metatables
+
+function worldlistHandler(ctx)
+    local worlds = { "minecraft:overworld", "minecraft:the_nether", "minecraft:the_end" }
+    local lines = {}
+    for _, name in ipairs(worlds) do
+        local w = mc.world(name)
+        if w then table.insert(lines, "  §7- §f" .. name .. " §7(time: §f" .. math.floor(w.time) .. "§7)") end
+    end
+    ctx.player:sendMessage("§6Loaded worlds:\n" .. table.concat(lines, "\n"))
+end
+
+function playerlistHandler(ctx)
+    local players = mc.players()
+    local lines = {}
+    for _, p in ipairs(players) do
+        table.insert(lines, "  §7- §f" .. p.name .. " §7(§f" .. p.ping .. "ms§7, §f" .. p.world.name .. "§7)")
+    end
+    ctx.player:sendMessage("§6Online (§f" .. #players .. "§6):\n" .. table.concat(lines, "\n"))
+end
+
+function onlinecountHandler(ctx)
+    ctx.player:sendMessage("§aOnline: §f" .. mc.onlineCount)
+end
+
+function entitylookupHandler(ctx, uuid)
+    local e = mc.getEntity(uuid)
+    if not e then ctx.player:sendMessage("§cEntity §f'" .. uuid .. "'§c not found"); return end
+    local pos = e.pos
+    ctx.player:sendMessage(
+        "§6Entity: §f" .. e.name .. " §7(§f" .. e.type .. "§7)\n"
+        .. "§7Health: §f" .. string.format("%.1f", e.health) .. "\n"
+        .. "§7World:  §f" .. e.world.name .. "\n"
+        .. "§7Pos:    §f" .. string.format("%.1f, %.1f, %.1f", pos.x, pos.y, pos.z)
+    )
+end
+
+function dumpentityHandler(ctx)
+    ctx.player:sendMessage(mc.dump(ctx.player, 2))
+end
+
+function metatablesHandler(ctx)
+    local names = { "vec", "player", "entity", "world", "item" }
+    local lines = {}
+    for _, name in ipairs(names) do
+        table.insert(lines, "  §7- §f" .. name .. " §7(" .. tostring(mc.getMetatable(name) ~= nil) .. ")")
+    end
+    ctx.player:sendMessage("§6Metatables:\n" .. table.concat(lines, "\n"))
+end
+
+
+-- ==========================================================================
+-- Pattern 18: Advanced player methods
+-- ==========================================================================
+-- /actionbar <msg:text>
+-- /sendtitle <title:text> [<subtitle:text>]
+-- /suicide
+-- /healme
+-- /playersound <id:text> [<volume:double>]
+-- /setitemslot <slot:int> <id:text> [<count:int>]
+-- /playereffect <id:text> <duration:int> [<amplifier:int>]
+-- /removeeffect <id:text>
+-- /haseffect <id:text>
+-- /playerraycast <range:double>
+
+function actionbarHandler(ctx, msg)
+    ctx.player:sendActionBar(msg)
+end
+
+function sendtitleHandler(ctx, title, subtitle)
+    ctx.player:sendTitle(title, subtitle)
+end
+
+function suicideHandler(ctx)
+    ctx.player:damage(100)
+    ctx.player:sendMessage("§cOuch!")
+end
+
+function healmeHandler(ctx)
+    local p = ctx.player
+    p:heal(p.maxHealth - p.health)
+    p:sendMessage("§aHealed!")
+end
+
+function playersoundHandler(ctx, id, volume)
+    ctx.player:playSound(id, volume or 1.0, 1.0)
+end
+
+function setitemslotHandler(ctx, slot, id, count)
+    ctx.player:setItem(slot, mc.createItem(id, { count = count or 1 }))
+    ctx.player:sendMessage("§aSet slot §f" .. slot .. " §7→ §f" .. id)
+end
+
+function playereffectHandler(ctx, id, duration, amplifier)
+    ctx.player:addEffect(id, duration, amplifier or 0, true, true)
+    ctx.player:sendMessage("§aApplied §f" .. id)
+end
+
+function removeeffectHandler(ctx, id)
+    ctx.player:removeEffect(id)
+    ctx.player:sendMessage("§aRemoved §f" .. id)
+end
+
+function haseffectHandler(ctx, id)
+    ctx.player:sendMessage("§aHas §f" .. id .. "§7: §f" .. tostring(ctx.player:hasEffect(id)))
+end
+
+function playerraycastHandler(ctx, range)
+    local r = ctx.player:raycast(range, false, true)
+    if r then
+        local msg = "§aHit §f" .. string.format("%.1f, %.1f, %.1f", r.hit.x, r.hit.y, r.hit.z)
+        if r.entity then msg = msg .. " §7→ §f" .. r.entity.name end
+        ctx.player:sendMessage(msg)
+    else
+        ctx.player:sendMessage("§cNothing in range")
+    end
+end
+
+
+-- ==========================================================================
+-- Pattern 19: Entity NBT & advanced operations
+-- ==========================================================================
+-- /entitynbt <uuid:text>
+-- /entitydamage <uuid:text> <amount:double>
+-- /entityeffect <uuid:text> <id:text> <duration:int>
+-- /setfire <uuid:text> <ticks:int>
+
+function entitynbtHandler(ctx, uuid)
+    local e = mc.getEntity(uuid)
+    if not e then ctx.player:sendMessage("§cEntity not found"); return end
+    ctx.player:sendMessage("§6NBT for §f" .. e.name .. "§6:\n" .. mc.dump(e:readNbt(), 2))
+end
+
+function entitydamageHandler(ctx, uuid, amount)
+    local e = mc.getEntity(uuid)
+    if not e then ctx.player:sendMessage("§cEntity not found"); return end
+    e:damage(amount)
+    ctx.player:sendMessage("§aDealt §f" .. amount .. " §adamage to §f" .. e.name)
+end
+
+function entityeffectHandler(ctx, uuid, effectId, duration)
+    local e = mc.getEntity(uuid)
+    if not e then ctx.player:sendMessage("§cEntity not found"); return end
+    e:addEffect(effectId, duration, 0, true, true)
+    ctx.player:sendMessage("§aApplied §f" .. effectId .. " §ato §f" .. e.name)
+end
+
+function setfireHandler(ctx, uuid, ticks)
+    local e = mc.getEntity(uuid)
+    if not e then ctx.player:sendMessage("§cEntity not found"); return end
+    e:setOnFireFor(ticks)
+    ctx.player:sendMessage("§aSet §f" .. e.name .. " §aon fire for §f" .. ticks .. " §aticks")
+end
+
+
+-- ==========================================================================
+-- Pattern 20: Structure API — load, inspect, place
+-- ==========================================================================
+-- /structinfo <name:text>
+-- /structplace <name:text>
+
+function structinfoHandler(ctx, name)
+    local s = mc.loadStructure(name)
+    if not s then ctx.player:sendMessage("§cStructure §f'" .. name .. "'§c not found"); return end
+    ctx.player:sendMessage("§6Structure: §f" .. name .. "\n  §7Size: §f" .. s.size.x .. " × " .. s.size.y .. " × " .. s.size.z)
+end
+
+function structplaceHandler(ctx, name)
+    local s = mc.loadStructure(name)
+    if not s then ctx.player:sendMessage("§cStructure §f'" .. name .. "'§c not found"); return end
+    local p = ctx.player
+    s:place(p.world, { x = p.pos.x, y = p.pos.y, z = p.pos.z }, { rotation = "none", mirror = "none" })
+    p:sendMessage("§aPlaced §f" .. name)
+end
+
+
+-- ==========================================================================
+-- Pattern 21: ItemStack details & serialisation
+-- ==========================================================================
+-- /iteminfo
+-- /itemserialise
+-- /itemdeserialise <json:text>
+
+function iteminfoHandler(ctx)
+    local held = ctx.player.mainhand
+    if not held then ctx.player:sendMessage("§cHold an item"); return end
+    local lines = { "§6--- Held item ---", "§7ID:      §f" .. (held.id or "?") }
+    if held.name               then table.insert(lines, "§7Name:    §f" .. held.name) end
+    if held.unbreakable        then table.insert(lines, "§7Unbreakable: §f" .. tostring(held.unbreakable)) end
+    if held.custom_model_data  then table.insert(lines, "§7CMD:     §f" .. held.custom_model_data) end
+    ctx.player:sendMessage(table.concat(lines, "\n"))
+end
+
+function itemserialiseHandler(ctx)
+    local held = ctx.player.mainhand
+    if not held then ctx.player:sendMessage("§cHold an item"); return end
+    ctx.player:sendMessage("§6JSON: §f" .. mc.serialise("item", held))
+end
+
+function itemdeserialiseHandler(ctx, json)
+    local item = mc.deserialise("item", json)
+    if not item then ctx.player:sendMessage("§cFailed to deserialise"); return end
+    ctx.player:give(item)
+    ctx.player:sendMessage("§aItem restored from JSON!")
+end
+
+
+-- ==========================================================================
+-- Pattern 22: Module system — require "format", require "simple"
+-- ==========================================================================
+-- The Lua package.path includes config/pxrp/?.lua so you can write:
+--   local fmt = require("format")
+--   local simple = require("simple")
+--
+-- format(template):
+--   returns a function(args) that substitutes {expr} in the template
+--   using values from args. Supports dot notation for nested fields.
+--
+-- broadcastFormat(template):
+--   returns a function(args) that renders the template and broadcasts it.
+--
+-- registerSimple(syntax, template, range?, overlay?):
+--   one-shot registration — no handler needed. The generated handler
+--   builds an args table with {p = ctx.player, ...} and broadcasts.
+--
+-- Uncomment to enable:
+--   local format = require("format")
+--   local simple = require("simple")
+--   registerSimple("shout <msg:text>", "§6[SHOUT] §e{p.name}§7: §f{msg}", 100)
+-- ==========================================================================
+
+-- ==========================================================================
+-- Pattern 23: Chest GUI — interactive grid-based inventory GUI
+-- ==========================================================================
+-- /shop             — opens a buy menu with items in a chest GUI
+-- /shopadmin        — admin: open a shared view-only inventory
+-- /addcoins <target:player> <coins:int>  — give coins for testing
+--
+-- KEY PATTERNS:
+--   - chestgui.create(rows, title) returns a fresh GUI builder
+--   - gui:set(row, col, item, callback) places a clickable item
+--   - gui:decorate(row, col, item) places a non-interactive item
+--   - gui:open(player) opens the GUI for that player → returns Container
+--   - Click callback receives (player, slot, clickType, slotItem, cursorItem)
+--   - Returning false cancels the click (prevents item removal/swap)
+--   - Rows and cols are 1-based (1..6 rows, 1..9 cols)
+
+local chestgui = require "chestgui"
+
+-- Pre-build the shop GUI once — reused for all players
+local shopGui = chestgui.create(3, "§6§lShop")
+shopGui:set(2, 3, mc.createItem("minecraft:diamond", { name = "§bDiamond §7(§f10 coins§7)" }),
+    function(player, slot, clickType, slotItem, cursorItem)
+        local coins = player.data.coins or 0
+        if coins < 10 then
+            player:sendMessage("§cNot enough coins! §7Need 10, have " .. coins)
+            return false
+        end
+        player.data.coins = coins - 10
+        player:give(mc.createItem("minecraft:diamond"))
+        player:sendMessage("§aBought a diamond! §7Coins left: " .. (coins - 10))
+        return false
+    end)
+shopGui:set(2, 5, mc.createItem("minecraft:emerald", { name = "§aEmerald §7(§f5 coins§7)" }),
+    function(player, slot, clickType, slotItem, cursorItem)
+        local coins = player.data.coins or 0
+        if coins < 5 then
+            player:sendMessage("§cNot enough coins! §7Need 5, have " .. coins)
+            return false
+        end
+        player.data.coins = coins - 5
+        player:give(mc.createItem("minecraft:emerald"))
+        player:sendMessage("§aBought an emerald! §7Coins left: " .. (coins - 5))
+        return false
+    end)
+shopGui:set(2, 7, mc.createItem("minecraft:iron_ingot", { name = "§7Iron §7(§f2 coins§7)" }),
+    function(player, slot, clickType, slotItem, cursorItem)
+        local coins = player.data.coins or 0
+        if coins < 2 then
+            player:sendMessage("§cNot enough coins! §7Need 2, have " .. coins)
+            return false
+        end
+        player.data.coins = coins - 2
+        player:give(mc.createItem("minecraft:iron_ingot"))
+        player:sendMessage("§aBought an iron ingot! §7Coins left: " .. (coins - 2))
+        return false
+    end)
+
+-- Decorative glass border — no callback = non-interactive
+local glass = mc.createItem("minecraft:black_stained_glass_pane", { name = " " })
+for col = 1, 9 do
+    shopGui:decorate(1, col, glass)
+    shopGui:decorate(3, col, glass)
+end
+shopGui:decorate(2, 1, glass)
+shopGui:decorate(2, 9, glass)
+
+-- Info signs
+shopGui:decorate(2, 2, mc.createItem("minecraft:gold_nugget",
+    { name = "§eYour coins", lore = { "§7Stored in player.data.coins" } }))
+shopGui:decorate(2, 8, mc.createItem("minecraft:book",
+    { name = "§eHelp", lore = { "§7/shop — open menu", "§7/addcoins — give coins" } }))
+
+function shopHandler(ctx)
+    shopGui:open(ctx.player)
+end
+
+function shopadminHandler(ctx)
+    local inv = mc.createInventory(27)
+    inv:setItem(14, mc.createItem("minecraft:barrier", { name = "§cPlace items above" }))
+    ctx.player:sendMessage("§aOpening a shared inventory")
+    inv:open(ctx.player, "Admin View")
+end
+
+function addcoinsHandler(ctx, target, amount)
+    local coins = target.data.coins or 0
+    target.data.coins = coins + amount
+    ctx.player:sendMessage("§aGave §f" .. target.name .. " §a" .. amount .. " coins. §7Now: " .. (coins + amount))
+    target:sendMessage("§aYou received §f" .. amount .. " §acoins!")
+end
+
+-- ==========================================================================
+-- Pattern 24: Shared inventory — persist across reloads
+-- ==========================================================================
+-- /sharedchest        — opens a shared chest that persists across reloads
+-- /sharedchestrestore — admin: restore the shared chest after serialising
+--
+-- KEY PATTERNS:
+--   - inv:serialise() returns a JSON string (like item:serialise())
+--   - mc.serialise("inventory", inv) is the equivalent global call
+--   - mc.deserialise("inventory", json) recreates the inventory from JSON
+--   - Store the JSON string in mc.data to survive /pxrp reload
+--   - Serialise on server_stop to persist across actual shutdown
+--   - Also serialise in onClick to save after each player interaction
+
+local sharedChest
+
+-- Restore from saved data (survives /pxrp reload)
+local savedJson = mc.data.sharedChest
+if savedJson then
+    sharedChest = mc.deserialise("inventory", savedJson)
+else
+    sharedChest = mc.createInventory(27)
+end
+
+-- Save the shared chest state whenever it changes
+local function saveSharedChest()
+    mc.data.sharedChest = sharedChest:serialise()
+end
+
+-- Persist across server restarts
+mc.on("server_stop", saveSharedChest)
+
+function sharedchestHandler(ctx)
+    local container = sharedChest:open(ctx.player, "§6Shared Chest")
+    if container then
+        -- Save after every click so reloads don't lose recent changes
+        container:onClick(function(player, slot, clickType, slotItem, cursorItem)
+            saveSharedChest()
+            return true  -- allow items to move freely
+        end)
+        ctx.player:sendMessage("§aOpened shared chest. Items persist across reloads!")
+    end
+end
+
+-- Admin: dump the serialised state to chat (for debugging)
+function sharedchestrestoreHandler(ctx)
+    local json = mc.data.sharedChest
+    if json then
+        sharedChest = mc.deserialise("inventory", json)
+        ctx.player:sendMessage("§aShared chest restored from saved data. §7Size: " .. sharedChest.size)
+    else
+        ctx.player:sendMessage("§cNo saved shared chest data found.")
+    end
+end
+
+-- ==========================================================================
 -- Event integration
 -- ==========================================================================
 -- These handlers react to game events using state set by commands above.
@@ -792,6 +1279,37 @@ mc.on("player_block_break", function(player, pos, blockId)
     if player.data.blockNumber % 10 == 0 then
         player:sendMessage("Вы поставили уже " .. player.data.blockNumber .. " блоков")
     end
+end)
+
+mc.on("player_death", function(player)
+    player:sendMessage("§cYou died at " .. string.format("%.1f, %.1f, %.1f", player.pos.x, player.pos.y, player.pos.z))
+end)
+
+mc.on("player_use_item", function(player, hand)
+end)
+
+mc.on("player_attack_entity", function(player, target)
+    player:sendMessage("§eYou attacked §f" .. target.name)
+end)
+
+mc.on("player_interact_entity", function(player, target)
+    player:sendMessage("§eYou interacted with §f" .. target.name)
+end)
+
+mc.on("player_hurt", function(player, source, amount)
+end)
+
+mc.on("entity_hurt", function(entity, source, amount)
+end)
+
+mc.on("player_damage", function(player, source, amount)
+end)
+
+mc.on("entity_damage", function(entity, source, amount)
+end)
+
+mc.on("player_kill", function(player, target)
+    player:sendMessage("§cYou killed §f" .. target.name)
 end)
 
 
@@ -844,4 +1362,63 @@ register("cancelcountdown",            cancelcountdownHandler)
 -- Personal sidebar
 register("sidebar",                                     sidebarHandler)
 register("sidebarset <title:text> [<line1:text>] [<line2:text>] [<line3:text>]", sidebarsetHandler)
+
+-- Vector arithmetic
+register("vecadd <x1:int> <y1:int> <z1:int> <x2:int> <y2:int> <z2:int>", vecaddHandler)
+register("veceq <x1:int> <y1:int> <z1:int> <x2:int> <y2:int> <z2:int>", veceqHandler)
+
+-- World block manipulation
+register("setblock <pos:block_pos> <block:text>",       setblockHandler,    "pxrp.admin")
+register("getblock <pos:block_pos>",                     getblockHandler)
+register("fillblock <pos1:block_pos> <pos2:block_pos> <block:text>", fillblockHandler, "pxrp.admin")
+
+-- Particles, sounds, queries
+register("particle <id:text> [<count:int>]",            particleHandler,    "pxrp.admin")
+register("playsound <id:text> [<volume:double>]",       playsoundHandler)
+register("nearby <radius:double> [<type:text>]",        nearbyHandler)
+register("worldraycast <range:double>",                 worldraycastHandler)
+
+-- Advanced mc API
+register("worldlist",                                   worldlistHandler)
+register("playerlist",                                  playerlistHandler)
+register("onlinecount",                                 onlinecountHandler)
+register("entitylookup <uuid:text>",                    entitylookupHandler)
+register("dumpentity",                                  dumpentityHandler)
+register("metatables",                                  metatablesHandler)
+
+-- Advanced player methods
+register("actionbar <msg:text>",                        actionbarHandler)
+register("sendtitle <title:text> [<subtitle:text>]",    sendtitleHandler)
+register("suicide",                                     suicideHandler)
+register("healme",                                      healmeHandler)
+register("playersound <id:text> [<volume:double>]",     playersoundHandler)
+register("setitemslot <slot:int> <id:text> [<count:int>]", setitemslotHandler, "pxrp.admin")
+register("playereffect <id:text> <duration:int> [<amplifier:int>]", playereffectHandler)
+register("removeeffect <id:text>",                      removeeffectHandler)
+register("haseffect <id:text>",                         haseffectHandler)
+register("playerraycast <range:double>",                playerraycastHandler)
+
+-- Entity NBT & ops
+register("entitynbt <uuid:text>",                       entitynbtHandler,   "pxrp.admin")
+register("entitydamage <uuid:text> <amount:double>",    entitydamageHandler, "pxrp.admin")
+register("entityeffect <uuid:text> <id:text> <duration:int>", entityeffectHandler, "pxrp.admin")
+register("setfire <uuid:text> <ticks:int>",             setfireHandler,     "pxrp.admin")
+
+-- Structure
+register("structinfo <name:text>",                      structinfoHandler)
+register("structplace <name:text>",                     structplaceHandler, "pxrp.admin")
+
+-- Chest GUI
+register("shop",                                          shopHandler)
+register("shopadmin",                                     shopadminHandler,   "pxrp.admin")
+register("addcoins <target:player> <coins:int>",          addcoinsHandler,    "pxrp.admin")
+
+-- Shared inventory
+register("sharedchest",                                       sharedchestHandler)
+register("sharedchestrestore",                                sharedchestrestoreHandler, "pxrp.admin")
+
+-- Item details & serialisation
+register("iteminfo",                                    iteminfoHandler)
+register("itemserialise",                               itemserialiseHandler)
+register("itemdeserialise <json:text>",                 itemdeserialiseHandler)
 

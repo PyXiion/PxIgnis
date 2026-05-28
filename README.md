@@ -12,8 +12,12 @@ A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define
 - [Quick Start](#quick-start)
 - [Examples](#examples)
 - [Registering Commands](#registering-commands)
+- [`Vec(x, y, z)` — vector constructor](#vecx-y-z--vector-constructor)
 - [`mc.*` API](#mc-api)
 - [Player API](#player-api)
+- [ItemStack API](#itemstack-api)
+- [Inventory API](#inventory-api)
+- [Container API](#container-api)
 - [World API](#world-api)
 - [Entity Wrapper](#entity-wrapper)
 - [Structure Wrapper](#structure-wrapper)
@@ -34,11 +38,12 @@ A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define
 - **Permission system** — Integrates with the Fabric Permissions API (supports both OP-based and permissions plugins like LuckPerms).
 - **Player context** — Handlers receive a live `Player` wrapper object with readable properties (health, position, gamemode, etc.) and methods (`sendMessage`, `teleport`, `kick`, `give`).
 - **Structure loading** — Load and place Minecraft structure files with rotation, mirroring, and per-entity Lua callbacks.
+- **Vector API** — `Vec(x, y, z)` global constructor with arithmetic operators (`+`, `-`, `*`, `/`, `unm`, `==`, `tostring`). Component-wise for `v1 * v2`, scalar for `v / n`. Both `v * n` and `n * v` work.
 - **Entity API** — `entity:damage(amount, source?)`, `entity:raycast(range)`, `entity:addEffect/removeEffect/hasEffect`, `entity:setOnFireFor(ticks)`, `entity:readNbt()/writeNbt(table)`.
 - **Debug dumping** — `mc.dump(obj, depth?)` prints any Lua value as readable nested output with cycle detection.
-- **Metatable extensions** — `mc.getMetatable("player"/"entity"/"world"/"structure")` allows adding custom methods to all wrappers of that type.
+- **Metatable extensions** — `mc.getMetatable("player"/"entity"/"world"/"structure"/"vec")` allows adding custom methods to all wrappers of that type.
 - **Per-player sidebar** — `player.sidebar = {title = "...", lines = {...}}` for packet-based scoreboard display.
-- **Lua libraries** — Bundled `format.lua` (f-string-like templating) and `simple.lua` (concise command registration).
+- **Lua libraries** — Bundled `format.lua` (f-string-like templating), `simple.lua` (concise command registration), and `chestgui.lua` (chest-based GUI with grid positioning).
 
 ## Quick Start
 
@@ -59,8 +64,8 @@ register("fart", function(ctx)
     local dir = player.bodyDir
 
     broadcastFormat "*{p.name} farted*" {p = player}
-    player.world:particle("minecraft:gust", pos.x - dir.x * 0.5, pos.y + 0.6, pos.z - dir.z * 0.5)
-    mc.playSound("minecraft:entity.slime.squish", pos.x, pos.y, pos.z, player.world.name, 10, 0.1)
+    player.world:particle("minecraft:gust", Vec(pos.x - dir.x * 0.5, pos.y + 0.6, pos.z - dir.z * 0.5))
+    player.world:playSound("minecraft:entity.slime.squish", pos.x, pos.y, pos.z, 10, 0.1)
 end)
 ```
 
@@ -167,15 +172,56 @@ Every command handler receives a **Context** object as its first argument:
 
 ---
 
+## `Vec(x, y, z)` — vector constructor
+
+A global Lua function available in all scripts. Creates a vector table with arithmetic operators. Vectors are used across the API — `pos`, `dir`, `blockPos`, `hit`, `normal`, `size` are all vector tables.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `x` | number | X component |
+| `y` | number | Y component |
+| `z` | number | Z component |
+
+### Operators
+
+| Operator | Description |
+|----------|-------------|
+| `v + w` | Component-wise addition (`v` and `w` can be vectors or scalars) |
+| `v - w` | Component-wise subtraction |
+| `v * w` | Component-wise multiplication (both `v * n` and `n * v` work) |
+| `v / n` | Scalar division (vector must be first, denominator must be number) |
+| `-v` | Negation |
+| `v == w` | Equality (all three components must match) |
+| `tostring(v)` | Returns `"(x, y, z)"` |
+
+```lua
+local v = Vec(1, 2, 3)
+local w = Vec(4, 5, 6)
+
+print(v + w)    -- (5, 7, 9)
+print(v - w)    -- (-3, -3, -3)
+print(v * 2)    -- (2, 4, 6)
+print(2 * v)    -- (2, 4, 6)
+print(v * w)    -- (4, 10, 18)  component-wise
+print(v / 2)    -- (0.5, 1, 1.5)
+print(-v)       -- (-1, -2, -3)
+print(v == Vec(1,2,3))  -- true
+print(tostring(v))      -- "(1, 2, 3)"
+```
+
+Any `{x, y, z}` table in the API accepts a Vec — they're interchangeable.
+
+The vector metatable is accessible via `mc.getMetatable("vec")` for custom extensions.
+
+---
+
 ## `mc.*` API
 
 ### `mc.broadcast(text, overlay?)`
 
 Sends a chat message to all players. If `overlay` is a number, sends a title overlay for that many ticks.
-
-### `mc.playSound(id, x, y, z, world, volume?, pitch?)`
-
-Plays a sound at the given coordinates.
 
 ### `mc.time()`
 
@@ -318,16 +364,7 @@ s:place(player.world, {x = 0, y = 64, z = 0})
 
 ### `mc.createItem(id, [count | components])` → ItemStack
 
-Creates an ItemStack. Short form: `mc.createItem(id, count)`. Extended form with a components table (returned ItemStacks expose `id`, `count`, and `custom_model_data` as read-only properties):
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `count` | int | Stack count (default 1) |
-| `name` | string | Custom item name |
-| `lore` | string[] | Lore lines |
-| `custom_model_data` | int | Custom model data value |
-| `unbreakable` | bool | Makes item unbreakable |
-| `attackDamage` | number | Sets base attack damage (adds attribute modifier) |
+Creates an ItemStack. See [ItemStack API](#itemstack-api) for the full reference.
 
 ```lua
 local arrows = mc.createItem("minecraft:arrow", 64)
@@ -352,7 +389,7 @@ mc.data.totalPlayers = (mc.data.totalPlayers or 0) + 1
 
 ### `mc.getMetatable(name)` → table
 
-Returns a singleton LuaTable for one of 4 wrapper types. Functions set on these tables become available on all wrappers of that type via `__index` fallthrough.
+Returns a singleton LuaTable for one of 5 wrapper types. Functions set on these tables become available on all wrappers of that type via `__index` fallthrough.
 
 | Name | Affects |
 |------|---------|
@@ -360,6 +397,7 @@ Returns a singleton LuaTable for one of 4 wrapper types. Functions set on these 
 | `"entity"` | Entity wrappers (Player delegates here) |
 | `"world"` | World wrappers |
 | `"structure"` | Structure wrappers |
+| `"vec"` | Vector tables (arithmetic metamethods) |
 
 ```lua
 local meta = mc.getMetatable("entity")
@@ -372,6 +410,15 @@ Methods are colon-callable (receive `self` as arg1).
 ### `mc.on(event, handler)`
 
 Registers a Lua handler for a game event. See [Events Reference](#events-reference) for available events.
+
+### `mc.emit(event, ...)`
+
+Fires a game event programmatically, triggering all registered Lua handlers for that event. Any extra arguments are passed through to the handlers.
+
+```lua
+mc.emit("server_start")
+mc.emit("player_chat", somePlayer, "hello")
+```
 
 ---
 
@@ -386,7 +433,7 @@ The Player object is accessed via `ctx.player` inside a command handler, or as t
 | `name` | string | ❌ | Player name |
 | `uuid` | string | ❌ | UUID string |
 | `world` | World | ❌ | World wrapper (use `world.name` for the path string) |
-| `pos` | `{x, y, z}` | ❌ | Position |
+| `pos` | `{x, y, z}` | ✅ | Position |
 | `dir` | `{x, y, z}` | ❌ | Look direction |
 | `bodyDir` | `{x, z}` | ❌ | Body yaw direction |
 | `health` | number | ✅ | Current health |
@@ -428,8 +475,6 @@ The Player object is accessed via `ctx.player` inside a command handler, or as t
 | `chest` | ItemStack | ✅ | Chestplate slot item |
 | `legs` | ItemStack | ✅ | Leggings slot item |
 | `feet` | ItemStack | ✅ | Boots slot item |
-| `customName` | string | ✅ | Custom entity name |
-| `tags` | table | ✅ | Scoreboard command tags proxy (`tags["foo"] = true`) |
 
 Setting a read-only property logs a warning and does nothing.
 
@@ -493,6 +538,151 @@ ctx.player.data.nested.key = "value"
 local t = ctx.player.data.nested or {}
 t.key = "value"
 ctx.player.data.nested = t
+```
+
+---
+
+## ItemStack API
+
+ItemStack wrappers are returned by equipment properties, inventory methods, and [`mc.createItem()`](#mc-createitem-id-count-components---itemstack). Empty slots return `nil`.
+
+### Properties
+
+All read-only:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | Registry ID (e.g. `"minecraft:diamond"`) |
+| `count` | number | Stack count |
+| `custom_model_data` | number | Custom model data value, if set |
+
+### `mc.createItem(id, [count | components])` → ItemStack
+
+Short form: `mc.createItem(id, count)`. Extended form with a components table:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `count` | int | Stack count (default 1) |
+| `name` | string | Custom item name |
+| `lore` | string[] | Lore lines |
+| `custom_model_data` | int | Custom model data value |
+| `unbreakable` | bool | Makes item unbreakable |
+| `attackDamage` | number | Sets base attack damage (adds attribute modifier) |
+
+---
+
+## Inventory API
+
+Virtual inventories backed by `SimpleInventory`. Sizes must be multiples of 9 between 9 and 54.
+
+### `mc.createInventory(size)` → Inventory
+
+```lua
+local inv = mc.createInventory(27)  -- 3 rows × 9 cols
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `size` | number | Total slot count |
+
+### Methods
+
+| Method | Args | Description |
+|--------|------|-------------|
+| `getItem` | slot (1-based) | Returns ItemStack or nil |
+| `setItem` | slot, item | Sets item (nil clears) |
+| `fill` | item | Fills all slots with item (nil clears) |
+| `clear` | — | Empties all slots |
+| `open` | player, [title="Container"] | Opens the inventory as a chest screen → Container |
+
+---
+
+## Container API
+
+Returned by `inv:open(player, title)`. Represents an open chest screen for a player.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `player` | Player | The player viewing this container |
+| `inventory` | Inventory | The backing inventory |
+
+### Methods
+
+| Method | Args | Description |
+|--------|------|-------------|
+| `close` | — | Closes the screen |
+| `onClick` | callback or nil | Registers/unregisters click handler |
+
+### Click callback
+
+```lua
+container:onClick(function(player, slot, clickType, slotItem, cursorItem)
+    -- slot:       1-based slot index
+    -- clickType:  "pickup", "quick_move", "swap", "throw", "quick_craft", "pickup_all"
+    -- slotItem:   item in the clicked slot (nil if empty)
+    -- cursorItem: item on the player's cursor (nil if empty)
+    return false  -- cancel the click (prevents item manipulation)
+end)
+```
+
+When a callback is registered, the inventory auto-locks — players can't remove or swap items. Setting `onClick(nil)` unlocks it for shared-inventory use.
+
+All containers are force-closed on `/pxrp reload` and player disconnect.
+
+---
+
+## Chest GUI Library
+
+```lua
+local chestgui = require "chestgui"
+```
+
+Wraps `mc.createInventory` + Container with grid positioning.
+
+### `chestgui.create(rows, title)` → GUI
+
+Creates a GUI with `rows` rows (1–6). Returns a GUI object.
+
+```lua
+local gui = chestgui.create(3, "My Shop")
+```
+
+### Methods
+
+| Method | Args | Description |
+|--------|------|-------------|
+| `set` | row, col, item, [callback] | Place item at grid position |
+| `decorate` | row, col, item | Place decorative item (no callback) |
+| `button` | slot, item, [callback] | Place item by raw slot number |
+| `fill` | item | Fill all slots |
+| `clear` | — | Empty all slots |
+| `open` | player | Opens GUI for a player → Container |
+| `close` | player | Closes GUI for that player |
+
+`row` and `col` are both 1-based. For a 3-row GUI: rows 1–3, cols 1–9.
+
+```lua
+local shop = chestgui.create(3, "Shop")
+
+-- Grid positioning
+shop:set(2, 5, mc.createItem("diamond"), function(player, slot, clickType, slotItem, cursorItem)
+    player:sendMessage("Bought diamond!")
+    return false
+end)
+
+-- Decorative border (no interaction)
+shop:decorate(1, 1, mc.createItem("black_stained_glass_pane"))
+
+-- Raw slot still works
+shop:button(15, mc.createItem("emerald"), function(player)
+    player:sendMessage("Bought emerald!")
+end)
+
+shop:open(somePlayer)
 ```
 
 ---
@@ -562,12 +752,56 @@ Fills a cuboid region. No neighbor updates — blocks appear instantly without o
 player.world:fill({x = -10, y = 4, z = -10}, {x = 10, y = 4, z = 10}, "glass")
 ```
 
-#### `world:particle(particle, x, y, z)`
+#### `world:particle(id, pos, opts?)`
 
-Spawns a particle at position visible to all players in that world.
+Spawns a particle visible to all players in that world. `pos` is a vector table (`{x,y,z}` or `Vec`). An optional `opts` table can specify spread options and particle-specific data.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `count` | int | `1` | Particle count |
+| `spread` | `{x,y,z}` or `Vec` | `0,0,0` | Spread vector |
+| `speed` | number | `0` | Particle speed |
+| `data` | table | `nil` | Particle type-specific data (see below) |
+
+If the `opts` table contains particle data keys (`color`, `block`, `item`, `fromColor`, `toColor`, `angle`, or any camelCase‑to‑snake_case key), the whole table is treated as both opts and data — no need for a `data` wrapper.
 
 ```lua
-player.world:particle("minecraft:gust", 0, 64, 0)
+-- Simple particle (no data needed)
+world:particle("minecraft:gust", Vec(0, 64, 0))
+world:particle("minecraft:flame", {x=0, y=64, z=0}, {count=3, spread=Vec(1,1,1)})
+
+-- Implicit form — opts IS the data (cleaner, preferred)
+world:particle("minecraft:flash", Vec(0, 64, 0), {color={1, 0, 0}})
+world:particle("minecraft:block", Vec(0, 64, 0), {block="stone"})
+world:particle("minecraft:item", Vec(0, 64, 0), {item="diamond"})
+world:particle("minecraft:dust", Vec(0, 64, 0), {color={1,1,0}, size=1})
+world:particle("minecraft:dust_color_transition", Vec(0, 64, 0),
+    {fromColor={1,0,0}, toColor={0,0,1}, size=1})
+world:particle("minecraft:sculk_charge", Vec(0, 64, 0), {angle=0.5})
+world:particle("minecraft:shriek", Vec(0, 64, 0), {delay=20})
+
+-- Explicit data= form (also works, same result)
+world:particle("minecraft:flash", Vec(0, 64, 0), {data={color={1,0,0}}})
+```
+
+**Sugar keys** accepted in the `data` table (or directly in `opts`):
+| Key | Maps to NBT | Example value |
+|-----|-------------|---------------|
+| `block` | `block_state` (string) | `"stone"` (auto-prefixes `minecraft:`) |
+| `item` | `item` (compound `{id, count}`) | `"diamond"` |
+| `color` | `color` (packed int `0xRRGGBB`) | `{1, 0, 0}` or `{r=1, g=0, b=0}` |
+| `fromColor` | `from_color` (packed int) | `{1, 0, 0}` |
+| `toColor` | `to_color` (packed int) | `{0, 0, 1}` |
+| `angle` | `roll` (float) | `0.5` |
+
+Color values accept both 0–255 and 0.0–1.0 ranges. Any other key is converted from camelCase to snake_case automatically (e.g. `myField` → `my_field`).`
+
+#### `world:playSound(id, x, y, z, volume?, pitch?)`
+
+Plays a sound at the given coordinates in this world.
+
+```lua
+player.world:playSound("minecraft:entity.slime.squish", 0, 64, 0, 10, 0.1)
 ```
 
 #### `world:broadcastInRange(text, x, y, z, range, overlay?)`
@@ -576,6 +810,29 @@ Broadcasts text to players within range in that world.
 
 ```lua
 player.world:broadcastInRange("Someone is nearby!", 0, 64, 0, 10)
+```
+
+#### `world:raycast(startVec, dirVec, range, includeFluids?, includeEntities?)` → result table | nil
+
+Raycasts from an arbitrary start position in a given direction. Same return format as [entity:raycast](#entityraycastrange-includefluids--result-table--nil).
+
+| Param | Default | Description |
+|-------|---------|-------------|
+| `startVec` | — | Start position (`{x, y, z}` or Vec) |
+| `dirVec` | — | Direction vector (`{x, y, z}` or Vec) |
+| `range` | — | Max distance in blocks |
+| `includeFluids` | `false` | Whether fluid bodies are checked |
+| `includeEntities` | `true` | Whether entity hits are checked |
+
+```lua
+-- Check line of sight (blocks + entities)
+local r = world:raycast(Vec(0, 10, 0), Vec(0, -1, 0), 20)
+
+-- Blocks only
+local r = world:raycast(start, dir, 20, false, false)
+if r and r.type == "block" then
+    print("Hit", r.hit, "on", r.side, "face")
+end
 ```
 
 #### `world:getEntities(pos, radius, typeFilter?)` → table
@@ -658,14 +915,28 @@ entity:damage(10)                      -- generic damage, no knockback
 entity:damage(10, ctx.player)          -- player attack with knockback
 ```
 
-#### `entity:raycast(range, includeFluids?)` → Entity | `{x, y, z}` | nil
+#### `entity:raycast(range, includeFluids?)` → result table | nil
 
-Raycasts from the entity's eyes. Returns the closest LivingEntity hit, a position table `{x, y, z}` if a block is hit, or `nil`.
+Raycasts from the entity's eyes. Returns a result table with hit details, or `nil` if nothing hit.
 
+Block hit:
 ```lua
-local target = entity:raycast(50)
-if target and target.type == "minecraft:villager" then
-    mc.broadcast("Looking at a villager!")
+local r = entity:raycast(50)
+if r and r.type == "block" then
+    print(r.blockPos)       -- Vec(10, 5, 7)  block position
+    print(r.hit)            -- Vec(10.5, 5.3, 7.0) exact hit point
+    print(r.side)           -- "north", "south", "up", "down", "east", "west"
+    print(r.normal)         -- Vec(0, 0, -1) unit normal of the face
+end
+```
+
+Entity hit:
+```lua
+local r = entity:raycast(50)
+if r and r.type == "entity" then
+    print(r.entity.name)    -- entity wrapper
+    print(r.hit)            -- Vec(...) hit point on bounding box
+    r.entity:damage(10)
 end
 ```
 
@@ -779,6 +1050,18 @@ require "simple"    -- provides registerSimple()
 ```
 
 ### `format.lua` — template engine
+- Templates use `{expr}` placeholders with dot-notation access
+- `format(pattern)(args)` returns formatted string
+- `broadcastFormat(pattern)(args)` formats and broadcasts in one call
+
+### `simple.lua` — concise command registration
+- `registerSimple(syntax, template, range?, overlay?)` — one-shot command registration
+
+### `chestgui.lua` — chest-based GUI
+- `gui.create(rows, title)` — creates a chest GUI
+- `gui:set(row, col, item, callback)` — place item with click handler
+- `gui:decorate(row, col, item)` — place decorative item
+- `gui:open(player)` / `gui:close(player)` — open/close for a player
 
 Templates use `{expr}` placeholders with dot-notation access:
 

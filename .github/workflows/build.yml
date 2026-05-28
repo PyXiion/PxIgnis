@@ -74,7 +74,7 @@ jobs:
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           modrinth-id: SYYlZZEi
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          modrinth-token: ${{ secrets.MODRINTH }}
           files: PxRP-*.jar
           loaders: fabric
           version-type: release
