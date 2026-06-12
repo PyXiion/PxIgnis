@@ -5,6 +5,28 @@ description: Release history for PxIgnis.
 
 # Changelog
 
+## 0.8.0 — Async API, PxLuaNova embedded, documentation site
+
+### Async API
+
+- Added `mc.fetch(url)` — coroutine-yielding HTTP requests via `HttpClient.sendAsync`
+- Added `mc.sleep(ticks)` — coroutine-yielding timed delay via `Scheduler.schedule`
+
+### PxLuaNova composite build
+
+- Embedded PxLuaNova as a Gradle composite build (`pxluanova/`) — no more Maven Local dependency
+- Dependency auto-substitution via `includeBuild 'pxluanova'` in `settings.gradle`
+
+### Documentation site
+
+- New Astro + Starlight documentation site at `site/` (brand: PxIgnis)
+- 28 documentation pages covering all APIs
+
+### Other
+
+- `.gitignore` patterns fixed to match nested directories (trailing-slash form)
+- General cleanup and minor improvements
+
 ## 0.7.0 — Mob AI, ByteBuddy hooks, sidebar rewrite, PxLuaNova migration
 
 ### Migration: LuaJ → PxLuaNova
