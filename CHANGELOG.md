@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.0 — Removed ByteBuddy (jar size -83%)
+
+### Removed: `mc.observeHook` / `mc.removeHook` / `mc.clearHooks`
+
+ByteBuddy (`byte-buddy` + `byte-buddy-agent`) was pulling ~4.3 MB into the output jar for a single
+unstable API (`mc.observeHook`) that was marked as WIP/beta and recommended for removal in favour of
+`mc.on()` events. Since the mod already provides 16 Fabric-based events via `mc.on()`, the ByteBuddy
+runtime method hooking system was removed entirely.
+
+**Migration**: Use `mc.on("event_name", handler)` for all event handling. See the 0.7.0 changelog for
+the full event list.
+
+### Other changes
+
+- Deleted `LuaMixinManager.kt` (ByteBuddy agent setup, mapping, transformer — 152 lines)
+- Deleted `LuaMixinManagerTest.kt` (144 lines, tested only removed code)
+- Output jar reduced from ~4.9 MB to ~839 KB
+
 ## 0.8.0 — Async API, PxLuaNova embedded, documentation site
 
 ### Async API
