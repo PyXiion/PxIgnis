@@ -71,7 +71,6 @@ class PxRp : ModInitializer {
                     luaLoader.eventManager.fire("server_stop")
                 }
             } catch (_: UninitializedPropertyAccessException) { }
-            LuaMixinManager.clearHooks()
             storageManager?.close()
         })
 

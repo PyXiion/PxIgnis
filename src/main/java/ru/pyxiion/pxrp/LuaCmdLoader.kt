@@ -228,8 +228,6 @@ class LuaCmdLoader(
         ContainerManager.closeAll()
         SidebarManager.closeAll()
         MobAIManager.restoreAll()
-        LuaMixinManager.clearHooks()
-
 
         prepareGlobals()
 

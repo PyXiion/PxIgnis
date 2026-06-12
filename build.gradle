@@ -60,13 +60,6 @@ dependencies {
         transitive = false
     }
 
-    // Byte Buddy for mixins
-    implementation "net.bytebuddy:byte-buddy:1.18.9"
-    shadow "net.bytebuddy:byte-buddy:1.18.9"
-
-    implementation "net.bytebuddy:byte-buddy-agent:1.18.9"
-    shadow "net.bytebuddy:byte-buddy-agent:1.18.9"
-
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:$kotlin_version"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
@@ -80,7 +73,6 @@ shadowJar {
     minimize()
 
     relocate 'org.luaj', 'ru.pyxiion.lib.luaj'
-    relocate 'net.bytebuddy', 'ru.pyxiion.lib.bytebuddy'
 }
 
 remapJar {
