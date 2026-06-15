@@ -4,7 +4,7 @@ description: Lua wrapper for modifiable inventories — create, modify slots, op
 ---
 
 The inventory API lets you create and manage virtual inventories. Inventories can be
-opened for players, returning a [Container](/docs/reference/container-api) session.
+opened for players, returning a [Container](/reference/container-api) session.
 
 Metatable name: `"inventory"`
 
@@ -45,7 +45,7 @@ local item = inv:getItem(0)
 Sets a slot to the given item stack.
 
 - `slot` (`number`) — Slot index (0‑based)
-- `item` ([`ItemStack`](/docs/reference/itemstack-api) or `nil`) — Item to place, or `nil` to clear
+- `item` ([`ItemStack`](/reference/itemstack-api) or `nil`) — Item to place, or `nil` to clear
 
 ```lua
 inv:setItem(0, mc.createItem("diamond", 1))
@@ -56,7 +56,7 @@ inv:setItem(1, nil)
 
 Fills every empty slot with the given item.
 
-- `item` ([`ItemStack`](/docs/reference/itemstack-api)) — Item to fill with
+- `item` ([`ItemStack`](/reference/itemstack-api)) — Item to fill with
 
 ```lua
 inv:fill(mc.createItem("stone", 1))
@@ -72,9 +72,9 @@ inv:clear()
 
 ### `inv:open(player, title?)`
 
-Opens the inventory for a player. Returns a [Container](/docs/reference/container-api) session.
+Opens the inventory for a player. Returns a [Container](/reference/container-api) session.
 
-- `player` ([`Player`](/docs/reference/player-api)) — Target player
+- `player` ([`Player`](/reference/player-api)) — Target player
 - `title` (`string`, optional) — Window title
 
 The returned container tracks the open session with click handling, forced close,

@@ -4,7 +4,7 @@ description: Lua wrapper for Minecraft entities — properties, attributes, equi
 ---
 
 The entity wrapper provides access to any Minecraft entity. Player entities extend this
-wrapper — see [Player API](/docs/reference/player-api).
+wrapper — see [Player API](/reference/player-api).
 
 Metatable name: `"entity"`
 
@@ -42,7 +42,7 @@ Custom name. Assign to set.
 
 ### `entity.world`
 
-**type:** [`World`](/docs/reference/world-api)
+**type:** [`World`](/reference/world-api)
 
 The world the entity is in. Read-only.
 
@@ -134,37 +134,37 @@ Invulnerability state. Assign to set.
 
 ### `entity.mainhand`
 
-**type:** [`ItemStack`](/docs/reference/itemstack-api) or `nil`
+**type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
 Main hand item. Assign to set equipped item.
 
 ### `entity.offhand`
 
-**type:** [`ItemStack`](/docs/reference/itemstack-api) or `nil`
+**type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
 Off hand item. Assign to set equipped item.
 
 ### `entity.head`
 
-**type:** [`ItemStack`](/docs/reference/itemstack-api) or `nil`
+**type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
 Helmet item. Assign to set equipped item.
 
 ### `entity.chest`
 
-**type:** [`ItemStack`](/docs/reference/itemstack-api) or `nil`
+**type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
 Chestplate item. Assign to set equipped item.
 
 ### `entity.legs`
 
-**type:** [`ItemStack`](/docs/reference/itemstack-api) or `nil`
+**type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
 Leggings item. Assign to set equipped item.
 
 ### `entity.feet`
 
-**type:** [`ItemStack`](/docs/reference/itemstack-api) or `nil`
+**type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
 Boots item. Assign to set equipped item.
 
@@ -273,7 +273,7 @@ entity.tags["old_tag"] = false -- remove
 Deals damage to the entity.
 
 - `amount` (`number`) — Damage amount
-- `source` ([`Entity`](/docs/reference/entity-api), optional) — Attacking entity
+- `source` ([`Entity`](/reference/entity-api), optional) — Attacking entity
 
 ```lua
 entity:damage(10)

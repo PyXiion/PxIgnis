@@ -119,21 +119,12 @@ class LuaMcApi(
         return LuaValue.valueOf(removed)
     }
 
-    private fun luaGetPlayers(args: Varargs): Varargs {
-        val list = LuaTable()
-        server.playerManager.playerList.forEachIndexed { i, p ->
-            list.set(i + 1, playerCache.getOrPut(p.uuid) { PlayerWrapper(p).toLuaValue() })
-        }
-        return list
-    }
-
     private fun luaGetWorld(args: Varargs): Varargs {
         val name = args.arg(1).checkjstring()
         val key = RegistryKey.of(RegistryKeys.WORLD, Identifier.of(name))
         val world = server.getWorld(key)
             ?: throw IllegalArgumentException("World '$name' not found")
-        WorldWrapper.playerCache = this.playerCache
-        return WorldWrapper(world).toLuaValue()
+        return WorldWrapper(world, playerCache, { scheduler.currentTick }).toLuaValue()
     }
 
     private fun luaLoadStructure(args: Varargs): Varargs {
@@ -259,6 +250,12 @@ class LuaMcApi(
         return LuaValue.NIL
     }
 
+    private fun luaGetRegion(args: Varargs): Varargs {
+        require(args.narg() == 1) { "getRegion(id) requires 1 argument" }
+        val id = args.arg(1).checkint()
+        return RegionManager.get(id)?.let { RegionWrapper(it).toLuaValue() } ?: LuaValue.NIL
+    }
+
     fun toTable(): LuaTable {
         MetaTableRegistry.init()
 
@@ -289,8 +286,13 @@ class LuaMcApi(
             "scheduleRepeating" to this::luaScheduleRepeating.asVarArgFunction(),
             "cancelTask" to this::luaCancelTask.asVarArgFunction(),
             "world" to this::luaGetWorld.asVarArgFunction(),
-            "players" to this::luaGetPlayers.asVarArgFunction(),
+            "players" to PlayerListWrapper(
+                source = { server.playerManager.playerList },
+                playerCache = playerCache,
+                tickProvider = { scheduler.currentTick },
+            ).toLuaValue(),
             "getEntity" to this::luaGetEntity.asVarArgFunction(),
+            "getRegion" to this::luaGetRegion.asVarArgFunction(),
             "holograms" to object : VarArgFunction() {
                 override fun invoke(args: Varargs): Varargs {
                     val list = LuaTable()

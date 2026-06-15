@@ -32,6 +32,7 @@ import ru.pyxiion.ignis.api.ItemStackWrapper
 import ru.pyxiion.ignis.api.MobAIManager
 import ru.pyxiion.ignis.api.MobWrapper
 import ru.pyxiion.ignis.api.PlayerWrapper
+import ru.pyxiion.ignis.api.RegionManager
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.ContainerManager
 import ru.pyxiion.ignis.api.SidebarManager
@@ -78,18 +79,26 @@ class PxIgnis : ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(fun(server) {
             if (::luaLoader.isInitialized) {
                 luaLoader.scheduler.tick()
+                val em = luaLoader.eventManager
+                if (em.hasHandlers("tick")) {
+                    em.fire("tick")
+                    em.tick()
+                }
+                RegionManager.tick()
             }
         })
 
         ServerEntityEvents.ENTITY_LOAD.register { entity, world ->
             if (::luaLoader.isInitialized) {
                 MobAIManager.onEntityLoad(entity, world)
+                RegionManager.onEntityChunkLoad(entity)
                 luaLoader.eventManager.fire("entity_spawn", EntityWrapper(entity).toLuaValue())
             }
         }
 
         ServerEntityEvents.ENTITY_UNLOAD.register { entity, world ->
             if (::luaLoader.isInitialized) {
+                RegionManager.onEntityChunkUnload(entity)
                 luaLoader.eventManager.fire("entity_despawn", EntityWrapper(entity).toLuaValue())
             }
         }
@@ -137,6 +146,10 @@ class PxIgnis : ModInitializer {
         }
 
         ServerLivingEntityEvents.AFTER_DEATH.register(fun(entity, source) {
+            if (::luaLoader.isInitialized) {
+                val damageTypeName = source.name.substringAfterLast(".")
+                RegionManager.onEntityDeath(entity, damageTypeName, 0.0)
+            }
             if (entity is net.minecraft.server.network.ServerPlayerEntity && storageManager != null) {
                 val luaPlayer = PlayerWrapper(entity).toLuaValue()
                 val damageTypeName = source.name.substringAfterLast(".")

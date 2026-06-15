@@ -6,7 +6,7 @@ import java.util.PriorityQueue
 
 class Scheduler {
     private var nextId = 0
-    private var currentTick = 0L
+    var currentTick = 0L
     private val tasks = PriorityQueue(compareBy<ScheduledTask> { it.fireAtTick })
     private val cancelledIds = HashSet<Int>()
 

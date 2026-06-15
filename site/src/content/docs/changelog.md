@@ -5,18 +5,115 @@ description: Release history for PxIgnis.
 
 # Changelog
 
+## 0.11.0 — Region API (2026-06-15)
+
+### New API — [Region](/reference/region-api)
+
+Spatial areas in a world with event subscriptions. Create with two corners (auto-normalized), subscribe to
+enter/leave/move/death/tick events with optional per-callback throttling.
+
+| API                              | Description                                                    |
+|----------------------------------|----------------------------------------------------------------|
+| `world:createRegion(posA, posB)` | Creates a region between two corners                           |
+| `r:getBounds()`                  | Returns `{A, B}` — the two bounding corners (A = min, B = max) |
+| `r:setBounds(posA, posB)`        | Updates region bounds; re-evaluates entity membership          |
+| `r:on(event, fn, opts?)`         | Subscribes to a region event; returns handler ID              |
+| `r:off(id)`                      | Unsubscribes a handler by ID; returns `true` if removed        |
+| `r:contains(pos)`                | `true` if position is inside the bounds                        |
+| `r:destroy()`                    | Destroys region, fires `destroy` event, clears handlers        |
+| `r.players`                      | Sequence of players currently inside                           |
+| `r.entities`                     | Sequence of entities currently inside                          |
+| `r.id`                           | Session-unique integer ID                                      |
+| `r.world`                        | World the region belongs to                                    |
+| `world.regions`                  | Sequence of all live regions in this world                     |
+| `mc.getRegion(id)`               | Looks up a region by ID across all worlds; returns `Region` or `nil` |
+| `world:getRegion(id)`            | Looks up a region by ID in this world; returns `Region` or `nil` |
+| `world:getRegionsAt(pos)`        | Returns a sequence of regions in this world containing `pos`    |
+
+**Events**: `entity_enter`, `entity_leave`, `entity_move`, `player_enter`, `player_leave`, `player_move`,
+`entity_death`, `player_death`, `tick`, `destroy`.
+
+```lua
+local r = world:createRegion({x=0,y=0,z=0}, {x=100,y=64,z=100})
+r:on("entity_enter", function(e) e:sendMessage("Welcome!") end)
+r:on("entity_move", function(e, from, to) print((to - from):length()) end, { throttle = 5 })
+r:on("tick", function() end) -- auto-subscribes, no enableTick needed
+
+-- Look up a region later by ID (e.g. one stored in mc.data)
+local saved = mc.getRegion(r.id)
+-- Find all regions at a position
+for _, reg in ipairs(world:getRegionsAt({ x = 50, y = 64, z = 50 })) do
+  print("In region", reg.id)
+end
+```
+
+### [Updated Event System](/reference/events)
+
+The event system was refactored into a single `EventBus` class backing both `mc.on` and `region:on`. Changes:
+
+- **`mc.on` now returns a handler ID** (integer). Pass it to `mc.off(id)` to unsubscribe.
+- **`mc.off(id)`** — new global API. Returns `true` if the handler was removed.
+- **`region:on` now returns a handler ID**. Pass it to `region:off(id)` to unsubscribe.
+- **`mc.on("tick", fn)`** — now works globally, same auto-subscribe semantics as regions. Fires every server tick.
+- **`mc.emit` / `mc.on`** signatures unchanged.
+
+```lua
+local id = mc.on("player_join", function(p) print(p.name) end)
+mc.off(id)  -- remove handler
+
+local rid = r:on("entity_enter", function(e) e:sendMessage("Hi!") end)
+r:off(rid)
+```
+
+### Breaking changes
+
+- **`mc.players()` → `mc.players`** — now a strict read-only list property, not a function. Callers must use
+  `mc.players` without parentheses.
+
+### Other
+
+- **`world.players` refactored**. It's now cached per-tick.
+- **`mc.getWorld(name)` now also caches**.
+
+## 0.10.0 — Hologram API
+
+### New API
+
+| Function                                | Description                                                        |
+|-----------------------------------------|--------------------------------------------------------------------|
+| `world:spawnHologram(pos, text, opts?)` | Spawns a `minecraft:text_display` entity; returns hologram wrapper |
+| `mc.holograms`                          | List of all live holograms (property)                              |
+| `mc.getHologram(uuid)`                  | Returns hologram by UUID, or `nil`                                 |
+
+Hologram wrapper exposes r/w properties: `text`, `lines`, `alignment`, `billboard`,
+`lineWidth`, `background`, `opacity`, `shadow`, `seeThrough`, `glowing`, `pos`,
+plus `:setLine(n, text)` and `:destroy()` methods. Delegates to entity metatable
+for `uuid`, `world`, `removed`, `pos` live proxy, `tags`, NBT read/write, etc.
+
+```lua
+local h = world:spawnHologram({x=0,y=64,z=0}, "Hello\nWorld", {billboard="center"})
+h.lines = {"Line 1", "Line 2"}
+h:setLine(1, "Updated")
+mc.schedule(40, function() h:destroy() end)
+```
+
+### Notes
+
+- All holograms are destroyed on `/ignis reload`.
+- Per-player holograms deferred as future work (would need custom packet dispatch).
+
 ## 0.9.0 — Removed ByteBuddy, 6 new events (23 total)
 
 ### New events
 
-| Event | Cancellable | Args | Fires |
-|---|---|---|---|
-| `entity_spawn` | ❌ | `entity` | Any entity loads into a world |
-| `entity_despawn` | ❌ | `entity` | Any entity unloads from a world |
-| `entity_death` | ✅ | `entity`, `source`, `amount` | Any living entity is about to die (players + mobs) |
-| `player_join_init` | ✅ | `player` | Early join, player not fully loaded (renamed from `player_join`) |
-| `player_join` | ❌ | `player` | Post-load join, player fully ready in world |
-| `player_respawn` | ❌ | `player`, `wasDeath` | Player respawns after death or end portal |
+| Event              | Cancellable | Args                         | Fires                                                            |
+|--------------------|-------------|------------------------------|------------------------------------------------------------------|
+| `entity_spawn`     | ❌           | `entity`                     | Any entity loads into a world                                    |
+| `entity_despawn`   | ❌           | `entity`                     | Any entity unloads from a world                                  |
+| `entity_death`     | ✅           | `entity`, `source`, `amount` | Any living entity is about to die (players + mobs)               |
+| `player_join_init` | ✅           | `player`                     | Early join, player not fully loaded (renamed from `player_join`) |
+| `player_join`      | ❌           | `player`                     | Post-load join, player fully ready in world                      |
+| `player_respawn`   | ❌           | `player`, `wasDeath`         | Player respawns after death or end portal                        |
 
 **Migration**: `player_join` was renamed to `player_join_init` (still cancellable, early). The new `player_join`
 fires later when the player is fully in-world.
@@ -68,12 +165,12 @@ unstable API (`mc.observeHook`). Use `mc.on()` events instead.
 
 ### New Mob AI system
 
-| API                                    | Description                                                                             |
-|----------------------------------------|-----------------------------------------------------------------------------------------|
-| `mc.registerBehaviour(id, fn)`         | Registers a named AI behaviour function                                                 |
-| `mob:setAI("id")` / `mob:setAI(fn)`    | Assigns behaviour by name or directly with a function. Persists on reload if ID is used |
-| `mob:clearAI()`                        | Removes behaviour, restores vanilla AI                                                  |
-| `mob.aiActive`                         | Whether a behaviour is currently active                                                 |
+| API                                 | Description                                                                             |
+|-------------------------------------|-----------------------------------------------------------------------------------------|
+| `mc.registerBehaviour(id, fn)`      | Registers a named AI behaviour function                                                 |
+| `mob:setAI("id")` / `mob:setAI(fn)` | Assigns behaviour by name or directly with a function. Persists on reload if ID is used |
+| `mob:clearAI()`                     | Removes behaviour, restores vanilla AI                                                  |
+| `mob.aiActive`                      | Whether a behaviour is currently active                                                 |
 
 **Mob properties** (delegates to entity metatable for entity-level props):
 
@@ -313,7 +410,7 @@ Non-cancellable:
 
 - `world:spawn(id, pos, overrides?)` now returns entity with all new methods (raycast, damage, effects, NBT)
 - `entity.dir`, `entity.bodyDir` now return `{x,y,z}` vector tables (previously Java userdata)
-- Player cache: `mc.players()` and `world.players` reuse wrappers across lookups
+- Player cache: `mc.players` and `world.players` reuse wrappers across lookups
 - Sidebar persists across world changes and reconnects (restored 2 ticks after join)
 - `player.block_break`/`player.block_place` migrated from mixins to Fabric API events
 

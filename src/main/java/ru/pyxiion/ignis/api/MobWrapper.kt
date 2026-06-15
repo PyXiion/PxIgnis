@@ -5,7 +5,6 @@ import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.attribute.EntityAttributes
 import net.minecraft.entity.mob.MobEntity
 import net.minecraft.server.world.ServerWorld
-import net.minecraft.util.math.Vec3d
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -22,6 +21,7 @@ class MobWrapper(private val mob: MobEntity) {
         t.setmetatable(MetaTableRegistry.MOB)
         t.rawset("__pxrp_type", LuaValue.valueOf("mob"))
         t.rawset("__pxrp_object", CoerceJavaToLua.coerce(mob))
+
         return t
     }
 

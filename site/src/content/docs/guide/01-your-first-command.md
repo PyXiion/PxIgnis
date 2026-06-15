@@ -35,7 +35,7 @@ register("heal [<target:player>]", function(ctx, target)
 end)
 ```
 
-See [Registering Commands](/docs/reference/registering-commands) for all argument types.
+See [Registering Commands](/reference/commands-api) for all argument types.
 
 ## 3. Choice arguments
 
@@ -79,14 +79,14 @@ register("countdown <seconds:int>", function(ctx, seconds)
 end)
 ```
 
-See the [mc.\* API](/docs/reference/mc-api) for scheduler options.
+See the [mc.\* API](/reference/mc-api) for scheduler options.
 
 ## 5. Coroutine delays with mc.sleep
 
 All command handlers and `mc.schedule` callbacks run inside an implicit
 coroutine — so you can call `mc.sleep` directly without any extra setup.
 
-`mc.sleep(ticks)` yields the current coroutine and resumes after the delay. See [Async API](/docs/reference/async-api) for details:
+`mc.sleep(ticks)` yields the current coroutine and resumes after the delay. See [Async API](/reference/async-api) for details:
 
 ```lua
 register("delayedheal", function(ctx)
@@ -103,7 +103,7 @@ end)
 
 ## 6. Async HTTP with mc.fetch
 
-`mc.fetch(url)` sends an HTTP GET request and yields the coroutine until the response arrives. See [Async API](/docs/reference/async-api) for POST config and response fields:
+`mc.fetch(url)` sends an HTTP GET request and yields the coroutine until the response arrives. See [Async API](/reference/async-api) for POST config and response fields:
 
 ```lua
 register("playerinfo", function(ctx)
@@ -129,7 +129,7 @@ end, "admin.kick")
 
 ## 8. Effects for flair
 
-See [World API](/docs/reference/world-api) and [Vector API](/docs/reference/vector-api) for particle, sound, and Vec options:
+See [World API](/reference/world-api) and [Vector API](/reference/vector-api) for particle, sound, and Vec options:
 
 ```lua
 register("fart", function(ctx)
@@ -145,7 +145,7 @@ end)
 
 ## Next steps
 
-- [Events](/docs/reference/events) — react to player joins, block breaks, chat, and more
-- [Async API](/docs/reference/async-api) — detailed mc.fetch and mc.sleep reference
-- [Storage](/docs/reference/storage) — persist data across reloads with `mc.data` and `player.data`
+- [Events](/reference/events) — react to player joins, block breaks, chat, and more
+- [Async API](/reference/async-api) — detailed mc.fetch and mc.sleep reference
+- [Storage](/reference/storage) — persist data across reloads with `mc.data` and `player.data`
 - [Libraries](/docs/libraries/overview) — formatting templates, simple registrations, chest GUIs

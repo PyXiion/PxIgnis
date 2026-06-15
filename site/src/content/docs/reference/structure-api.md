@@ -49,7 +49,7 @@ Dimensions of the structure. Read-only.
 
 Places the structure in the world.
 
-- `world` ([`World`](/docs/reference/world-api)) — Target world
+- `world` ([`World`](/reference/world-api)) — Target world
 - `pos` (`table`) — `{x, y, z}` block position
 - `params` (`table`, optional) — Placement parameters
 

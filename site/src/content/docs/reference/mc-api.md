@@ -20,11 +20,12 @@ local t = mc.time()
 
 For world-daylight-time in ticks, use `world.time` instead.
 
-### `mc.players()`
-Returns a list of all online players as player wrappers.
+### `mc.players`
+
+A read-only list of all online players as player wrappers. The list is rebuilt each server tick to reflect joins and leaves. Wrappers are cached by UUID — the same player returns the same wrapper across reads.
 
 ```lua
-for _, p in ipairs(mc.players()) do
+for _, p in ipairs(mc.players) do
   p:sendMessage("Hello!")
 end
 ```
@@ -77,7 +78,7 @@ Recursively prints a Lua value's structure for debugging. Optional `depth` limit
 (default 3).
 
 ```lua
-mc.dump(mc.players(), 2)
+mc.dump(mc.players, 2)
 ```
 
 ### `mc.getMetatable(name)`

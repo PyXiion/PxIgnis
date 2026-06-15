@@ -6,13 +6,17 @@ description: Server-side event handling with mc.on() — full event reference.
 Handle server events with `mc.on(eventName, handler)`. All events are wired through Fabric API callbacks in the mod
 lifecycle — no mixins are used for events.
 
+`mc.on` returns a handler ID (integer) that can be passed to `mc.off(id)` to unsubscribe.
+
 Event handlers do **not** receive a `ctx` argument — unlike command handlers, they receive the event-specific arguments
 directly.
 
 ```lua
-mc.on("player_join", function(player)
+local id = mc.on("player_join", function(player)
     mc.broadcast(player.name .. " joined the server!")
 end)
+-- later:
+mc.off(id)
 ```
 
 ## Event Reference
@@ -42,6 +46,18 @@ end)
 | `entity_spawn`           | `(entity)`                                      |      ❌      |
 | `entity_despawn`         | `(entity)`                                      |      ❌      |
 | `entity_death`           | `(entity, damageType, amount)`                  |      ✅      |
+| `tick`                   | `()`                                            |      ❌      |
+
+## `mc.off(id)`
+
+Removes a previously registered event handler by its ID. Returns `true` if the handler was found and removed, `false` otherwise.
+
+```lua
+local id = mc.on("player_join", function(p)
+    mc.broadcast(p.name .. " joined!")
+end)
+mc.off(id)  -- unsubscribes
+```
 
 ## Cancellable Events
 
@@ -58,6 +74,8 @@ end)
 
 ## Notes
 
+- **tick** fires every server tick via the mod's tick hook. Can be throttled via the standard `mc.on` / `mc.off` API.
+  **Async** (`mc.sleep`, `mc.fetch`) is **not available** in tick handlers — they run on the main thread.
 - **damageType** is the last segment after `.` in the damage type registry ID (e.g. `"player_attack"`, `"fall"`,
   `"in_fire"`, `"on_fire"`).
 - **blocked** is a boolean indicating whether the damage was blocked by a shield. Available on `player_damage` and

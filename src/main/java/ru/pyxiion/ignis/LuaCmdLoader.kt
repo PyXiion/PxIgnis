@@ -30,6 +30,7 @@ import ru.pyxiion.ignis.api.ItemStackWrapper
 import ru.pyxiion.ignis.api.LuaMcApi
 import ru.pyxiion.ignis.api.MobAIManager
 import ru.pyxiion.ignis.api.PlayerWrapper
+import ru.pyxiion.ignis.api.RegionManager
 import ru.pyxiion.ignis.api.SidebarManager
 import ru.pyxiion.ignis.api.SidebarWrapper
 import ru.pyxiion.ignis.api.HologramManager
@@ -149,7 +150,7 @@ class LuaCmdLoader(
     val api = LuaMcApi(server, storageManager)
 
     // Manages Lua event handlers registered via mc.on()
-    val eventManager = LuaEventManager()
+    val eventManager = EventBus("", logger)
 
     // Task scheduler for mc.schedule / mc.scheduleRepeating
     val scheduler: Scheduler get() = api.scheduler
@@ -189,10 +190,17 @@ class LuaCmdLoader(
             require(args.narg() == 2) { "on(event, handler) requires 2 arguments" }
             val eventName = args.checkjstring(1)
             val handler = args.checkfunction(2)
-            eventManager.on(eventName, handler)
-            LuaValue.NIL
+            val id = eventManager.on(eventName, handler)
+            LuaValue.valueOf(id)
         }
         mcTable.set("on", onHandler.asVarArgFunction())
+
+        val offHandler: (Varargs) -> Varargs = { args: Varargs ->
+            require(args.narg() == 1) { "off(id) requires 1 argument" }
+            val id = args.checkint(1)
+            LuaValue.valueOf(eventManager.off(id))
+        }
+        mcTable.set("off", offHandler.asVarArgFunction())
         val emitHandler: (Varargs) -> Varargs = { args ->
             require(args.narg() >= 1) { "emit(event, ...) requires at least 1 argument" }
             val eventName = args.checkjstring(1)
@@ -230,6 +238,7 @@ class LuaCmdLoader(
         SidebarManager.closeAll()
         MobAIManager.restoreAll()
         HologramManager.closeAll()
+        RegionManager.closeAll()
 
         prepareGlobals()
 

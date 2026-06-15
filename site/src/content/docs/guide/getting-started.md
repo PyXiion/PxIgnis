@@ -36,12 +36,14 @@ Run `/ignis reload`, then type `/hello` in chat.
 register("cmd <name:type> [<name:type>]", handler, permission?)
 ```
 
-| Part | Meaning |
-|------|---------|
-| `cmd` `sub` | Literal path tokens |
-| `<name:type>` | Required argument |
-| `[<name:type>]` | Optional trailing argument |
+| Part                | Meaning                          |
+|---------------------|----------------------------------|
+| `cmd` `sub`         | Literal path tokens              |
+| `<name:type>`       | Required argument                |
+| `[<name:type>]`     | Optional trailing argument       |
 | `<name:choice=x,y>` | Choice type with tab completions |
+
+P.S. `[name:type]` is equal to `[<name:type>]` =D
 
 ## Configuration
 

@@ -4,9 +4,9 @@ description: Lua wrapper for Minecraft players — properties, inventory, effect
 ---
 
 The player wrapper provides access to a connected player. Players are obtained via
-`mc.players()`, `world.players`, or as event handler arguments.
+`mc.players`, `world.players`, or as event handler arguments.
 
-Player extends [Entity](/docs/reference/entity-api) — all entity properties and methods are available on players.
+Player extends [Entity](/reference/entity-api) — all entity properties and methods are available on players.
 Only player-specific additions are listed here.
 
 Metatable name: `"player"`
@@ -37,7 +37,7 @@ Metatable name: `"player"`
 ### Other
 
 - `player.gamemode` (`string`) — `"survival"`, `"creative"`, `"adventure"`, `"spectator"`. Assign to change.
-- `player.data` (`table`) — Persistent per-player data. See [Storage](/docs/reference/storage).
+- `player.data` (`table`) — Persistent per-player data. See [Storage](/reference/storage).
 
 ## Methods
 
@@ -83,7 +83,7 @@ player:sendTitle("&cWarning", "&7Danger zone", 10, 70, 20)
 
 Teleports to a position.
 
-- `world` ([`World`](/docs/reference/world-api)) — Target world
+- `world` ([`World`](/reference/world-api)) — Target world
 - `pos` (`table`) — `{x, y, z}` position
 
 ```lua
@@ -136,7 +136,7 @@ player:playSound("minecraft:entity.ender_dragon.growl", 1.0, 1.0)
 
 Gives an item to the inventory.
 
-- `item` ([`ItemStack`](/docs/reference/itemstack-api)) — Item to give
+- `item` ([`ItemStack`](/reference/itemstack-api)) — Item to give
 
 ```lua
 player:give(mc.createItem("diamond", 1))
@@ -147,7 +147,7 @@ player:give(mc.createItem("diamond", 1))
 Sets an item in a slot.
 
 - `slot` (`number`) — Slot index
-- `item` ([`ItemStack`](/docs/reference/itemstack-api) or `nil`) — Item or `nil` to clear
+- `item` ([`ItemStack`](/reference/itemstack-api) or `nil`) — Item or `nil` to clear
 
 ### `player:getItem(slot)`
 

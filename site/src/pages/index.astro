@@ -183,6 +183,52 @@ register("kit <name:choice=warrior,archer,miner> [target:player]", function(ctx,
     end
 end, "px.ignis.admin")  -- only operators or those with the permission node`,
   },
+  {
+    id: "regions",
+    label: "Regions",
+    file: "regions.lua",
+    code: `-- Three zones: lobby (auto-welcome), arena (PvP gate), boss (warning)
+local lobby = world:createRegion(vec(0, 64, 0),   vec(100, 128, 100))
+local arena = world:createRegion(vec(200, 64, 200), vec(300, 128, 300))
+local boss  = world:createRegion(vec(400, 64, 400), vec(500, 96, 500))
+
+-- enter/leave fire once per transition (not every tick)
+lobby:on("player_enter", function(p) p:sendMessage("Welcome to the lobby!") end)
+lobby:on("player_leave", function(p) p:sendMessage("See you soon.") end)
+
+-- Gate PvP zone by permission; bounce unauthorised to lobby
+arena:on("player_enter", function(p)
+    if not p:hasPermission("px.ignis.pvp") then
+        local a = lobby:getBounds().A
+        p:teleport(a.x, a.y, a.z)
+        p:sendMessage("PvP access denied.")
+    end
+end)
+
+-- Throttle: entity_move fires at most every 5 ticks (0.25s)
+boss:on("entity_move", function(e, from, to)
+    local d = to - from
+    if d:length() > 0.5 then  -- moved more than half a block
+        e:sendMessage("Boss room is small — slow down!")
+    end
+end, { throttle = 5 })
+
+-- tick auto-subscribes: no enableTick() needed
+lobby:on("tick", function()
+    for _, p in ipairs(lobby.players) do
+        p:sendActionBar("Online: " .. mc.onlineCount)
+    end
+end)
+
+-- Find regions at a position: returns {} when empty
+mc.on("player_join", function(p)
+    local zones = world:getRegionsAt(p.pos)
+    p:sendMessage("You are in " .. #zones .. " zone(s).")
+end)
+
+-- Resize at runtime — setBounds normalises corners, re-evaluates membership
+arena:setBounds(vec(200, 64, 200), vec(350, 128, 300))`,
+  },
 ];
 
 const highlighted = await Promise.all(
@@ -308,6 +354,13 @@ const highlighted = await Promise.all(
                 <h3>Dynamic UI</h3>
               </div>
               <p>Per-player scoreboard sidebars, chest GUI menus with click interception (<code>container:onClick</code>), and virtual inventories. Packet-based — never touches the global scoreboard, other players never see it.</p>
+            </div>
+            <div class="module-card">
+              <div class="module-header">
+                <span class="module-icon">🗺️</span>
+                <h3>Spatial Regions</h3>
+              </div>
+              <p>AABB zones with event hooks: <code>enter</code>, <code>leave</code>, <code>move</code>, <code>death</code>, <code>tick</code>. Per-region <code>players</code>/<code>entities</code> queries, throttlable callbacks, chunk-indexed lookups, <code>mc.getRegion</code> for ID-based retrieval.</p>
             </div>
           </div>
         </div>

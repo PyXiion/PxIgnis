@@ -889,7 +889,7 @@ function worldlistHandler(ctx)
 end
 
 function playerlistHandler(ctx)
-    local players = mc.players()
+    local players = mc.players
     local lines = {}
     for _, p in ipairs(players) do
         table.insert(lines, "  §7- §f" .. p.name .. " §7(§f" .. p.ping .. "ms§7, §f" .. p.world.name .. "§7)")

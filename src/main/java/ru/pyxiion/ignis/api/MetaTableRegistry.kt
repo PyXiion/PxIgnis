@@ -14,6 +14,7 @@ object MetaTableRegistry {
     private var _sidebar = LuaTable()
     private var _mob = LuaTable()
     private var _hologram = LuaTable()
+    private var _region = LuaTable()
 
     val ENTITY: LuaTable get() = _entity
     val PLAYER: LuaTable get() = _player
@@ -26,6 +27,7 @@ object MetaTableRegistry {
     val SIDEBAR: LuaTable get() = _sidebar
     val MOB: LuaTable get() = _mob
     val HOLOGRAM: LuaTable get() = _hologram
+    val REGION: LuaTable get() = _region
 
     private var byName = mapOf(
         "entity" to _entity,
@@ -39,6 +41,7 @@ object MetaTableRegistry {
         "sidebar" to _sidebar,
         "mob" to _mob,
         "hologram" to _hologram,
+        "region" to _region,
     )
 
     fun init() {
@@ -53,6 +56,7 @@ object MetaTableRegistry {
         _sidebar = LuaTable()
         _mob = LuaTable()
         _hologram = LuaTable()
+        _region = LuaTable()
         byName = mapOf(
             "entity" to _entity,
             "player" to _player,
@@ -65,6 +69,7 @@ object MetaTableRegistry {
             "sidebar" to _sidebar,
             "mob" to _mob,
             "hologram" to _hologram,
+            "region" to _region,
         )
         initVecMeta(_vec)
         EntityWrapper.initMeta(_entity)
@@ -76,6 +81,7 @@ object MetaTableRegistry {
         SidebarWrapper.initMeta(_sidebar)
         MobWrapper.initMeta(_mob)
         HologramWrapper.initMeta(_hologram)
+        RegionWrapper.initMeta(_region)
     }
 
     fun get(name: String): LuaTable = byName[name]

@@ -47,6 +47,7 @@ export default defineConfig({
             { label: "Structure", slug: "reference/structure-api" },
             { label: "Sidebar", slug: "reference/sidebar-api" },
             { label: "Hologram", slug: "reference/hologram-api" },
+            { label: "Region", slug: "reference/region-api" },
             { label: "Mob AI", slug: "reference/mob-ai" },
           ],
         },

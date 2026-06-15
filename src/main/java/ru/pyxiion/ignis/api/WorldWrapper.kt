@@ -33,16 +33,23 @@ import ru.pyxiion.ignis.toBlockPos
 import ru.pyxiion.ignis.toVec3d
 import java.util.UUID
 
-class WorldWrapper(private val world: ServerWorld) {
+class WorldWrapper(
+    private val world: ServerWorld,
+    private val playerCache: MutableMap<UUID, LuaValue> = mutableMapOf(),
+    private val tickProvider: () -> Long = { 0L },
+) {
+    private class InstanceData(
+        @JvmField val playerCache: MutableMap<UUID, LuaValue>,
+        @JvmField val tickProvider: () -> Long,
+    )
 
     companion object {
-        var playerCache: Map<UUID, LuaValue>? = null
-
         private val worldKeys = listOf(
             "name", "time", "raining", "thundering", "players",
             "spawn", "setBlock", "getBlock", "fill", "particle",
             "playSound", "getEntities", "raycast", "broadcastInRange",
-            "spawnHologram",
+            "spawnHologram", "createRegion", "regions",
+            "getRegion", "getRegionsAt",
         )
 
         fun initMeta(meta: LuaTable) {
@@ -58,14 +65,17 @@ class WorldWrapper(private val world: ServerWorld) {
                         "raining" -> if (w.isRaining) LuaValue.TRUE else LuaValue.FALSE
                         "thundering" -> if (w.isThundering) LuaValue.TRUE else LuaValue.FALSE
                         "players" -> {
+                            val data = self.rawget("__pxrp_data").checkuserdata() as InstanceData
+                            PlayerListWrapper(
+                                source = { w.players },
+                                playerCache = data.playerCache,
+                                tickProvider = data.tickProvider,
+                            ).toLuaValue()
+                        }
+                        "regions" -> {
                             val t = LuaTable()
-                            w.players.forEachIndexed { i, p ->
-                                val cached = playerCache?.get(p.uuid)
-                                if (cached != null) {
-                                    t.set(i + 1, cached)
-                                } else {
-                                    t.set(i + 1, PlayerWrapper(p).toLuaValue())
-                                }
+                            RegionManager.all(w).forEachIndexed { i, r ->
+                                t.set(i + 1, RegionWrapper(r).toLuaValue())
                             }
                             t
                         }
@@ -403,6 +413,45 @@ class WorldWrapper(private val world: ServerWorld) {
                     return LuaValue.NIL
                 }
             })
+
+            meta.rawset("createRegion", object : VarArgFunction() {
+                override fun invoke(args: Varargs): Varargs {
+                    val self = args.arg(1).checktable()
+                    val w = self.rawget("__pxrp_object").checkuserdata() as ServerWorld
+                    if (args.narg() < 3) throw LuaError("createRegion: ожидается (posA, posB)")
+                    val a = args.arg(2).toVec3d()
+                    val b = args.arg(3).toVec3d()
+                    val min = Vec3d(minOf(a.x, b.x), minOf(a.y, b.y), minOf(a.z, b.z))
+                    val max = Vec3d(maxOf(a.x, b.x), maxOf(a.y, b.y), maxOf(a.z, b.z))
+                    val region = RegionManager.create(w, Box(min, max))
+                    return RegionWrapper(region).toLuaValue()
+                }
+            })
+
+            meta.rawset("getRegion", object : VarArgFunction() {
+                override fun invoke(args: Varargs): Varargs {
+                    val self = args.arg(1).checktable()
+                    val w = self.rawget("__pxrp_object").checkuserdata() as ServerWorld
+                    require(args.narg() == 1) { "getRegion(id) requires 1 argument" }
+                    val id = args.arg(2).checkint()
+                    val r = RegionManager.get(id)
+                    return if (r != null && r.world === w) RegionWrapper(r).toLuaValue() else LuaValue.NIL
+                }
+            })
+
+            meta.rawset("getRegionsAt", object : VarArgFunction() {
+                override fun invoke(args: Varargs): Varargs {
+                    val self = args.arg(1).checktable()
+                    val w = self.rawget("__pxrp_object").checkuserdata() as ServerWorld
+                    require(args.narg() == 1) { "getRegionsAt(pos) requires 1 argument" }
+                    val pos = args.arg(2).toVec3d()
+                    val list = LuaTable()
+                    RegionManager.getAt(w, pos).forEachIndexed { i, r ->
+                        list.set(i + 1, RegionWrapper(r).toLuaValue())
+                    }
+                    return list
+                }
+            })
         }
 
         private fun resolveBlockId(id: String): String {
@@ -513,6 +562,7 @@ class WorldWrapper(private val world: ServerWorld) {
         t.setmetatable(MetaTableRegistry.WORLD)
         t.rawset("__pxrp_type", LuaValue.valueOf("world"))
         t.rawset("__pxrp_object", CoerceJavaToLua.coerce(world))
+        t.rawset("__pxrp_data", CoerceJavaToLua.coerce(InstanceData(playerCache, tickProvider)))
         return t
     }
 }

@@ -12,13 +12,13 @@ Metatable name: `"container"`
 
 ### `container.player`
 
-**type:** [`Player`](/docs/reference/player-api)
+**type:** [`Player`](/reference/player-api)
 
 The player who opened the container. Read-only.
 
 ### `container.inventory`
 
-**type:** [`Inventory`](/docs/reference/inventory-api)
+**type:** [`Inventory`](/reference/inventory-api)
 
 The backing inventory. Read-only.
 
@@ -42,11 +42,11 @@ Callback receives:
 
 | Argument | Type | Description |
 |---|---|---|
-| `player` | [`Player`](/docs/reference/player-api) | Player who clicked |
+| `player` | [`Player`](/reference/player-api) | Player who clicked |
 | `slot` | `number` | Slot index (-1 = outside window) |
 | `clickType` | `string` | Click type (see below) |
-| `slotItem` | [`ItemStack`](/docs/reference/itemstack-api) or `nil` | Item in the clicked slot |
-| `cursorItem` | [`ItemStack`](/docs/reference/itemstack-api) or `nil` | Item on cursor |
+| `slotItem` | [`ItemStack`](/reference/itemstack-api) or `nil` | Item in the clicked slot |
+| `cursorItem` | [`ItemStack`](/reference/itemstack-api) or `nil` | Item on cursor |
 
 Return `false` from the callback to cancel the click.
 

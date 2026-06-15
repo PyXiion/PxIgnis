@@ -36,9 +36,15 @@ Whether it is thundering. Assign to set thunder state.
 
 ### `world.players`
 
-**type:** sequence of [`Player`](/docs/reference/player-api)
+**type:** sequence of [`Player`](/reference/player-api)
 
 Array of online player wrappers in this world. Read-only.
+
+### `world.regions`
+
+**type:** sequence of [`Region`](/reference/region-api)
+
+Array of all live region wrappers in this world. Read-only.
 
 ```lua
 local world = mc.world("minecraft:overworld")
@@ -169,6 +175,44 @@ Broadcasts a message to players within range of a position.
 ```lua
 world:broadcastInRange("&cDanger nearby!", 0, 64, 0, 20)
 ```
+
+## Regions
+
+### `world:createRegion(posA, posB)`
+
+Creates a new spatial region spanning between two corners. The corners are auto-normalized — order does not matter.
+
+- `posA` (`table`) — First corner `{x, y, z}`
+- `posB` (`table`) — Second corner `{x, y, z}`
+
+Returns a [`Region`](/reference/region-api) wrapper.
+
+```lua
+local r = world:createRegion({ x = 0, y = 0, z = 0 }, { x = 100, y = 64, z = 100 })
+```
+
+See the [Region](/reference/region-api) page for events and methods.
+
+### `world:getRegion(id)`
+
+Returns the [`Region`](/reference/region-api) wrapper for the given ID, or `nil` if no region with that ID exists in this world.
+
+```lua
+local r = world:getRegion(42)
+if r then r:destroy() end
+```
+
+### `world:getRegionsAt(pos)`
+
+Returns a sequence of all [`Region`](/reference/region-api) wrappers in this world that contain the given position. Returns `{}` if none. Regions may overlap, so multiple results are possible.
+
+```lua
+for _, r in ipairs(world:getRegionsAt({ x = 50, y = 64, z = 50 })) do
+  print("Inside", r.id)
+end
+```
+
+See [Region lookup](/reference/region-api#lookup) for the global `mc.getRegion` variant and details.
 
 ## Raycasting
 
