@@ -15,12 +15,12 @@ PxIgnis is a Fabric mod that embeds a hot-swappable Lua runtime into your Minecr
 ## Installation
 
 1. Install PxIgnis on your Fabric server.
-2. On first run, `config/pxrp/demo.lua` is created with example scripts.
-3. Run `/pxrp reload` (requires operator level 4 or `pyxiion.pxrp` permission) to apply changes.
+2. On first run, `config/ignis/demo.lua` is created with example scripts.
+3. Run `/ignis reload` (requires operator level 4 or `px.ignis` permission) to apply changes.
 
 ## Your First Script
 
-Create `config/pxrp/hello.lua`:
+Create `config/ignis/hello.lua`:
 
 ```lua
 register("hello", function(ctx)
@@ -28,7 +28,7 @@ register("hello", function(ctx)
 end)
 ```
 
-Run `/pxrp reload`, then type `/hello` in chat.
+Run `/ignis reload`, then type `/hello` in chat.
 
 ## Command Structure
 
@@ -45,6 +45,6 @@ register("cmd <name:type> [<name:type>]", handler, permission?)
 
 ## Configuration
 
-All Lua scripts go in `config/pxrp/`. Files are loaded alphabetically.
+All Lua scripts go in `config/ignis/`. Files are loaded alphabetically.
 
-`package.path`: `config/pxrp/?.lua;config/pxrp/?/init.lua;?.lua`
+`package.path`: `config/ignis/?.lua;config/ignis/?/init.lua;?.lua`

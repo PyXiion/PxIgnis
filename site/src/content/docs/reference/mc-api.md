@@ -1,5 +1,5 @@
 ---
-title: mc API
+title: mc.* API
 description: Global Lua API table for server interaction, scheduling, networking, events, and persistence.
 ---
 
@@ -53,8 +53,6 @@ Returns the runtime namespace string (e.g., `"minecraft"`).
 ### `mc.mapped(className)`
 Translates an obfuscated class name to its mapped name.
 
----
-
 ## Chat & Broadcasting
 
 ### `mc.broadcast(text, overlay?)`
@@ -65,8 +63,6 @@ Broadcasts a message to all online players. Second argument, if `true`, sends an
 mc.broadcast("Server is restarting soon!")
 mc.broadcast("Welcome!", true) -- overlay
 ```
-
----
 
 ## Utilities
 
@@ -83,8 +79,6 @@ Returns a shared metatable by name. See [MetaTableRegistry](/api/#metatableregis
 ```lua
 local meta = mc.getMetatable("vec")
 ```
-
----
 
 ## Scheduling & Async
 
@@ -149,8 +143,6 @@ local res = mc.fetch({
 The response table has `.status`, `.headers`, `.body`, and `.json` (lazy-parsed via
 metatable — accessed as `res.json`).
 
----
-
 ## Items
 
 ### `mc.createItem(id, [count | components])`
@@ -170,28 +162,23 @@ local sword = mc.createItem("diamond_sword", {
 })
 ```
 
-See [ItemStack API](/docs/itemstack-api) for details.
-
----
+See [ItemStack API](/reference/itemstack-api) for details.
 
 ## Storage
 
 ### `mc.data`
-Global persistent data table. Saved to `config/pxrp/storage/global.json`. Changes persist
-across server restarts and `/pxrp reload`.
+Global persistent data table. See [Storage](/reference/storage) for details.
 
 ```lua
 mc.data.welcomeMessage = "Welcome!"
 mc.data.visits = (mc.data.visits or 0) + 1
 ```
 
----
-
 ## Events
 
 ### `mc.on(event, handler)`
 Registers a handler for a server event. Returns `true` on success. Cancellable events:
-return `false` to cancel.
+return `false` to cancel. See [Events](/reference/events) for the full event list.
 
 ```lua
 mc.on("player_join", function(player)
@@ -205,41 +192,17 @@ mc.on("player_block_break", function(player, blockPos)
 end)
 ```
 
-| Event | Cancellable |
-|---|---|
-| `server_start` | ❌ |
-| `server_stop` | ❌ |
-| `player_join` | ✅ |
-| `player_leave` | ❌ |
-| `player_death` | ❌ |
-| `player_chat` | ✅ |
-| `player_block_break` | ✅ |
-| `player_block_place` | ✅ |
-| `player_use_item` | ✅ |
-| `player_attack_entity` | ✅ |
-| `player_interact_entity` | ✅ |
-| `player_hurt` | ✅ |
-| `entity_hurt` | ✅ |
-| `player_damage` | ❌ |
-| `entity_damage` | ❌ |
-| `player_kill` | ❌ |
-
 ### `mc.emit(event, ...)`
 Programmatically emits an event, triggering all registered handlers.
 
 ```lua
-mc.emit("player_chat", player, "Hello!")
+mc.emit("script:custom_event", player, "Hello!")
+
+mc.on("script:custom_event", function(p, msg)
+    p:sendMessage(msg)
+end)
+
+mc.on("script:custom_event", function(p, msg)
+    print("MESSAGE LOG: " .. p.name .. " got " .. msg)
+end)
 ```
-
----
-
-## Hooks (Experimental)
-
-### `mc.observeHook(className, methodName, callback)`
-**WIP/Beta.** Uses ByteBuddy to hook a Java method at runtime. Unstable — may be removed.
-
-### `mc.removeHook(className, methodName)`
-Removes a hook previously registered via `mc.observeHook`.
-
-### `mc.clearHooks()`
-Removes all active hooks.

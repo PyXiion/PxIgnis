@@ -3,14 +3,15 @@ title: Async API
 description: Coroutine-based HTTP requests and tick delays with mc.fetch and mc.sleep.
 ---
 
-Coroutine-based async operations — sequential code without callback nesting. Under the hood, `mc.fetch` and `mc.sleep` yield the Lua coroutine and resume on the server thread when the operation completes.
+Coroutine-based async operations — sequential code without callback nesting. Under the hood, `mc.fetch` and `mc.sleep` yield the execution and resume on the server thread when the operation completes.
+No need to worry about syncing (if you know what it is).
 
 ## mc.sleep(ticks)
 
 Yields the current coroutine and resumes after the specified number of ticks (20 ticks = 1 second).
 
 ```lua
-mc.sendMessage("Waiting 2 seconds...")
+mc.sendMessage("Wait for 2 seconds...")
 mc.sleep(40)
 mc.sendMessage("Done!")
 ```
@@ -41,6 +42,8 @@ Full request with options:
 | `json` | table | `nil` | Auto-encodes to JSON and sets `Content-Type: application/json` |
 | `timeout` | number | `30` | Timeout in seconds |
 
+`body` & `json` are mutually exclusive.
+
 ```lua
 local res = mc.fetch({
     url = "https://api.example.com/data",
@@ -59,7 +62,7 @@ local res = mc.fetch({
 | `res.status` | number | HTTP status code |
 | `res.text` | string | Response body as string |
 | `res.headers` | table | Response headers |
-| `res.json` | table or nil | Lazy-parsed JSON (parsed on first access via `__index`) |
+| `res.json` | table or nil | Lazy-parsed JSON (parsed on first access) |
 | `res.error` | string or nil | Error message if the request failed |
 
 ```lua
@@ -92,4 +95,12 @@ end)
 
 ## Lifecycle
 
-All pending coroutines (sleeps, in-flight HTTP requests) are **discarded** on `/pxrp reload`. The Lua state is completely torn down and rebuilt.
+Beware, all pending coroutines (sleeps, in-flight HTTP requests) are **discarded** on `/ignis reload`. 
+The Lua state is completely torn down and rebuilt.
+This is intended, and you should consider it when reloading/writing scripts.
+
+So don't use it extremely long `mc.sleep` (e.g. for an hour or a day) for critical mechanics (e.g. ban durations or the
+wait time for daily bonuses). For long pauses, use the [persistent storage](/examples/persistence) saving the time
+when player can perform an action again.
+
+`mc.sleep` is ideal for short delays: animations, spell casting & etc.

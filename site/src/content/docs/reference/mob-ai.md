@@ -5,6 +5,8 @@ description: Custom mob behaviours with mc.registerBehaviour, mob:setAI, and bui
 
 Define and assign custom AI behaviours to mobs. Any `MobEntity` subtype returned by `world:spawn()` is a **MobWrapper** with AI methods.
 
+Metatable name: `"mob"`
+
 ## Registering Behaviours
 
 ```lua
