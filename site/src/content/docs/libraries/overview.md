@@ -3,7 +3,7 @@ title: Libraries
 description: PxIgnis ships with bundled Lua libraries that can be loaded via require().
 ---
 
-PxIgnis includes several Lua libraries in `config/pxrp/`. Load them with `require()`:
+PxIgnis includes several Lua libraries in `config/ignis/`. Load them with `require()`:
 
 ```lua
 local format = require "format"
@@ -21,18 +21,18 @@ local chestgui = require "chestgui"
 
 ## Loading from Subdirectories
 
-Files in subdirectories of `config/pxrp/` can be loaded using dot notation:
+Files in subdirectories of `config/ignis/` can be loaded using dot notation:
 
 ```lua
 local utils = require "libs.utils"
 ```
 
-This resolves to `config/pxrp/libs/utils.lua`.
+This resolves to `config/ignis/libs/utils.lua`.
 
 ## package.path
 
 The Lua `package.path` is set to:
 
 ```
-config/pxrp/?.lua;config/pxrp/?/init.lua;?.lua
+config/ignis/?.lua;config/ignis/?/init.lua;?.lua
 ```

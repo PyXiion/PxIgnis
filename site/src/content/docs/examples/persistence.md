@@ -67,7 +67,7 @@ register("ban <target:player> [<reason:text>]", function(ctx)
     mc.data.bans = bans
 
     target:kick("Banned: " .. reason)
-end, "pxrp.ban")
+end, "px.ignis.ban")
 
 mc.on("player_join", function(player)
     local bans = mc.data.bans or {}

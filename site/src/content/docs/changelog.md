@@ -5,6 +5,32 @@ description: Release history for PxIgnis.
 
 # Changelog
 
+## 0.9.0 — Removed ByteBuddy, 6 new events (23 total)
+
+### New events
+
+| Event | Cancellable | Args | Fires |
+|---|---|---|---|
+| `entity_spawn` | ❌ | `entity` | Any entity loads into a world |
+| `entity_despawn` | ❌ | `entity` | Any entity unloads from a world |
+| `entity_death` | ✅ | `entity`, `source`, `amount` | Any living entity is about to die (players + mobs) |
+| `player_join_init` | ✅ | `player` | Early join, player not fully loaded (renamed from `player_join`) |
+| `player_join` | ❌ | `player` | Post-load join, player fully ready in world |
+| `player_respawn` | ❌ | `player`, `wasDeath` | Player respawns after death or end portal |
+
+**Migration**: `player_join` was renamed to `player_join_init` (still cancellable, early). The new `player_join`
+fires later when the player is fully in-world.
+
+### Removed: `mc.observeHook` / `mc.removeHook` / `mc.clearHooks`
+
+ByteBuddy (`byte-buddy` + `byte-buddy-agent`) was pulling ~4.3 MB into the output jar for a single
+unstable API (`mc.observeHook`). Use `mc.on()` events instead.
+
+### Other changes
+
+- Deleted `LuaMixinManager.kt` (ByteBuddy — 152 lines)
+- Output jar reduced from ~4.9 MB to ~839 KB
+
 ## 0.8.0 — Async API, PxLuaNova embedded, documentation site
 
 ### Async API
@@ -84,7 +110,7 @@ Built-in behaviours: `guard`, `pet`, `orbiter`, `statue`, `wander` (check `demo_
 | `mc.removeHook(class, method)` → bool     | Removes a hook                               |
 | `mc.clearHooks()`                         | Removes all hooks                            |
 
-Hooks are cleared on `/pxrp reload` and server stop. Callback receives `(instance, args)`. Only single-overload methods
+Hooks are cleared on `/ignis reload` and server stop. Callback receives `(instance, args)`. Only single-overload methods
 supported. May be removed in future versions.
 
 ### New Lua API
@@ -391,7 +417,7 @@ Entity table returned by `world:spawn()` and `player` delegation:
 ### Storage
 
 - JSON storage: `mc.data` → global, `player.data` → per-player
-- Saved on server stop, player disconnect, `/pxrp reload`
+- Saved on server stop, player disconnect, `/ignis reload`
 - Nested tables require re-assignment (`data.nested = t`)
 
 ### Other

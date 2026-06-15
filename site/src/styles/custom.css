@@ -62,6 +62,16 @@
 }
 
 /* ----------------------------------------------------------------------- */
+/*  Table overrides                                                        */
+/* ----------------------------------------------------------------------- */
+/* Starlight sets overflow-wrap: anywhere on <code>, causing mid-word
+   breaks in table cells. Prefer break-word so inline code wraps at
+   natural boundaries (spaces, hyphens, slashes). */
+.sl-markdown-content td code {
+  overflow-wrap: break-word;
+}
+
+/* ----------------------------------------------------------------------- */
 /*  Global resets for landing page                                         */
 /* ----------------------------------------------------------------------- */
 html { scroll-behavior: smooth; }

@@ -24,7 +24,7 @@ register("rp kill <target:player>", function(ctx)
     local bf = broadcastFormat("*{p.name} kills {t.name}*")
     bf({p = ctx.player, t = target})
     target:damage(1000)
-end, "pxrp.rp")
+end, "px.ignis.rp")
 ```
 
 ## 3. Gamemode Command
@@ -44,5 +44,5 @@ end)
 register("kick <target:player> [<reason:text>]", function(ctx)
     local reason = ctx.args.reason or "You have been kicked"
     ctx.args.target:kick(reason)
-end, "pxrp.kick")
+end, "px.ignis.kick")
 ```
