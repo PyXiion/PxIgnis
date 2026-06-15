@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "pxrp",
+  "id": "pxignis",
   "version": "${version}",
-  "name": "PxRP",
+  "name": "PxIgnis",
   "description": "Lua-scriptable roleplay command framework for Fabric servers.",
   "authors": ["PyXiion"],
   "contact": {
@@ -14,7 +14,7 @@
     "main": [
       {
         "adapter": "kotlin",
-        "value": "ru.pyxiion.pxrp.PxRp"
+        "value": "ru.pyxiion.ignis.PxIgnis"
       }
     ]
   },
@@ -24,8 +24,8 @@
     "minecraft": ">=1.21-",
     "fabric-language-kotlin": ">=1.10.8+kotlin.1.9.0"
   },
-  "accessWidener" : "pxrp.accesswidener",
+  "accessWidener" : "pxignis.accesswidener",
   "mixins": [
-    "pxrp.mixins.json"
+    "pxignis.mixins.json"
   ]
 }
