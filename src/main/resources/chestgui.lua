@@ -1,5 +1,5 @@
 -- ==========================================================================
--- chestgui.lua — Chest GUI library for PxRP
+-- chestgui.lua — Chest GUI library for PxIgnis
 -- ==========================================================================
 -- Usage: local chestgui = require "chestgui"
 --

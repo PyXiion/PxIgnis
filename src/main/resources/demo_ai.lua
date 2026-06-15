@@ -1,5 +1,5 @@
--- PxRP Mob AI Demo
--- Поместите в config/pxrp/demo_ai.lua и /pxrp reload
+-- PxIgnis Mob AI Demo
+-- Поместите в config/ignis/demo_ai.lua и /ignis reload
 
 -- Хелпер: найти ближайших игроков в радиусе от моба
 local function nearestPlayers(mob, range)
@@ -170,7 +170,7 @@ register("spawnguard", function(ctx)
     m.health = 40; m.maxHealth = 40
     m:setAI("guard")
     ctx.player:sendMessage("Стражник с AI 'guard'")
-end, "pyxiion.pxrp")
+end, "px.ignis")
 
 register("spawnpet", function(ctx)
     local w = mc.world("minecraft:overworld")
@@ -178,7 +178,7 @@ register("spawnpet", function(ctx)
     m.customName = "Питомец"
     m:setAI("pet")
     ctx.player:sendMessage("Питомец с AI 'pet'")
-end, "pyxiion.pxrp")
+end, "px.ignis")
 
 register("spawnorbiter <count:int>", function(ctx, n)
     local w = mc.world("minecraft:overworld")
@@ -188,7 +188,7 @@ register("spawnorbiter <count:int>", function(ctx, n)
         m:setAI("orbiter")
     end
     ctx.player:sendMessage(n .. " пчёл с AI 'orbiter'")
-end, "pyxiion.pxrp")
+end, "px.ignis")
 
 register("spawnstatue", function(ctx)
     local w = mc.world("minecraft:overworld")
@@ -198,7 +198,7 @@ register("spawnstatue", function(ctx)
     m.aiStepHeight = 0
     m:setAI("statue")
     ctx.player:sendMessage("Статуя с AI 'statue'")
-end, "pyxiion.pxrp")
+end, "px.ignis")
 
 register("spawnwander <type:word> [<count:int>]", function(ctx, etype, count)
     local w = mc.world("minecraft:overworld")
@@ -209,7 +209,7 @@ register("spawnwander <type:word> [<count:int>]", function(ctx, etype, count)
         m:setAI("wander")
     end
     ctx.player:sendMessage(count .. "x " .. etype .. " с AI 'wander'")
-end, "pyxiion.pxrp")
+end, "px.ignis")
 
 -- Спавн с произвольным поведением
 register("spawnai <type:word> <behaviour:word> [<name:text>]", function(ctx, etype, behaviour, name)
@@ -222,7 +222,7 @@ register("spawnai <type:word> <behaviour:word> [<name:text>]", function(ctx, ety
     else
         ctx.player:sendMessage(etype .. " с AI '" .. behaviour .. "'")
     end
-end, "pyxiion.pxrp")
+end, "px.ignis")
 
 -- Сбросить AI у ближайшего моба
 register("clearmobai", function(ctx)
@@ -236,7 +236,7 @@ register("clearmobai", function(ctx)
         end
     end
     ctx.player:sendMessage("Мобов с AI поблизости нет")
-end, "pyxiion.pxrp")
+end, "px.ignis")
 
 -- Список ближайших мобов с AI
 register("aimobs", function(ctx)
@@ -252,4 +252,4 @@ register("aimobs", function(ctx)
     else
         ctx.player:sendMessage("Мобы с AI:\n" .. list)
     end
-end, "pyxiion.pxrp")
+end, "px.ignis")

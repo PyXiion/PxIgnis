@@ -1,7 +1,7 @@
 -- ==========================================================================
--- demo.lua — Practical Lua patterns for PxRP
+-- demo.lua — Practical Lua patterns for PxIgnis
 -- ==========================================================================
--- Usage:  Place this file in the config/pxrp/ directory.
+-- Usage:  Place this file in the config/ignis/ directory.
 --         On first run it is copied there automatically.
 --
 -- This file demonstrates useful scripting patterns, not just API methods.
@@ -61,12 +61,11 @@ end
 -- /homelist         — list all saved homes
 --
 -- KEY PATTERN: Nested table reassignment.
--- DataTable does NOT track deep key changes. Writing to
+-- Deep writes now work directly:
 --   player.data.homes[name] = {...}
--- silently fails to persist. You MUST:
---   1. Read the whole nested table:  local homes = player.data.homes or {}
---   2. Modify it:                    homes[name] = {...}
---   3. Write it back:                player.data.homes = homes
+-- persists on save. The read-modify-write pattern below still works
+-- and can be useful for read-before-write logic, but is no longer
+-- required for correctness.
 
 function sethomeHandler(ctx, name)
     local player = ctx.player
@@ -759,7 +758,7 @@ function sidebarsetHandler(ctx, title, line1, line2, line3)
 end
 
 -- Show a welcome sidebar when a player joins
-mc.on("player_join", function(player)
+mc.on("player_join_init", function(player)
     player.sidebar = {
         title = "§a§lWelcome!",
         lines = {
@@ -1087,7 +1086,7 @@ end
 -- ==========================================================================
 -- Pattern 22: Module system — require "format", require "simple"
 -- ==========================================================================
--- The Lua package.path includes config/pxrp/?.lua so you can write:
+-- The Lua package.path includes config/ignis/?.lua so you can write:
 --   local fmt = require("format")
 --   local simple = require("simple")
 --
@@ -1208,13 +1207,13 @@ end
 --   - inv:serialise() returns a JSON string (like item:serialise())
 --   - mc.serialise("inventory", inv) is the equivalent global call
 --   - mc.deserialise("inventory", json) recreates the inventory from JSON
---   - Store the JSON string in mc.data to survive /pxrp reload
+--   - Store the JSON string in mc.data to survive /ignis reload
 --   - Serialise on server_stop to persist across actual shutdown
 --   - Also serialise in onClick to save after each player interaction
 
 local sharedChest
 
--- Restore from saved data (survives /pxrp reload)
+-- Restore from saved data (survives /ignis reload)
 local savedJson = mc.data.sharedChest
 if savedJson then
     sharedChest = mc.deserialise("inventory", savedJson)
@@ -1265,7 +1264,7 @@ mc.on("player_chat", function(player, message)
     end
 end)
 
-mc.on("player_join", function(player)
+mc.on("player_join_init", function(player)
     local welcome = mc.data.welcomeMessage
     if welcome then
         player:sendMessage("§6" .. welcome)
@@ -1334,39 +1333,39 @@ register("homelist",                             homelistHandler)
 register("tpa <target:player>",                  tpaHandler)
 register("tpaccept <sender:player>",             tpacceptHandler)
 register("tpdeny <sender:player>",               tpdenyHandler)
-register("mute <target:player>",                 muteHandler,              "pxrp.mod")
-register("unmute <target:player>",               unmuteHandler,            "pxrp.mod")
-register("setwelcome <msg:text>",                setwelcomeHandler,        "pxrp.admin")
-register("setspawn",                             setspawnHandler,          "pxrp.admin")
+register("mute <target:player>",                 muteHandler,              "px.ignis.mod")
+register("unmute <target:player>",               unmuteHandler,            "px.ignis.mod")
+register("setwelcome <msg:text>",                setwelcomeHandler,        "px.ignis.admin")
+register("setspawn",                             setspawnHandler,          "px.ignis.admin")
 register("report <msg:text>",                    reportHandler)
 register("whois <target:player>",                whoisHandler)
 register("checkperm <perm:text>",                checkpermHandler)
 
 -- New argument types
 register("math <a:double> <op:word> <b:double>",    mathHandler)
-register("setwarp <name:text> <pos:block_pos>",  setwarpHandler,           "pxrp.admin")
+register("setwarp <name:text> <pos:block_pos>",  setwarpHandler,           "px.ignis.admin")
 
 -- Choice + optional args
-register("gamemode <mode:choice=creative,survival,adventure,spectator> [<target:player>]", gamemodeHandler, "pxrp.admin")
-register("kick <target:player> [<reason:text>]", kickHandler,              "pxrp.mod")
+register("gamemode <mode:choice=creative,survival,adventure,spectator> [<target:player>]", gamemodeHandler, "px.ignis.admin")
+register("kick <target:player> [<reason:text>]", kickHandler,              "px.ignis.mod")
 
 -- Item & inventory commands
-register("kit <name:choice=warrior,archer,miner>",          kitHandler,       "pxrp.admin")
+register("kit <name:choice=warrior,archer,miner>",          kitHandler,       "px.ignis.admin")
 register("hat",                                              hatHandler)
 register("rename <name:text>",                               renameHandler)
-register("repair",                                           repairHandler,    "pxrp.admin")
+register("repair",                                           repairHandler,    "px.ignis.admin")
 register("cleararmor",                                       cleararmorHandler)
-register("invsee <target:player>",                           invseeHandler,    "pxrp.mod")
+register("invsee <target:player>",                           invseeHandler,    "px.ignis.mod")
 
 -- World & entity API
-register("spawnmob <entity:text>",                                          spawnmobHandler,  "pxrp.admin")
+register("spawnmob <entity:text>",                                          spawnmobHandler,  "px.ignis.admin")
 register("tagself <tag:text>",                                               tagselfHandler)
 register("worldinfo",                                                        worldinfoHandler)
-register("settime <time:choice=day,night,noon,midnight>",                   settimeHandler,   "pxrp.admin")
+register("settime <time:choice=day,night,noon,midnight>",                   settimeHandler,   "px.ignis.admin")
 register("yell <msg:text>",                                                  yellHandler)
 
 -- Scheduler
-register("boom <target:player>",       boomHandler,      "pxrp.admin")
+register("boom <target:player>",       boomHandler,      "px.ignis.admin")
 register("countdown <seconds:int>",    countdownHandler)
 register("cancelcountdown",            cancelcountdownHandler)
 
@@ -1379,12 +1378,12 @@ register("vecadd <x1:int> <y1:int> <z1:int> <x2:int> <y2:int> <z2:int>", vecaddH
 register("veceq <x1:int> <y1:int> <z1:int> <x2:int> <y2:int> <z2:int>", veceqHandler)
 
 -- World block manipulation
-register("setblock <pos:block_pos> <block:text>",       setblockHandler,    "pxrp.admin")
+register("setblock <pos:block_pos> <block:text>",       setblockHandler,    "px.ignis.admin")
 register("getblock <pos:block_pos>",                     getblockHandler)
-register("fillblock <pos1:block_pos> <pos2:block_pos> <block:text>", fillblockHandler, "pxrp.admin")
+register("fillblock <pos1:block_pos> <pos2:block_pos> <block:text>", fillblockHandler, "px.ignis.admin")
 
 -- Particles, sounds, queries
-register("particle <id:text> [<count:int>]",            particleHandler,    "pxrp.admin")
+register("particle <id:text> [<count:int>]",            particleHandler,    "px.ignis.admin")
 register("playsound <id:text> [<volume:double>]",       playsoundHandler)
 register("nearby <radius:double> [<type:text>]",        nearbyHandler)
 register("worldraycast <range:double>",                 worldraycastHandler)
@@ -1403,30 +1402,30 @@ register("sendtitle <title:text> [<subtitle:text>]",    sendtitleHandler)
 register("suicide",                                     suicideHandler)
 register("healme",                                      healmeHandler)
 register("playersound <id:text> [<volume:double>]",     playersoundHandler)
-register("setitemslot <slot:int> <id:text> [<count:int>]", setitemslotHandler, "pxrp.admin")
+register("setitemslot <slot:int> <id:text> [<count:int>]", setitemslotHandler, "px.ignis.admin")
 register("playereffect <id:text> <duration:int> [<amplifier:int>]", playereffectHandler)
 register("removeeffect <id:text>",                      removeeffectHandler)
 register("haseffect <id:text>",                         haseffectHandler)
 register("playerraycast <range:double>",                playerraycastHandler)
 
 -- Entity NBT & ops
-register("entitynbt <uuid:text>",                       entitynbtHandler,   "pxrp.admin")
-register("entitydamage <uuid:text> <amount:double>",    entitydamageHandler, "pxrp.admin")
-register("entityeffect <uuid:text> <id:text> <duration:int>", entityeffectHandler, "pxrp.admin")
-register("setfire <uuid:text> <ticks:int>",             setfireHandler,     "pxrp.admin")
+register("entitynbt <uuid:text>",                       entitynbtHandler,   "px.ignis.admin")
+register("entitydamage <uuid:text> <amount:double>",    entitydamageHandler, "px.ignis.admin")
+register("entityeffect <uuid:text> <id:text> <duration:int>", entityeffectHandler, "px.ignis.admin")
+register("setfire <uuid:text> <ticks:int>",             setfireHandler,     "px.ignis.admin")
 
 -- Structure
 register("structinfo <name:text>",                      structinfoHandler)
-register("structplace <name:text>",                     structplaceHandler, "pxrp.admin")
+register("structplace <name:text>",                     structplaceHandler, "px.ignis.admin")
 
 -- Chest GUI
 register("shop",                                          shopHandler)
-register("shopadmin",                                     shopadminHandler,   "pxrp.admin")
-register("addcoins <target:player> <coins:int>",          addcoinsHandler,    "pxrp.admin")
+register("shopadmin",                                     shopadminHandler,   "px.ignis.admin")
+register("addcoins <target:player> <coins:int>",          addcoinsHandler,    "px.ignis.admin")
 
 -- Shared inventory
 register("sharedchest",                                       sharedchestHandler)
-register("sharedchestrestore",                                sharedchestrestoreHandler, "pxrp.admin")
+register("sharedchestrestore",                                sharedchestrestoreHandler, "px.ignis.admin")
 
 -- Item details & serialisation
 register("iteminfo",                                    iteminfoHandler)
