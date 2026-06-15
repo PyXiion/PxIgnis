@@ -37,18 +37,18 @@ omitting any optional arg removes all later ones too.
 
 ## Argument types
 
-| Type         | Lua type  | Description                                        |
-|--------------|-----------|----------------------------------------------------|
-| `text`       | `string`  | Full message text until the end of the command     |
-| `word`       | `string`  | Single word (`abc` or `"abc abc"`)                 |
-| `player`     | `player`  | Player                                             |
-| `target`     | `player`  | Alias for `player`                                 |
-| `int`        | `number`  | Integer                                            |
-| `double`     | `number`  | Double-precision float                             |
-| `float`      | `number`  | Single-precision float                             |
-| `bool`       | `boolean` | Boolean                                            |
-| `block_pos`  | `table`   | `{x, y, z}` block position table                   |
-| `choice=a,b` | `string`  | Multi-choice — runtime validation + tab completion |
+| Type         | Lua type  | Description                                                    |
+|--------------|-----------|----------------------------------------------------------------|
+| `text`       | `string`  | Greedy: consumes the rest of the command line. **Must be last.** |
+| `word`       | `string`  | Single word (`abc` or `"abc abc"`)                             |
+| `player`     | `player`  | Player                                                         |
+| `target`     | `player`  | Alias for `player`                                             |
+| `int`        | `number`  | Integer                                                        |
+| `double`     | `number`  | Double-precision float                                         |
+| `float`      | `number`  | Single-precision float                                         |
+| `bool`       | `boolean` | Boolean                                                        |
+| `block_pos`  | `table`   | `{x, y, z}` block position table                               |
+| `choice=a,b` | `string`  | Multi-choice — runtime validation + tab completion             |
 
 ## Handler arguments
 
@@ -81,7 +81,7 @@ end, "admin.kick")
 
 These cannot be registered:
 
-`pxrp`, `stop`, `reload`, `op`, `deop`, `ban`, `ban-ip`, `pardon`, `pardon-ip`, `save-all`, `save-on`, `save-off`,
+`ignis`, `stop`, `reload`, `op`, `deop`, `ban`, `ban-ip`, `pardon`, `pardon-ip`, `save-all`, `save-on`, `save-off`,
 `whitelist`
 
 ## Examples

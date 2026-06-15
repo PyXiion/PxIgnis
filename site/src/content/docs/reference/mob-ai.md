@@ -29,7 +29,7 @@ mob:setAI("my_behaviour")
 -- By inline function
 mob:setAI(function(self, ctx)
     self:lookAt(self.target)
-    self:moveToward(self.target.position, self.speed)
+    self:moveToward(self.target.pos, self.speed)
 end)
 
 -- Clear AI
@@ -41,7 +41,7 @@ mob:clearAI()
 | Property | Type | Description |
 |----------|------|-------------|
 | `mob.isMob` | boolean | Always `true` |
-| `mob.target` | entity or nil | Current target entity. Read/write — assign by entity or UUID string |
+| `mob.target` | entity or nil | Current target entity. Read/write — assign an entity wrapper (player, mob, etc.), or `nil` to clear. Only `LivingEntity` types are valid targets; non-living entities are silently ignored. |
 | `mob.speed` | number | Movement speed |
 | `mob.pathRemaining` | number | Path completion progress (0–1) |
 | `mob.pathFound` | boolean | Whether a valid path was found |
@@ -64,7 +64,9 @@ mob:clearAI()
 
 ```lua
 register("pet", function(ctx)
-    local mob = ctx.player.world:spawn("wolf", ctx.player.position + Vec(2, 0, 0))
+    local p = ctx.player
+    local spawnAt = p.pos + Vec(2, 0, 0)
+    local mob = p.world:spawn("wolf", spawnAt)
     mob:setAI("pet")
 end)
 ```

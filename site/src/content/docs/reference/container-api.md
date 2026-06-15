@@ -59,6 +59,16 @@ end)
 container:onClick(nil)  -- remove callback and unlock
 ```
 
+## Notes
+
+When `onClick(fn)` is registered, the inventory is **automatically locked**:
+
+### Slot indexing
+
+PxIgnus uses **0-based** slot indexing in `inv:getItem`, `inv:setItem`, `container:onClick`
+callbacks, and `chestgui:button`. The exception is `chestgui:set(row, col, item, callback)`
+which uses **1-based** `(row, col)` for human-readable coordinates (rows 1–6, columns 1–9).
+
 ## Auto-Locking
 
 When `onClick(fn)` is registered, the inventory is **automatically locked**:

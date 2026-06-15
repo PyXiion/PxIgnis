@@ -346,10 +346,25 @@ Returns the entity's NBT data as a Lua table.
 
 ### `entity:writeNbt(data)`
 
-Writes NBT data from a Lua table.
+Writes NBT data from a Lua table. Lua types are converted:
+
+| Lua value | NBT type |
+|---|---|
+| `number` | `Double` (whole numbers in int range stored as `Int`) |
+| `string` | `String` |
+| `boolean` | `Byte` (0/1) |
+| `table` (string keys) | `Compound` |
+| `table` (1-indexed numeric) | `List` |
+| `nil` | Key deletion |
+
+Text components must be passed as JSON strings (`'{"text":"Bob"}'`), not as Lua tables.
 
 - `data` (`table`) — NBT data
 
 ```lua
 entity:writeNbt({ CustomName = '{"text":"Bob"}', Health = 40.0 })
 ```
+
+Note: `writeNbt` modifies the entity on the server, but may not sync to clients
+immediately. Use with entity-specific tags that Minecraft re-reads each tick (health,
+custom name). Changes to visual-only tags may require re-spawning the entity.

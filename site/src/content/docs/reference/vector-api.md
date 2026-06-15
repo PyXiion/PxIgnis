@@ -14,7 +14,7 @@ Metatable name: `"vec"`
 
 ## Properties
 
-`x`, `y` & `z`. All numbers. What's it.
+Three read/write numeric properties: `v.x`, `v.y`, `v.z`. They can also be accessed via index (`v["x"]`, `v[1]`).
 
 ## Operators
 

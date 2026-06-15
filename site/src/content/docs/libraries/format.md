@@ -35,9 +35,9 @@ bf({p = ctx.player, t = target})
 ```lua
 local format = require "format"
 
-register("shout <message:text>", function(ctx)
+register("shout <message:text>", function(ctx, message)
     local fmt = format("*{p.name} shouts: {msg}*")
-    local text = fmt({p = ctx.player, msg = ctx.args.message})
+    local text = fmt({p = ctx.player, msg = message})
     ctx.player:sendMessage(text)
 end)
 ```

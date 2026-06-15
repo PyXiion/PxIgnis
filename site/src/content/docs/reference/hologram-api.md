@@ -115,6 +115,17 @@ Whether the text renders through walls. Read/write.
 
 Whether the entity has the glowing outline effect. Read/write.
 
+### `holo:setLine(n, text)`
+
+Updates a single line (1-indexed) without re-sending all other lines.
+
+- `n` (`number`) — Line index (1‑based)
+- `text` (`string`) — New line text
+
+```lua
+holo:setLine(2, "Updated second line")
+```
+
 ### `holo:destroy()`
 
 Destroys the hologram entity and removes it from the manager.

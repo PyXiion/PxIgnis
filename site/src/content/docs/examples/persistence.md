@@ -6,10 +6,7 @@ description: Complete examples using persistent data storage.
 ## 1. Coins Economy
 
 ```lua
-register("pay <target:player> <amount:int>", function(ctx)
-    local target = ctx.args.target
-    local amount = ctx.args.amount
-
+register("pay <target:player> <amount:int>", function(ctx, target, amount)
     local senderData = ctx.player.data
     local targetData = target.data
 
@@ -18,6 +15,12 @@ register("pay <target:player> <amount:int>", function(ctx)
 
     ctx.player:sendMessage("You paid " .. amount .. " coins to " .. target.name)
     target:sendMessage("You received " .. amount .. " coins from " .. ctx.player.name)
+end)
+
+register("balance [<target:player>]", function(ctx, target)
+    local t = target or ctx.player
+    local bal = t.data.balance or 0
+    ctx.player:sendMessage(t.name .. " has " .. bal .. " coins")
 end)
 
 register("balance [<target:player>]", function(ctx)
@@ -34,7 +37,7 @@ local cooldowns = {}
 
 register("daily", function(ctx)
     local p = ctx.player
-    local now = mc.time()
+    local now = mc.time()  -- Unix seconds (e.g., 1.7e9), not game ticks
     local last = p.data.lastDaily or 0
     local cooldown = 86400 -- 24 hours in seconds
 
@@ -53,20 +56,19 @@ end)
 ## 3. Ban System
 
 ```lua
-register("ban <target:player> [<reason:text>]", function(ctx)
-    local target = ctx.args.target
-    local reason = ctx.args.reason or "Banned by an operator"
+register("ban <target:player> [<reason:text>]", function(ctx, target, reason)
+    local msg = reason or "Banned by an operator"
 
     local bans = mc.data.bans or {}
     bans[target.uuid] = {
         name = target.name,
-        reason = reason,
+        reason = msg,
         bannedBy = ctx.player.name,
         time = mc.time()
     }
     mc.data.bans = bans
 
-    target:kick("Banned: " .. reason)
+    target:kick("Banned: " .. msg)
 end, "px.ignis.ban")
 
 mc.on("player_join", function(player)

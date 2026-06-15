@@ -83,6 +83,9 @@ See the [mc.\* API](/docs/reference/mc-api) for scheduler options.
 
 ## 5. Coroutine delays with mc.sleep
 
+All command handlers and `mc.schedule` callbacks run inside an implicit
+coroutine — so you can call `mc.sleep` directly without any extra setup.
+
 `mc.sleep(ticks)` yields the current coroutine and resumes after the delay. See [Async API](/docs/reference/async-api) for details:
 
 ```lua
@@ -132,7 +135,7 @@ See [World API](/docs/reference/world-api) and [Vector API](/docs/reference/vect
 register("fart", function(ctx)
     local p = ctx.player
     local pos = p.pos
-    p.world:playSound("entity_player_burp", pos.x, pos.y, pos.z, 1.0, 1.0)
+    p.world:playSound("minecraft:entity.player.burp", pos.x, pos.y, pos.z, 1.0, 1.0)
     p.world:particle("minecraft:heart", Vec(pos.x, pos.y + 1, pos.z), {
         count = 5,
         delta = { 0.5, 0.5, 0.5 }

@@ -6,14 +6,19 @@ description: Global Lua API table for server interaction, scheduling, networking
 The `mc` table is the main entry point for all PxIgnis Lua scripting. It provides access to the
 server, entities, worlds, storage, events, and async operations.
 
+`mc` exposes both **functions** (must be called with `()`) and **static properties** (read directly).
+Functions are documented as `mc.fn()`, properties as `mc.prop`.
+
 ## World & Server Info
 
 ### `mc.time()`
-Returns the current world age in ticks.
+Returns the current Unix timestamp in seconds (e.g. `1700000000.123`).
 
 ```lua
 local t = mc.time()
 ```
+
+For world-daylight-time in ticks, use `world.time` instead.
 
 ### `mc.players()`
 Returns a list of all online players as player wrappers.
@@ -25,7 +30,7 @@ end
 ```
 
 ### `mc.onlineCount`
-The number of currently online players.
+The number of currently online players (a static property, not a function — no parentheses).
 
 ```lua
 if mc.onlineCount == 0 then
@@ -55,19 +60,21 @@ Translates an obfuscated class name to its mapped name.
 
 ## Chat & Broadcasting
 
-### `mc.broadcast(text, overlay?)`
-Broadcasts a message to all online players. Second argument, if `true`, sends an overlay
-(toast-style) message instead of chat.
+### `mc.broadcast(text, overlayDuration?)`
+Broadcasts a message to all online players. If `overlayDuration` is a number (in ticks),
+sends it as a title overlay (toast-style) instead of chat. The overlay fades in over 20
+ticks (1s), stays for the given duration, then fades out over 20 ticks.
 
 ```lua
 mc.broadcast("Server is restarting soon!")
-mc.broadcast("Welcome!", true) -- overlay
+mc.broadcast("Welcome!", 70) -- overlay, stays ~3.5s
 ```
 
 ## Utilities
 
 ### `mc.dump(obj, depth?)`
-Recursively prints a Lua value's structure for debugging. Optional `depth` limits nesting.
+Recursively prints a Lua value's structure for debugging. Optional `depth` limits nesting
+(default 3).
 
 ```lua
 mc.dump(mc.players(), 2)
@@ -164,6 +171,26 @@ local sword = mc.createItem("diamond_sword", {
 
 See [ItemStack API](/reference/itemstack-api) for details.
 
+### `mc.serialise(type, obj)`
+### `mc.deserialise(type, json)`
+
+Serialise and deserialise items or inventories to/from JSON strings. Useful for saving
+stacks to `mc.data` or transferring over `mc.fetch`.
+
+- `type` (`string`) — `"item"` or `"inventory"`
+- `obj` — An [ItemStack](/reference/itemstack-api) or [Inventory](/reference/inventory-api) wrapper
+- `json` (`string`) — JSON string produced by `mc.serialise`
+
+```lua
+local stack = mc.createItem("diamond", 1)
+local json = mc.serialise("item", stack)
+
+local restored = mc.deserialise("item", json)
+player:give(restored)
+```
+
+Items returned by `mc.serialise` can be stored in `mc.data` and restored across reloads.
+
 ## Storage
 
 ### `mc.data`
@@ -185,7 +212,7 @@ mc.on("player_join", function(player)
   player:sendMessage("Welcome, " .. player.name .. "!")
 end)
 
-mc.on("player_block_break", function(player, blockPos)
+mc.on("player_block_break", function(player, pos, blockId)
   if player.gamemode == "survival" then
     return false -- cancel
   end

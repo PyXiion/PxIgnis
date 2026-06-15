@@ -58,6 +58,9 @@ Creates an item stack with full component data.
 | `unbreakable` | `boolean` | Unbreakable flag |
 | `attackDamage` | `number` | Attack damage |
 
+Additional component keys may work depending on the item type (e.g., `potion_effects`, `firework`, `block_state`).
+Keys that don't exist on the given item type are silently ignored.
+
 ```lua
 local sword = mc.createItem("diamond_sword", {
   count = 1,
