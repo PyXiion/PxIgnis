@@ -1,21 +1,60 @@
 # Changelog
 
-## 0.9.0 — Removed ByteBuddy (jar size -83%)
+## 0.10.0 — Hologram API
+
+### New API
+
+| Function                                | Description                                                        |
+|-----------------------------------------|--------------------------------------------------------------------|
+| `world:spawnHologram(pos, text, opts?)` | Spawns a `minecraft:text_display` entity; returns hologram wrapper |
+| `mc.holograms()`                        | Returns list of all live holograms                                 |
+| `mc.getHologram(uuid)`                  | Returns hologram by UUID, or `nil`                                 |
+
+Hologram wrapper exposes r/w properties: `text`, `lines`, `alignment`, `billboard`,
+`lineWidth`, `background`, `opacity`, `shadow`, `seeThrough`, `glowing`, `pos`,
+plus `:setLine(n, text)` and `:destroy()` methods. Delegates to entity metatable
+for `uuid`, `world`, `removed`, `pos` live proxy, `tags`, NBT read/write, etc.
+
+```lua
+local h = world:spawnHologram({x=0,y=64,z=0}, "Hello\nWorld", {billboard="center"})
+h.lines = {"Line 1", "Line 2"}
+h:setLine(1, "Updated")
+mc.schedule(40, function() h:destroy() end)
+```
+
+### Notes
+
+- All holograms are destroyed on `/ignis reload`.
+- Per‑player holograms deferred as future work (would need custom packet dispatch)
+
+## 0.9.0 — Removed ByteBuddy, 6 new events (23 total)
+
+### New events
+
+| Event              | Cancellable | Args                         | Fires                                                            |
+|--------------------|-------------|------------------------------|------------------------------------------------------------------|
+| `entity_spawn`     | ❌           | `entity`                     | Any entity loads into a world                                    |
+| `entity_despawn`   | ❌           | `entity`                     | Any entity unloads from a world                                  |
+| `entity_death`     | ✅           | `entity`, `source`, `amount` | Any living entity is about to die (players + mobs)               |
+| `player_join_init` | ✅           | `player`                     | Early join, player not fully loaded (renamed from `player_join`) |
+| `player_join`      | ❌           | `player`                     | Post-load join, player fully ready in world                      |
+| `player_respawn`   | ❌           | `player`, `wasDeath`         | Player respawns after death or end portal                        |
+
+**Migration**: `player_join` was renamed to `player_join_init` (still cancellable, early). The new `player_join`
+fires later when the player is fully in-world. Update `mc.on("player_join", ...)` to `mc.on("player_join_init", ...)`
+if your handler needs to cancel the join.
 
 ### Removed: `mc.observeHook` / `mc.removeHook` / `mc.clearHooks`
 
 ByteBuddy (`byte-buddy` + `byte-buddy-agent`) was pulling ~4.3 MB into the output jar for a single
 unstable API (`mc.observeHook`) that was marked as WIP/beta and recommended for removal in favour of
-`mc.on()` events. Since the mod already provides 16 Fabric-based events via `mc.on()`, the ByteBuddy
+`mc.on()` events. Since the mod already provides 23 Fabric-based events via `mc.on()`, the ByteBuddy
 runtime method hooking system was removed entirely.
 
-**Migration**: Use `mc.on("event_name", handler)` for all event handling. See the 0.7.0 changelog for
-the full event list.
+**Migration**: Use `mc.on("event_name", handler)` for all event handling. See the events table above.
 
 ### Other changes
 
-- Deleted `LuaMixinManager.kt` (ByteBuddy agent setup, mapping, transformer — 152 lines)
-- Deleted `LuaMixinManagerTest.kt` (144 lines, tested only removed code)
 - Output jar reduced from ~4.9 MB to ~839 KB
 
 ## 0.8.0 — Async API, PxLuaNova embedded, documentation site
@@ -25,11 +64,6 @@ the full event list.
 - Added `mc.fetch(url)` — coroutine-yielding HTTP requests via `HttpClient.sendAsync`
 - Added `mc.sleep(ticks)` — coroutine-yielding timed delay via `Scheduler.schedule`
 
-### PxLuaNova composite build
-
-- Embedded PxLuaNova as a Gradle composite build (`pxluanova/`) — no more Maven Local dependency
-- Dependency auto-substitution via `includeBuild 'pxluanova'` in `settings.gradle`
-
 ### Documentation site
 
 - New Astro + Starlight documentation site at `site/` (brand: PxIgnis)
@@ -37,7 +71,6 @@ the full event list.
 
 ### Other
 
-- `.gitignore` patterns fixed to match nested directories (trailing-slash form)
 - General cleanup and minor improvements
 
 ## 0.7.0 — Mob AI, ByteBuddy hooks, sidebar rewrite, PxLuaNova migration
@@ -55,12 +88,12 @@ the full event list.
 
 ### New Mob AI system
 
-| API                                    | Description                                                                             |
-|----------------------------------------|-----------------------------------------------------------------------------------------|
-| `mc.registerBehaviour(id, fn)`         | Registers a named AI behaviour function                                                 |
-| `mob:setAI("id")` / `mob:setAI(fn)`    | Assigns behaviour by name or directly with a function. Persists on reload if ID is used |
-| `mob:clearAI()`                        | Removes behaviour, restores vanilla AI                                                  |
-| `mob.aiActive`                         | Whether a behaviour is currently active                                                 |
+| API                                 | Description                                                                             |
+|-------------------------------------|-----------------------------------------------------------------------------------------|
+| `mc.registerBehaviour(id, fn)`      | Registers a named AI behaviour function                                                 |
+| `mob:setAI("id")` / `mob:setAI(fn)` | Assigns behaviour by name or directly with a function. Persists on reload if ID is used |
+| `mob:clearAI()`                     | Removes behaviour, restores vanilla AI                                                  |
+| `mob.aiActive`                      | Whether a behaviour is currently active                                                 |
 
 **Mob properties** (delegates to entity metatable for entity-level props):
 
@@ -97,7 +130,7 @@ Built-in behaviours: `guard`, `pet`, `orbiter`, `statue`, `wander` (check `demo_
 | `mc.removeHook(class, method)` → bool     | Removes a hook                               |
 | `mc.clearHooks()`                         | Removes all hooks                            |
 
-Hooks are cleared on `/pxrp reload` and server stop. Callback receives `(instance, args)`. Only single-overload methods
+Hooks are cleared on `/ignis reload` and server stop. Callback receives `(instance, args)`. Only single-overload methods
 supported. May be removed in future versions.
 
 ### New Lua API
@@ -404,7 +437,7 @@ Entity table returned by `world:spawn()` and `player` delegation:
 ### Storage
 
 - JSON storage: `mc.data` → global, `player.data` → per-player
-- Saved on server stop, player disconnect, `/pxrp reload`
+- Saved on server stop, player disconnect, `/ignis reload`
 - Nested tables require re-assignment (`data.nested = t`)
 
 ### Other

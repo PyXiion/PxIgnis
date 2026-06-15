@@ -1,9 +1,9 @@
-**PxRP** embeds a hot-swappable Lua runtime directly into the Fabric server lifecycle. No need to compile Java mods just to handle server-side logic, custom commands, or basic event manipulation. 
+**PxIgnis** embeds a hot-swappable Lua runtime directly into the Fabric server lifecycle. No need to compile Java mods just to handle server-side logic, custom commands, or basic event manipulation. 
 Write your logic in Lua, save the file, reload instantly, and see the changes live.
 
 ---
 
-Right now, I am using PxRP to develop a complex, fully Vanilla custom Roguelike server. 
+Right now, I am using PxIgnis to develop a complex, fully Vanilla custom Roguelike server. 
 If an action felt clunky or required too much boilerplate during my own design phases, I changed the core engine to fix it. 
 The result is a development loop explicitly streamlined for rapid, practical deployment.
 
@@ -12,7 +12,7 @@ The result is a development loop explicitly streamlined for rapid, practical dep
 ## Key Features
 
 * **Simple command registration:** They hook straight into Minecraft's native Brigadier system. You get tab completion, type validation (`block_pos`, `player`, `int`, etc.) with a simple API.
-* **Fast Hot-Reloading:** Running `/pxrp reload` completely reloads the Lua state in memory within milliseconds. Registered commands are hot-patched into the live dispatcher without restarting the server.
+* **Fast Hot-Reloading:** Running `/ignis reload` completely reloads the Lua state in memory within milliseconds. Registered commands are hot-patched into the live dispatcher without restarting the server.
 * **Simple API:** 
 
 ---
@@ -70,9 +70,9 @@ end)
 
 ## Installation & Requirements
 
-1. Install PxRP on your Fabric server.
-2. The first boot generates a `config/pxrp/demo.lua` configuration file containing basic usage examples.
-3. Edit your scripts and use `/pxrp reload` to apply changes instantly.
+1. Install PxIgnis on your Fabric server.
+2. The first boot generates a `config/ignis/demo.lua` configuration file containing basic usage examples.
+3. Edit your scripts and use `/ignis reload` to apply changes instantly.
 
 * **Minecraft:** `1.21.x`
 * **Fabric Loader:** `≥0.19.2`
