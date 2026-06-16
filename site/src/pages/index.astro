@@ -7,8 +7,9 @@ const examples = [
     id: "spells",
     label: "Spells",
     file: "spells.lua",
-    code: `-- Right-click blaze rod: raycast → knockback → fire → damage
-mc.on("player_use_item", function(player, hand, _, id)
+    code: `--# nova syntax
+    -- Right-click blaze rod: raycast → knockback → fire → damage
+mc.on("player_use_item") \\{ player, hand, _, id -> -- Kotlin-like custom syntax
     -- Early return if not the item we care about
     if id ~= "minecraft:blaze_rod" then return end
 
@@ -32,13 +33,14 @@ mc.on("player_use_item", function(player, hand, _, id)
         target:damage(6, player)
         target:addEffect("minecraft:slowness", 60, 1)
     end
-end)`,
+}`,
   },
   {
     id: "class",
     label: "Shop GUI",
     file: "shop.lua",
-    code: `-- Chest GUI shop: require library, build once, open for any player
+    code: `--# nova syntax
+-- Chest GUI shop: require library, build once, open for any player
 local chestgui = require "chestgui"
 
 -- Create a 3-row (27-slot) GUI
@@ -53,78 +55,79 @@ end
 
 -- gui:set(row, col, item, callback) — clickable item
 -- Returning false cancels the click (prevents item theft)
-gui:set(2, 3, mc.createItem("diamond", { name = "Diamond", lore = { "10 coins" } }),
-    function(player)
-        -- player.data is per-player persistent storage (JSON, survives reloads)
-        local coins = player.data.coins or 0
-        if coins < 10 then
-            player:sendMessage("Not enough coins!")
-            return false
-        end
-
-        player.data.coins = coins - 10
-        player:give(mc.createItem("diamond"))
-        player:sendMessage("Bought a diamond! Coins: " .. (coins - 10))
+gui:set(2, 3, mc.createItem("diamond", { name = "Diamond", lore = { "10 coins" } })) \\{ player ->
+    -- player.data is per-player persistent storage (JSON, survives reloads)
+    local coins = player.data.coins or 0
+    if coins < 10 then
+        player:sendMessage("Not enough coins!")
         return false
-    end)
+    end
 
-register("shop", function(ctx)
+    player.data.coins = coins - 10
+    player:give(mc.createItem("diamond"))
+    player:sendMessage("Bought a diamond! Coins: " .. (coins - 10))
+    return false
+}
+
+register("shop") \\{ ctx ->
     gui:open(ctx.player)
-end)`,
+}`,
   },
   {
     id: "welcome",
     label: "Sidebar",
     file: "sidebar.lua",
-    code: `-- Live per-player sidebar refreshing every 2s, self-cleaning on disconnect
+    code: `--# nova syntax
+-- Live per-player sidebar refreshing every 2s, self-cleaning on disconnect
 mc.on("player_join", function(player)
-    -- Per-player data persists as JSON across reloads
-    local visits = player.data.visits or 0
-    visits = visits + 1
-    player.data.visits = visits
+-- Per-player data persists as JSON across reloads
+local visits = player.data.visits or 0
+visits = visits + 1
+player.data.visits = visits
 
-    if visits == 1 then
-        player:give(mc.createItem("compass", 1))
-    end
+if visits == 1 then
+    player:give(mc.createItem("compass", 1))
+end
 
-    -- Sidebar is packet-based — never touches the global scoreboard
-    player.sidebar = {
-        title = "Stats",
-        lines = {
+-- Doesn't alter server scoreboards
+player.sidebar = {
+    title = "Stats",
+    lines = {
+        "HP " .. math.floor(player.health),
+        "Visits " .. visits,
+        "Online " .. mc.onlineCount,
+    }
+}
+
+-- mc.scheduleRepeating(delay, interval, callback) — 20 ticks = 1 second
+local id
+id = mc.scheduleRepeating(40, 40) \\{
+    local sb = player.sidebar
+    if sb then
+        sb.lines = {
             "HP " .. math.floor(player.health),
             "Visits " .. visits,
             "Online " .. mc.onlineCount,
         }
-    }
+    else
+        mc.cancelTask(id)  -- sidebar destroyed, stop updating
+    end
+}
 
-    -- mc.scheduleRepeating(delay, interval, callback) — 20 ticks = 1 second
-    local id = mc.scheduleRepeating(40, 40, function()
-        local sb = player.sidebar
-        if sb then
-            sb.lines = {
-                "HP " .. math.floor(player.health),
-                "Visits " .. visits,
-                "Online " .. mc.onlineCount,
-            }
-        else
-            mc.cancelTask(id)  -- sidebar destroyed, stop updating
-        end
-    end)
-
-    -- Clean up the repeating task when the player disconnects
-    mc.on("player_leave", function(p)
-        if p.uuid == player.uuid then
-            mc.cancelTask(id)
-        end
-    end)
-end)`,
+-- Clean up the repeating task when the player disconnects
+mc.on("player_leave") \\{ p ->
+    if p.uuid == player.uuid then
+        mc.cancelTask(id)
+    end
+}`,
   },
   {
     id: "ai",
     label: "Mob AI",
     file: "guard_beast.lua",
-    code: `-- Custom guard behaviour: patrol home, hunt players, return
-mc.registerBehaviour("guard_beast", function(self, state)
+    code: `--# nova syntax
+-- Custom guard behaviour: patrol home, hunt players, return
+mc.registerBehaviour("guard_beast") \\{ self, state ->
     -- self: the mob wrapper; state: persists across server ticks per mob
     if not state.home then
         state.home = self.pos  -- remember spawn point on first tick
@@ -149,7 +152,7 @@ mc.registerBehaviour("guard_beast", function(self, state)
             self:navigateTo(state.home.x, state.home.y, state.home.z)
         end
     end
-end)
+}
 
 -- Spawn a zombie and assign the behaviour
 local guard = world:spawn("minecraft:zombie", player.pos)
@@ -161,14 +164,15 @@ guard:setAI("guard_beast")`,
     id: "commands",
     label: "Commands",
     file: "commands.lua",
-    code: `-- Simple: no arguments, no permission — anyone can use it
-register("fly", function(ctx)
+    code: `--# nova syntax
+-- Simple: no arguments, no permission — anyone can use it
+register("fly") \\{ ctx ->
     ctx.player.isFlying = not ctx.player.isFlying
     ctx.player:sendMessage("Flight: " .. tostring(ctx.player.isFlying))
-end)
+}
 
 -- Complex: choice type (tab-completion), optional target, permission
-register("kit <name:choice=warrior,archer,miner> [target:player]", function(ctx, name, target)
+register("kit <name:choice=warrior,archer,miner> [target:player]", \\{ctx, name, target ->
     -- target is nil when omitted; fall back to the command sender
     local player = target or ctx.player
     player:clear()
@@ -181,50 +185,51 @@ register("kit <name:choice=warrior,archer,miner> [target:player]", function(ctx,
         player:give(mc.createItem("bow", { name = "Longbow", unbreakable = true }))
         player:give(mc.createItem("arrow", 64))
     end
-end, "px.ignis.admin")  -- only operators or those with the permission node`,
+}, "px.ignis.admin")  -- only those with the permission`,
   },
   {
     id: "regions",
     label: "Regions",
     file: "regions.lua",
-    code: `-- Three zones: lobby (auto-welcome), arena (PvP gate), boss (warning)
+    code: `--# nova syntax
+-- Three zones: lobby (auto-welcome), arena (PvP gate), boss (warning)
 local lobby = world:createRegion(vec(0, 64, 0),   vec(100, 128, 100))
 local arena = world:createRegion(vec(200, 64, 200), vec(300, 128, 300))
 local boss  = world:createRegion(vec(400, 64, 400), vec(500, 96, 500))
 
 -- enter/leave fire once per transition (not every tick)
-lobby:on("player_enter", function(p) p:sendMessage("Welcome to the lobby!") end)
-lobby:on("player_leave", function(p) p:sendMessage("See you soon.") end)
+lobby:on("player_enter") \\{ p -> p:sendMessage("Welcome to the lobby!") }
+lobby:on("player_leave") \\{ p -> p:sendMessage("See you soon.") }
 
 -- Gate PvP zone by permission; bounce unauthorised to lobby
-arena:on("player_enter", function(p)
+arena:on("player_enter") \\{ p ->
     if not p:hasPermission("px.ignis.pvp") then
         local a = lobby:getBounds().A
         p:teleport(a.x, a.y, a.z)
         p:sendMessage("PvP access denied.")
     end
-end)
+}
 
 -- Throttle: entity_move fires at most every 5 ticks (0.25s)
-boss:on("entity_move", function(e, from, to)
+boss:on("entity_move", \\{ e, from, to ->
     local d = to - from
     if d:length() > 0.5 then  -- moved more than half a block
         e:sendMessage("Boss room is small — slow down!")
     end
-end, { throttle = 5 })
+}, { throttle = 5 })
 
 -- tick auto-subscribes: no enableTick() needed
-lobby:on("tick", function()
+lobby:on("tick") \\{
     for _, p in ipairs(lobby.players) do
         p:sendActionBar("Online: " .. mc.onlineCount)
     end
-end)
+}
 
 -- Find regions at a position: returns {} when empty
-mc.on("player_join", function(p)
+mc.on("player_join") \\{ p ->
     local zones = world:getRegionsAt(p.pos)
     p:sendMessage("You are in " .. #zones .. " zone(s).")
-end)
+}
 
 -- Resize at runtime — setBounds normalises corners, re-evaluates membership
 arena:setBounds(vec(200, 64, 200), vec(350, 128, 300))`,
@@ -300,12 +305,10 @@ const highlighted = await Promise.all(
     <main>
       <!-- ─── Hero ─────────────────────────────────────────────────── -->
       <section class="hero">
-        <h1>PxIgnis: Lua Scripting Engine<br />for Minecraft Servers</h1>
+        <h1>Build custom Minecraft<br />server gameplay in Lua.</h1>
         <p>
-          Server-side framework (Fabric) for writing custom game logic, events,
-          interfaces, and mob AI in Lua with async support and hot
-          reloading (<code>/pxignis reload</code>) — no server restarts.
-          Built on <strong>PxLuaNova</strong>, a custom Lua 5.2 fork.
+          Events, commands, GUIs, regions, mob AI, async tasks and hot reload —
+          all without restarting your server.
         </p>
         <div class="hero-actions">
           <a href="https://github.com/pyxiion/PxIgnis" class="btn-primary">
@@ -317,51 +320,93 @@ const highlighted = await Promise.all(
             View Changelog
           </a>
         </div>
+        <div class="hero-badges">
+          <span class="hero-badge">Fabric 1.21.x</span>
+          <span class="hero-badge">Active Development</span>
+          <span class="hero-badge">Open Source</span>
+        </div>
+        <div class="hero-nova">
+          <button type="button" class="nova-pill" id="nova-toggle" aria-expanded="false" aria-controls="nova-expand">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+            Powered by PxLuaNova
+            <svg class="nova-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="nova-expand" id="nova-expand" hidden>
+            <p>A custom Lua 5.2 fork that powers every script:</p>
+            <ul>
+              <li><code>\&#123; x, y -&gt; x + y \&#125;</code> — lambda syntax for compact callbacks</li>
+              <li><code>mc.sleep</code> &amp; <code>mc.fetch</code> — coroutine-yielding async</li>
+              <li>Trailing block syntax: <code>register("fly") \&#123; ctx -&gt; ... \&#125;</code></li>
+              <li>Additional language extensions &amp; quality-of-life helpers</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
-      <!-- ─── Core Modules ──────────────────────────────────────────── -->
-      <section id="modules" class="modules section-pad">
+      <!-- ─── What You Can Build ────────────────────────────────────── -->
+      <section id="can-build" class="can-build section-pad">
         <div class="container">
-          <h2 class="section-title">What You Get</h2>
+          <h2 class="section-title">What You Can Build</h2>
           <p class="section-subtitle">
-            Everything you need to script a server, built in.
+            Server owners script the gameplay. Players see the result.
           </p>
-          <div class="modules-grid">
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-icon">🔥</span>
-                <h3>Hot Reload</h3>
-              </div>
-              <p>Edit scripts and run <code>/pxignis reload</code> — no server restarts, no lost connections. Persistent data (<code>mc.data</code>, <code>player.data</code>) is preserved across reloads.</p>
+          <div class="can-build-grid">
+            <div class="can-build-item">
+              <svg class="cb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>
+              <span>RPG Classes</span>
             </div>
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-icon">⏳</span>
-                <h3>Async Runtime</h3>
-              </div>
-              <p>Coroutine-powered <code>mc.sleep(ticks)</code> and <code>mc.fetch(url)</code> with automatic JSON parsing. Yields the Lua coroutine, resumes on the server thread.</p>
+            <div class="can-build-item">
+              <svg class="cb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 6 6 .9-4.5 4.4 1 6.7L12 16.8 6.5 20l1-6.7L3 8.9 9 8z"/></svg>
+              <span>Custom Bosses</span>
             </div>
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-icon">🧠</span>
-                <h3>Mob AI Framework</h3>
-              </div>
-              <p>MobEntity behaviour scripting. Register custom goals with native pathfinding, line-of-sight (<code>canSee</code>), and vanilla AI override. Built-in behaviours: <code>guard</code>, <code>pet</code>, <code>orbiter</code>, <code>wander</code>.</p>
+            <div class="can-build-item">
+              <svg class="cb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 4v3M16 4v3"/></svg>
+              <span>Minigames</span>
             </div>
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-icon">🖼️</span>
-                <h3>Dynamic UI</h3>
-              </div>
-              <p>Per-player scoreboard sidebars, chest GUI menus with click interception (<code>container:onClick</code>), and virtual inventories. Packet-based — never touches the global scoreboard, other players never see it.</p>
+            <div class="can-build-item">
+              <svg class="cb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v4H4z"/><path d="M4 12h16v4H4z"/><path d="M4 20h16"/></svg>
+              <span>Quest Systems</span>
             </div>
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-icon">🗺️</span>
-                <h3>Spatial Regions</h3>
-              </div>
-              <p>AABB zones with event hooks: <code>enter</code>, <code>leave</code>, <code>move</code>, <code>death</code>, <code>tick</code>. Per-region <code>players</code>/<code>entities</code> queries, throttlable callbacks, chunk-indexed lookups, <code>mc.getRegion</code> for ID-based retrieval.</p>
+            <div class="can-build-item">
+              <svg class="cb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>
+              <span>Shops &amp; Economies</span>
             </div>
+            <div class="can-build-item">
+              <svg class="cb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+              <span>Server Hubs</span>
+            </div>
+            <div class="can-build-item">
+              <svg class="cb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M5 12H1M23 12h-4"/><circle cx="12" cy="12" r="5"/><path d="M12 9l1.5 3 3 .5-2.2 2.1.5 3-2.8-1.5-2.8 1.5.5-3L7.5 12.5l3-.5z"/></svg>
+              <span>MMO Abilities</span>
+            </div>
+            <div class="can-build-item">
+              <svg class="cb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M19 12c0 1-2 3-2 3M5 12c0 1 2 3 2 3"/><path d="M2 12h2M20 12h2"/></svg>
+              <span>Custom AI Companions</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Quick Start ───────────────────────────────────────────── -->
+      <section class="quickstart section-pad">
+        <div class="container">
+          <h2 class="section-title">Quick Start</h2>
+          <div class="quickstart-steps">
+            <div class="qs-step">
+              <div class="qs-num">1</div>
+              <p>Place <code>PxIgnis.jar</code> in your Fabric server's <code>mods/</code> folder.</p>
+            </div>
+            <div class="qs-step">
+              <div class="qs-num">2</div>
+              <p>Write scripts in <code>config/pxignis/scripts/</code>. The runtime loads all <code>*.lua</code> files alphabetically.</p>
+            </div>
+            <div class="qs-step">
+              <div class="qs-num">3</div>
+              <p>Run <code>/pxignis reload</code> in-game — no restart. Global data (<code>mc.data</code>) and per-player data auto-persist to JSON.</p>
+            </div>
+          </div>
+          <div class="quickstart-cta">
+            <a href="/guide/getting-started/" class="btn-primary">Full Documentation →</a>
           </div>
         </div>
       </section>
@@ -405,26 +450,77 @@ const highlighted = await Promise.all(
         </div>
       </section>
 
-      <!-- ─── Quick Start ───────────────────────────────────────────── -->
-      <section class="quickstart section-pad">
+      <!-- ─── Why Script Instead of Mod? ─────────────────────────────── -->
+      <section id="why-lua" class="why-lua section-pad">
         <div class="container">
-          <h2 class="section-title">Quick Start</h2>
-          <div class="quickstart-steps">
-            <div class="qs-step">
-              <div class="qs-num">1</div>
-              <p>Place <code>PxIgnis.jar</code> in your Fabric server's <code>mods/</code> folder.</p>
+          <h2 class="section-title">Why Script Instead of Writing a Mod?</h2>
+          <p class="section-subtitle">
+            Server owners iterate faster, players see the result live.
+          </p>
+          <div class="why-lua-grid">
+            <div class="why-card">
+              <div class="why-icon">⚡</div>
+              <h3>Reload Scripts Instantly</h3>
+              <p>Edit a file, run <code>/pxignis reload</code>. Changes are live in milliseconds — no server restart, no reconnecting players.</p>
             </div>
-            <div class="qs-step">
-              <div class="qs-num">2</div>
-              <p>Write scripts in <code>config/pxignis/scripts/</code>. The runtime loads all <code>*.lua</code> files alphabetically.</p>
+            <div class="why-card">
+              <div class="why-icon">🚫</div>
+              <h3>No Recompilation</h3>
+              <p>Skip the Java toolchain. No Gradle, no Loom, no 5-minute build cycles. Just a text editor and a save.</p>
             </div>
-            <div class="qs-step">
-              <div class="qs-num">3</div>
-              <p>Run <code>/pxignis reload</code> in-game — no restart. Global data (<code>mc.data</code>) and per-player data auto-persist to JSON.</p>
+            <div class="why-card">
+              <div class="why-icon">🛡️</div>
+              <h3>Safer Iteration</h3>
+              <p>Lua errors are isolated per-script. One bad handler doesn't take down the whole server — and rollback is just <code>git checkout</code>.</p>
+            </div>
+            <div class="why-card">
+              <div class="why-icon">🤝</div>
+              <h3>Server Owners Customize Gameplay</h3>
+              <p>Hand the scripts folder to a community manager. They can tune shops, classes, and events without ever touching Java.</p>
+            </div>
+            <div class="why-card">
+              <div class="why-icon">📦</div>
+              <h3>No IDE Required</h3>
+              <p>VS Code, Notepad++, vim — anything that saves <code>.lua</code> works. The runtime reads files directly from disk.</p>
+            </div>
+            <div class="why-card">
+              <div class="why-icon">🔌</div>
+              <h3>Full Fabric Power</h3>
+              <p>Lua wraps the entire Fabric API surface. You get events, networking, world data — without writing a single Java class.</p>
             </div>
           </div>
-          <div class="quickstart-cta">
-            <a href="/guide/getting-started/" class="btn-primary">Full Documentation →</a>
+        </div>
+      </section>
+
+      <!-- ─── Showcase placeholders ─────────────────────────────────── -->
+      <section id="showcase" class="showcase section-pad">
+        <div class="container">
+          <h2 class="section-title">See It In-Game</h2>
+          <p class="section-subtitle">
+            Demos and GIFs coming soon — drop a file at <code>public/showcase/*.gif</code> and it appears here.
+          </p>
+          <div class="showcase-grid">
+            <figure class="showcase-placeholder">
+              <div class="showcase-frame">
+                <span class="showcase-label">Open shop GUI · Buy item · Coins decrease</span>
+                <span class="showcase-tag">Demo · GIF</span>
+              </div>
+              <figcaption>Chest GUI shop, per-player coins, click interception</figcaption>
+            </figure>
+            <figure class="showcase-placeholder">
+              <div class="showcase-frame">
+                <span class="showcase-label">Edit file · Run /pxignis reload · Feature updates instantly</span>
+                <span class="showcase-tag">Demo · GIF</span>
+              </div>
+              <figcaption>Hot reload workflow with zero downtime</figcaption>
+            </figure>
+            <figure class="showcase-placeholder">
+              <div class="showcase-frame">
+                <span class="showcase-label">Region enter · Custom welcome · Scoreboard sidebar</span>
+                <span class="showcase-tag">Demo · GIF</span>
+              </div>
+              <figcaption>Region events and live per-player sidebar</figcaption>
+            </figure>
           </div>
         </div>
       </section>
@@ -464,6 +560,18 @@ const highlighted = await Promise.all(
         tabs.forEach((b) =>
           b.addEventListener("click", () => activate(b.dataset.tab))
         );
+
+        // ── PxLuaNova pill toggle ──────────────────────────────────────
+        const novaToggle = document.getElementById("nova-toggle");
+        const novaExpand = document.getElementById("nova-expand");
+        if (novaToggle && novaExpand) {
+          novaToggle.addEventListener("click", () => {
+            const open = !novaExpand.hidden;
+            novaExpand.hidden = open;
+            novaToggle.setAttribute("aria-expanded", String(!open));
+            novaToggle.classList.toggle("open", !open);
+          });
+        }
 
         // ── Scroll header ──────────────────────────────────────────────
         const header = document.getElementById("site-header");

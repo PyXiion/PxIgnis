@@ -256,6 +256,120 @@ body.landing-page {
   justify-content: center;
 }
 
+/* ── Hero status badges ─────────────────────────────────────────── */
+.hero-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 1.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--px-gray-400);
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  letter-spacing: 0.01em;
+}
+
+.hero-badge::before {
+  content: "✓";
+  color: var(--px-accent);
+  margin-right: 0.4em;
+  font-weight: 700;
+}
+
+/* ── PxLuaNova pill ─────────────────────────────────────────────── */
+.hero-nova {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.nova-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.95rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  color: var(--px-accent);
+  background: var(--px-accent-dim);
+  border: 1px solid var(--px-accent-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.nova-pill:hover {
+  background: rgba(255, 90, 0, 0.18);
+  border-color: rgba(255, 90, 0, 0.5);
+}
+
+.nova-pill .nova-chev {
+  transition: transform 0.2s;
+}
+
+.nova-pill.open .nova-chev {
+  transform: rotate(180deg);
+}
+
+.nova-expand {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 90vw);
+  padding: 1rem 1.25rem;
+  background: var(--px-gray-900);
+  border: 1px solid var(--px-gray-700);
+  border-radius: var(--px-radius-md);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  text-align: left;
+  z-index: 10;
+}
+
+.nova-expand[hidden] { display: none; }
+
+.nova-expand p {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--px-gray-300);
+  line-height: 1.5;
+}
+
+.nova-expand ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nova-expand li {
+  font-size: 0.78rem;
+  color: var(--px-gray-300);
+  padding: 0.25rem 0;
+  line-height: 1.5;
+}
+
+.nova-expand code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  color: var(--px-accent);
+  background: var(--px-accent-dim);
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+}
+
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 .btn-primary {
   display: inline-flex;
@@ -299,62 +413,48 @@ body.landing-page {
 }
 
 /* ----------------------------------------------------------------------- */
-/*  Core Modules — 2×2 grid                                                */
+/*  What You Can Build — outcome grid                                      */
 /* ----------------------------------------------------------------------- */
-.modules {
+.can-build {
   position: relative;
   z-index: 1;
   background: var(--px-gray-900);
 }
 
-.modules-grid {
+.can-build-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
 }
 
-.module-card {
+.can-build-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 1.5rem 0.75rem;
   background: var(--px-black);
   border: 1px solid var(--px-gray-800);
   border-radius: var(--px-radius-md);
-  padding: 1.5rem;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  text-align: center;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--px-gray-300);
+  transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
 }
 
-.module-card:hover {
+.can-build-item:hover {
   border-color: var(--px-accent-border);
-  box-shadow: 0 0 24px rgba(255, 90, 0, 0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 90, 0, 0.06);
 }
 
-.module-header {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.6rem;
-}
-
-.module-icon { font-size: 1.2rem; }
-
-.module-header h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.module-card p {
-  font-size: 0.85rem;
-  color: var(--px-gray-400);
-  line-height: 1.65;
-  margin: 0;
-}
-
-.module-card code {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.82em;
+.cb-icon {
+  width: 28px;
+  height: 28px;
   color: var(--px-accent);
-  background: var(--px-accent-dim);
-  padding: 0.1em 0.3em;
-  border-radius: 4px;
+  opacity: 0.85;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -439,7 +539,11 @@ body.landing-page {
 .pane-body {
   padding: 1rem 1.25rem;
   overflow-x: auto;
+  overflow-y: auto;
   min-height: 160px;
+  max-height: 550px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 32px), transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 32px), transparent 100%);
 }
 
 .pane-body pre {
@@ -548,11 +652,152 @@ body.landing-page {
 .footer-links svg { width: 18px; height: 18px; }
 
 /* ----------------------------------------------------------------------- */
+/*  Why Script Instead of Mod? — 3-col card grid                           */
+/* ----------------------------------------------------------------------- */
+.why-lua {
+  position: relative;
+  z-index: 1;
+  background: var(--px-gray-900);
+}
+
+.why-lua-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.why-card {
+  background: var(--px-black);
+  border: 1px solid var(--px-gray-800);
+  border-radius: var(--px-radius-md);
+  padding: 1.5rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.why-card:hover {
+  border-color: var(--px-accent-border);
+  box-shadow: 0 0 24px rgba(255, 90, 0, 0.05);
+}
+
+.why-icon {
+  font-size: 1.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.why-card h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+  color: var(--px-white);
+}
+
+.why-card p {
+  font-size: 0.82rem;
+  color: var(--px-gray-400);
+  line-height: 1.65;
+  margin: 0;
+}
+
+.why-card code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  color: var(--px-accent);
+  background: var(--px-accent-dim);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+/* ----------------------------------------------------------------------- */
+/*  Showcase placeholders                                                  */
+/* ----------------------------------------------------------------------- */
+.showcase {
+  position: relative;
+  z-index: 1;
+}
+
+.showcase .section-subtitle code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  color: var(--px-accent);
+  background: var(--px-accent-dim);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+}
+
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.showcase-placeholder {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.showcase-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(255, 255, 255, 0.02) 0,
+      rgba(255, 255, 255, 0.02) 10px,
+      transparent 10px,
+      transparent 20px),
+    var(--px-black);
+  border: 1px dashed var(--px-gray-700);
+  border-radius: var(--px-radius-md);
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.showcase-frame:hover {
+  border-color: var(--px-accent-border);
+}
+
+.showcase-label {
+  font-size: 0.8rem;
+  color: var(--px-gray-300);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.showcase-tag {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  font-size: 0.65rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--px-accent);
+  background: var(--px-accent-dim);
+  border: 1px solid var(--px-accent-border);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.showcase-placeholder figcaption {
+  font-size: 0.78rem;
+  color: var(--px-gray-400);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ----------------------------------------------------------------------- */
 /*  Responsive                                                             */
 /* ----------------------------------------------------------------------- */
 @media (max-width: 900px) {
   .header-nav { display: none; }
-  .modules-grid { grid-template-columns: 1fr; }
+  .can-build-grid { grid-template-columns: repeat(2, 1fr); }
+  .why-lua-grid { grid-template-columns: 1fr; }
+  .showcase-grid { grid-template-columns: 1fr; }
   .footer-inner { flex-direction: column; text-align: center; }
 }
 
