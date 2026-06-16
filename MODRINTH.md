@@ -1,85 +1,99 @@
-**PxIgnis** embeds a hot-swappable Lua runtime directly into the Fabric server lifecycle. No need to compile Java mods just to handle server-side logic, custom commands, or basic event manipulation. 
-Write your logic in Lua, save the file, reload instantly, and see the changes live.
+# PxIgnis
+
+A Lua runtime for Fabric servers, with hot-reload. Edit scripts in `config/ignis/`,
+run `/ignis reload`, and changes apply instantly.
+
+Full documentation at **[ignis.pyxiion.ru](https://ignis.pyxiion.ru)**.
 
 ---
 
-Right now, I am using PxIgnis to develop a complex, fully Vanilla custom Roguelike server. 
-If an action felt clunky or required too much boilerplate during my own design phases, I changed the core engine to fix it. 
-The result is a development loop explicitly streamlined for rapid, practical deployment.
+## About
+
+PxIgnis is developed in tandem with a fully Vanilla custom Roguelike server. The API
+reflects what the project itself needed.
 
 ---
 
 ## Key Features
 
-* **Simple command registration:** They hook straight into Minecraft's native Brigadier system. You get tab completion, type validation (`block_pos`, `player`, `int`, etc.) with a simple API.
-* **Fast Hot-Reloading:** Running `/ignis reload` completely reloads the Lua state in memory within milliseconds. Registered commands are hot-patched into the live dispatcher without restarting the server.
-* **Simple API:** 
+* **Hot-reload Lua runtime** — `/ignis reload` re-runs scripts in milliseconds. Commands
+  are re-registered into the live Brigadier dispatcher without restarting the server.
+* **Command registration** — `register("cmd <name:type> [<name:type>]", handler, permission?)`.
+  Built-in argument types: `int`, `double`, `float`, `bool`, `text`, `word`, `player`,
+  `block_pos`, `choice=...`. Tab completion and permissions (`admin.cmd`) are part
+  of the API.
+* **Events, with cancellation** — 15+ hooks: `player_block_break`, `player_chat`,
+  `player_attack_entity`, `entity_hurt`, `entity_death`, and more. Returning `false`
+  cancels.
+* **Regions and scripted mob AI** — spatial areas with enter/exit/move/death
+  events, and API for custom mob AI.
+* **Coroutines, persistence, UI** — `mc.fetch` / `mc.sleep` for sequential async code,
+  `player.data` / `mc.data` / storage backends for persistent state, plus holograms,
+  sidebars, and the `chestgui` library for custom containers.
+
+And more, and more.
 
 ---
 
-## Some Snippets
+## Examples
 
-### 1. Commands
-
-```lua
--- Simple registration
-register("pay <amount:int> <target:player>", function(ctx, amount, target)
-    local bal = ctx.player.data.balance or 100
-    if bal < amount then
-        mc.broadcast(ctx.player.name .. " has insufficient funds.", true)
-        return
-    end
-    ctx.player.data.balance = bal - amount
-    target.data.balance = (target.data.balance or 0) + amount
-    mc.broadcast(target.name .. " transferred " .. amount .. " coins to " .. target.name)
-end, "pxrp.economy")
-
-```
-
-### 2. Events & cancellation
+### 1. Region + async
 
 ```lua
-mc.on("player_block_break", function(player, pos, blockId)
-    if blockId ~= "minecraft:white_wool" then
-        return false -- Cancels the block break if it's not a wool block
-    end
-end)
+local arena = world:createRegion(vec(-50, 64, -50), vec(50, 80, 50))
 
-```
-
-### 3. Structure Placement
-
-```lua
-register("paste <id:text>", function(ctx, id)
-    local s = mc.loadStructure(id) or mc.loadStructureFile(id .. ".nbt")
-    if not s then return mc.broadcast("Structure not found!", true) end
-    
-    s:place(ctx.player.world, ctx.player.pos, {
-        rotation = "CLOCKWISE_90",
-        mirror = "LEFT_RIGHT",
+arena:on("entity_enter", function(entity)
+    if entity:isPlayer() then
+        mc.broadcast(entity.name .. " entered the arena")
         
-        -- Iterate structure entities
-        on_entity = function(entity, pos)
-            entity.customName = "Summoned " .. entity.type
-            entity.health = 50
-        end
-    })
+        coroutine.wrap(function()
+            local res = mc.fetch("https://api.example.com/arena/log")
+            if not res.ok then
+                mc.broadcast("log failed: " .. res.error, true)
+            end
+        end)()
+    end
+end)
+```
+
+### 2. Mob AI
+
+```lua
+mc.registerBehaviour("zombie_chase", function(self, mob)
+    local p = mc.players[1]
+    if p then
+        local pos = p.pos
+        mob:navigateTo(pos.x, pos.y, pos.z, 1.0)
+    end
 end)
 
+mc.on("entity_spawn", function(entity)
+    if entity:isMob() and entity.type == "minecraft:zombie" then
+        entity:setAI("zombie_chase")
+    end
+end)
 ```
+
+### 3. Command with permission
+
+```lua
+register("pay <amount:int> <target:player>", function(ctx, amount, target)
+    ctx.player.data.balance = (ctx.player.data.balance or 0) - amount
+    target.data.balance     = (target.data.balance or 0) + amount
+    
+    target:sendMessage("Received " .. amount .. " from " .. ctx.player.name)
+end, "pxrp.economy")
+```
+
+---
 
 ## Installation & Requirements
 
-1. Install PxIgnis on your Fabric server.
-2. The first boot generates a `config/ignis/demo.lua` configuration file containing basic usage examples.
-3. Edit your scripts and use `/ignis reload` to apply changes instantly.
+1. Install Fabric Loader ≥0.19.2, Fabric API ≥0.141.4+1.21.11, and Fabric Language Kotlin ≥1.10.8.
+2. Place `pxignis-*.jar` into the `mods/` folder of your server.
+3. Start the server. `config/ignis/demo.lua` is created on first boot.
+4. Edit scripts under `config/ignis/`, then run `/ignis reload`.
 
-* **Minecraft:** `1.21.x`
-* **Fabric Loader:** `≥0.19.2`
-* **Fabric API:** `≥0.141.4`
-* **Fabric Language Kotlin `≥1.10.8`**
-
----
 
 ## License
 
