@@ -432,7 +432,7 @@ class WorldWrapper(
                 override fun invoke(args: Varargs): Varargs {
                     val self = args.arg(1).checktable()
                     val w = self.rawget("__pxrp_object").checkuserdata() as ServerWorld
-                    require(args.narg() == 1) { "getRegion(id) requires 1 argument" }
+                    require(args.narg() == 2) { "getRegion(id) requires 1 argument" }
                     val id = args.arg(2).checkint()
                     val r = RegionManager.get(id)
                     return if (r != null && r.world === w) RegionWrapper(r).toLuaValue() else LuaValue.NIL
@@ -443,7 +443,7 @@ class WorldWrapper(
                 override fun invoke(args: Varargs): Varargs {
                     val self = args.arg(1).checktable()
                     val w = self.rawget("__pxrp_object").checkuserdata() as ServerWorld
-                    require(args.narg() == 1) { "getRegionsAt(pos) requires 1 argument" }
+                    require(args.narg() == 2) { "getRegionsAt(pos) requires 1 argument" }
                     val pos = args.arg(2).toVec3d()
                     val list = LuaTable()
                     RegionManager.getAt(w, pos).forEachIndexed { i, r ->

@@ -149,3 +149,4 @@ end)
 - [Async API](/reference/async-api) — detailed mc.fetch and mc.sleep reference
 - [Storage](/reference/storage) — persist data across reloads with `mc.data` and `player.data`
 - [Libraries](/docs/libraries/overview) — formatting templates, simple registrations, chest GUIs
+- [Language extensions](/reference/language) — `\{ ... }` lambda syntax

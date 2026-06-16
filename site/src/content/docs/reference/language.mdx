@@ -1,0 +1,206 @@
+---
+title: Language extensions
+description: PxLuaNova extends Lua 5.2 with a non-standard lambda literal syntax and some Lua 5.3+ stdlib additions.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components'
+
+PxIgnis runs on **PxLuaNova**, a Lua 5.2 fork. This page documents
+extensions that aren't part of standard Lua 5.2.
+
+## Lambda literal `\{ ... }`
+
+PxLuaNova adds a non-standard syntax for inline anonymous functions.
+Opt in per file by placing the magic comment **on line 1**:
+
+```lua
+--# nova syntax
+```
+
+This enables the `\` + `{` two-character sequence to be recognized as a
+lambda literal. Without the pragma, `\` outside a string literal is a
+syntax error.
+
+### Named-arg lambda
+
+`\{ args -> body }` — arguments followed by `->` and an expression body.
+The body expression is implicitly returned.
+
+<Tabs>
+<TabItem label="Lambda">
+
+```lua
+--# nova syntax
+local double = \{ x -> x * 2 }
+print(double(21))  -- 42
+```
+
+</TabItem>
+<TabItem label="Function">
+
+```lua
+local function double(x)
+  return x * 2
+end
+print(double(21))
+```
+
+</TabItem>
+</Tabs>
+
+Multi-arg:
+
+<Tabs>
+<TabItem label="Lambda">
+
+```lua
+--# nova syntax
+local sum = \{ a, b, c -> a + b + c }
+print(sum(1, 2, 3))  -- 6
+```
+
+</TabItem>
+<TabItem label="Function">
+
+```lua
+local function sum(a, b, c)
+  return a + b + c
+end
+print(sum(1, 2, 3))
+```
+
+</TabItem>
+</Tabs>
+
+### Zero-arg expression
+
+No arrow, no parameters — a single expression is implicitly returned:
+
+<Tabs>
+<TabItem label="Lambda">
+
+```lua
+--# nova syntax
+local answer = \{ 40 + 2 }
+print(answer())  -- 42
+```
+
+</TabItem>
+<TabItem label="Function">
+
+```lua
+local function answer()
+  return 40 + 2
+end
+print(answer())
+```
+
+</TabItem>
+</Tabs>
+
+### Zero-arg chunk
+
+When the body starts with a keyword like `if`, `for`, `while`, `return`,
+etc., it is parsed as a chunk. Use `return` for explicit values:
+
+<Tabs>
+<TabItem label="Lambda">
+
+```lua
+--# nova syntax
+local get = \{
+  print("side effects OK")
+  return 42
+}
+print(get())  -- 42
+```
+
+</TabItem>
+<TabItem label="Function">
+
+```lua
+local function get()
+  print("side effects OK")
+  return 42
+end
+print(get())
+```
+
+</TabItem>
+</Tabs>
+
+### Trailing-block sugar
+
+`\{ ... }` after a function call appends the lambda as the last argument.
+The body is always parsed as a chunk (no implicit return). This is
+especially useful with `register()`:
+
+<Tabs>
+<TabItem label="Lambda">
+
+```lua
+--# nova syntax
+register("greet") \{ ctx ->
+  ctx.player:send("hello!")
+}
+```
+
+</TabItem>
+<TabItem label="Function">
+
+```lua
+register("greet", function(ctx)
+  ctx.player:send("hello!")
+end)
+```
+
+</TabItem>
+</Tabs>
+
+Works with any function, not just `register()`:
+
+```lua
+--# nova syntax
+local results = {}
+local function each(t, fn)
+  for i, v in ipairs(t) do
+    fn(v, i)
+  end
+end
+each({ "a", "b", "c" }) \{ v, i ->
+  results[i] = v .. i
+}
+-- results == { "a1", "b2", "c3" }
+```
+
+### Closures
+
+Lambdas capture local variables from the enclosing scope, just like
+`function`:
+
+```lua
+--# nova syntax
+function makeCounter()
+  local n = 0
+  return \{
+    n = n + 1
+    return n
+  }
+end
+
+local c = makeCounter()
+print(c())  -- 1
+print(c())  -- 2
+```
+
+## Standard library additions
+
+The Lua standard library in PxLuaNova includes some Lua 5.3+ functions
+not present in standard Lua 5.2:
+
+| Function                    | Description                          |
+|-----------------------------|--------------------------------------|
+| `math.type(x)`              | Returns `"integer"` or `"float"`     |
+| `math.atan(y, x)`           | Two-argument arctangent (Lua 5.3+)   |
+| `math.min(...)`             | Variadic minimum                     |
+| `math.max(...)`             | Variadic maximum                     |

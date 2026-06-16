@@ -75,9 +75,9 @@ public class LuaC extends Constants implements LuaState.Compiler, LuaState.Loade
 
 	/** A sharable instance of the LuaC compiler. */
 	public static final LuaC instance = new LuaC();
-	
-	/** Install the compiler so that LoadState will first 
-	 * try to use it when handed bytes that are 
+
+	/** Install the compiler so that LoadState will first
+	 * try to use it when handed bytes that are
 	 * not already a compiled lua chunk.
 	 * @param state the LuaState into which this is to be installed.
 	 */

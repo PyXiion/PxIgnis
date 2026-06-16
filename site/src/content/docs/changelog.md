@@ -5,6 +5,17 @@ description: Release history for PxIgnis.
 
 # Changelog
 
+## 0.12.0 — Lambda literal syntax (unreleased)
+
+### New language extension
+
+- PxLuaNova's `\{ ... }` lambda literal syntax is now available in PxIgnis scripts.
+  Opt in per file with `--# nova syntax` on line&nbsp;1. See [Language extensions](/reference/language)
+  for all four forms: named-arg (`->`), zero-arg expression, zero-arg chunk, and
+  trailing-block sugar.
+
+---
+
 ## 0.11.0 — Region API (2026-06-15)
 
 ### New API — [Region](/reference/region-api)
@@ -12,23 +23,23 @@ description: Release history for PxIgnis.
 Spatial areas in a world with event subscriptions. Create with two corners (auto-normalized), subscribe to
 enter/leave/move/death/tick events with optional per-callback throttling.
 
-| API                              | Description                                                    |
-|----------------------------------|----------------------------------------------------------------|
-| `world:createRegion(posA, posB)` | Creates a region between two corners                           |
-| `r:getBounds()`                  | Returns `{A, B}` — the two bounding corners (A = min, B = max) |
-| `r:setBounds(posA, posB)`        | Updates region bounds; re-evaluates entity membership          |
-| `r:on(event, fn, opts?)`         | Subscribes to a region event; returns handler ID              |
-| `r:off(id)`                      | Unsubscribes a handler by ID; returns `true` if removed        |
-| `r:contains(pos)`                | `true` if position is inside the bounds                        |
-| `r:destroy()`                    | Destroys region, fires `destroy` event, clears handlers        |
-| `r.players`                      | Sequence of players currently inside                           |
-| `r.entities`                     | Sequence of entities currently inside                          |
-| `r.id`                           | Session-unique integer ID                                      |
-| `r.world`                        | World the region belongs to                                    |
-| `world.regions`                  | Sequence of all live regions in this world                     |
+| API                              | Description                                                          |
+|----------------------------------|----------------------------------------------------------------------|
+| `world:createRegion(posA, posB)` | Creates a region between two corners                                 |
+| `r:getBounds()`                  | Returns `{A, B}` — the two bounding corners (A = min, B = max)       |
+| `r:setBounds(posA, posB)`        | Updates region bounds; re-evaluates entity membership                |
+| `r:on(event, fn, opts?)`         | Subscribes to a region event; returns handler ID                     |
+| `r:off(id)`                      | Unsubscribes a handler by ID; returns `true` if removed              |
+| `r:contains(pos)`                | `true` if position is inside the bounds                              |
+| `r:destroy()`                    | Destroys region, fires `destroy` event, clears handlers              |
+| `r.players`                      | Sequence of players currently inside                                 |
+| `r.entities`                     | Sequence of entities currently inside                                |
+| `r.id`                           | Session-unique integer ID                                            |
+| `r.world`                        | World the region belongs to                                          |
+| `world.regions`                  | Sequence of all live regions in this world                           |
 | `mc.getRegion(id)`               | Looks up a region by ID across all worlds; returns `Region` or `nil` |
-| `world:getRegion(id)`            | Looks up a region by ID in this world; returns `Region` or `nil` |
-| `world:getRegionsAt(pos)`        | Returns a sequence of regions in this world containing `pos`    |
+| `world:getRegion(id)`            | Looks up a region by ID in this world; returns `Region` or `nil`     |
+| `world:getRegionsAt(pos)`        | Returns a sequence of regions in this world containing `pos`         |
 
 **Events**: `entity_enter`, `entity_leave`, `entity_move`, `player_enter`, `player_leave`, `player_move`,
 `entity_death`, `player_death`, `tick`, `destroy`.

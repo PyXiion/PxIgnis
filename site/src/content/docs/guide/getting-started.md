@@ -48,5 +48,3 @@ P.S. `[name:type]` is equal to `[<name:type>]` =D
 ## Configuration
 
 All Lua scripts go in `config/ignis/`. Files are loaded alphabetically.
-
-`package.path`: `config/ignis/?.lua;config/ignis/?/init.lua;?.lua`

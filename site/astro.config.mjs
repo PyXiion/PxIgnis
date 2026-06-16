@@ -32,6 +32,7 @@ export default defineConfig({
             { label: "Async API", slug: "reference/async-api" },
             { label: "Events", slug: "reference/events" },
             { label: "Storage", slug: "reference/storage" },
+            { label: "Language", slug: "reference/language" },
           ],
         },
         {

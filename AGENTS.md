@@ -116,6 +116,14 @@ src/main/java/ru/pyxiion/ignis/
 - **Scheduler**: ticked via `ServerTickEvents.END_SERVER_TICK` → `Scheduler.tick()`. Delay/interval in ticks (20 = 1 sec). All tasks cleared on reload and server stop.
 - **Built-in libs**: `require "format"`, `require "simple"`, `require "chestgui"`.
 
+**Lambda syntax** (PxLuaNova extension, opt-in per file):
+- Add `--# nova syntax` on line 1 of a script to enable lambda syntax for that file.
+- `\{ x, y -> x + y }` — named-arg lambda; desugars to `function(x, y) return x + y end`.
+- `\{ return 42 }` — zero-arg single-expression body; the expression is implicitly returned.
+- `\{ if x then return 1 end; return 2 }` — zero-arg chunk body; uses explicit `return` (also works for args form).
+- `register("lambda") \{ ctx -> ctx.player:send("hi") }` — trailing block on a call; desugars to `register("lambda", function(ctx) ctx.player:send("hi") end)`. Trailing bodies are always parsed as chunks (no implicit return); use `return` for a value.
+- `\{` is **not** a Lua token; the lexer recognizes the two-char sequence. A bare `\` outside a string is a hard syntax error.
+
 ## Global events (mc.on)
 
 All wired in `PxIgnis.kt` via Fabric API — no mixins for events. `mc.on(name, fn, opts?)` returns int ID. `mc.off(id)` returns boolean.

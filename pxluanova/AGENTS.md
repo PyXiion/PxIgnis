@@ -55,6 +55,15 @@ globals.coroutineThreadFactory = LuaThread.PLATFORM_THREAD_FACTORY;
 
 The handoff between resumer and coroutine uses `ReentrantLock` + `Condition` (not `synchronized`/`wait()`/`notify()`). The `run()` method holds the lock for the entire Lua execution; `lua_yield()` and `lua_resume()` use `condition.await()`/`condition.signal()` to hand off.
 
+## Lambda literal extension
+
+PxLuaNova adds a non-standard `\{ ... }` lambda syntax (off by default, opt-in per file via `--# nova syntax` on line 1):
+- `\{ a, b -> a + b }` — named-arg lambda, desugars to `function(a, b) return a + b end`.
+- `\{ return 42 }` — zero-arg chunk, requires explicit `return` for value (or `\{ 42 }` for implicit return of a single expression).
+- `register("lambda") \{ ctx -> ... }` — trailing block sugar, desugars to `register("lambda", function(ctx) ... end)`. Trailing bodies are always chunks (no implicit return).
+
+Implemented in `LexState.java` (lexer synth of `TK_LAMBDA`/`TK_DARROW`, `lambdaBody()` helper, `llex()` magic-comment detection on line 1, hooks in `simpleexp`/`funcargs`/`suffixedexp`). Per-file state lives in the `LexState.lambdaSyntax` instance field; the global `LuaC.lambdaSyntax` flag no longer exists.
+
 ## Dependencies
 
 - `pxluanova-jse` depends on `org.apache.bcel:bcel:6.8.2` (Lua-to-Java bytecode via LuaJC)

@@ -143,6 +143,7 @@ public class LexState extends Constants {
 	LuaString source;  /* current source name */
 	LuaString envn;  /* environment variable name */
 	byte decpoint;  /* locale decimal point */
+	public boolean lambdaSyntax = false; /* PxLuaNova: true when --# nova syntax pragma seen */
 
 	/* ORDER RESERVED */
 	final static String luaX_tokens [] = {
@@ -152,6 +153,7 @@ public class LexState extends Constants {
 	    "return", "then", "true", "until", "while",
 	    "..", "...", "==", ">=", "<=", "~=",
 	    "::", "<eos>", "<number>", "<name>", "<string>", "<eof>",
+	    "->", "<lambda>",
 	};
 
 	final static int
@@ -165,6 +167,8 @@ public class LexState extends Constants {
 		TK_DBCOLON=285, TK_EOS=286, TK_NUMBER=287, TK_NAME=288, TK_STRING=289;
 
 	private static final int TK_EOF = 290;
+	final static int TK_DARROW = 291;   /* '->' */
+	final static int TK_LAMBDA = 292;   /* synthesized for '\{' (lambdaSyntax only) */
 	  
 	final static int FIRST_RESERVED = TK_AND;
 	final static int NUM_RESERVED = TK_WHILE+1-FIRST_RESERVED;
@@ -604,10 +608,31 @@ public class LexState extends Constants {
 			}
 			case '-': {
 				nextChar();
+				if (current == '>') {
+					/* '->' arrow used in \{ args -> body } lambda syntax */
+					nextChar();
+					return TK_DARROW;
+				}
 				if (current != '-')
 					return '-';
 				/* else is a comment */
 				nextChar();
+				/* PxLuaNova: detect --# nova syntax magic pragma on line 1 */
+				if (linenumber == 1 && current == '#') {
+					StringBuilder body = new StringBuilder();
+					body.append((char) current);
+					nextChar();
+					while (!currIsNewline() && current != EOZ) {
+						body.append((char) current);
+						nextChar();
+					}
+					if (body.toString().trim().equals("# nova syntax")) {
+						this.lambdaSyntax = true;
+						nbuff = 0;
+						continue;
+					}
+					nbuff = 0;
+				}
 				if (current == '[') {
 					int sep = skip_sep();
 					nbuff = 0; /* `skip_sep' may dirty the buffer */
@@ -621,6 +646,18 @@ public class LexState extends Constants {
 				while (!currIsNewline() && current != EOZ)
 					nextChar();
 				continue;
+			}
+			case '\\': {
+				/* PxLuaNova lambda syntax: '\{' is synthesized into TK_LAMBDA.
+				 * The standalone '\' is only an error outside string literals;
+				 * we still return it as a single-char token so the parser can
+				 * produce a clear diagnostic. */
+				nextChar();
+				if (current == '{') {
+					nextChar();
+					return TK_LAMBDA;
+				}
+				return '\\';
 			}
 			case '[': {
 				int sep = skip_sep();
@@ -1315,6 +1352,130 @@ public class LexState extends Constants {
 		this.codeclosure(e);
 		this.close_func();
 	}
+
+	/* PxLuaNova extension: \{ ... } / \{ args -> body } lambda literal.
+	 * Caller has already consumed TK_LAMBDA. The lexer synthesizes TK_LAMBDA
+	 * from the two-character sequence '\{', so the opening '{' has already been
+	 * consumed and the current token is the first token of the lambda body.
+	 *
+	 * Body forms:
+	 *   - [NAME {`,` NAME} `->`] `return` <expr>     -- explicit return (chunk)
+	 *   - [NAME {`,` NAME} `->`] <statement> ...     -- statement chunk
+	 *   - [NAME {`,` NAME} `->`] <expr>              -- implicit return of the
+	 *                                                  last expression (only
+	 *                                                  for the standalone form;
+	 *                                                  trailing-block form
+	 *                                                  always parses a chunk)
+	 */
+	void lambdaBody(expdesc e, int line) {
+		lambdaBody(e, line, true);
+	}
+
+	void lambdaBody(expdesc e, int line, boolean implicitReturnOk) {
+		FuncState new_fs = new FuncState();
+		BlockCnt bl = new BlockCnt();
+		new_fs.f = addprototype();
+		new_fs.f.linedefined = line;
+		open_func(new_fs, bl);
+		int nparams = parseLambdaParList();
+		if (nparams > 0) {
+			this.adjustlocalvars(nparams);
+			new_fs.f.numparams = (short) new_fs.nactvar;
+			new_fs.reserveregs(new_fs.nactvar);
+		} else {
+			new_fs.f.numparams = 0;
+		}
+		/* Decide between implicit-return expression and regular statement chunk. */
+		boolean exprBody = implicitReturnOk
+				&& this.t.token != '}'
+				&& !isLambdaStmtStart(this.t.token);
+		if (exprBody) {
+			/* Implicit return: parse one expression and emit OP_RETURN.
+			 * Mirrors retstat() but for a single expression without the `return` keyword. */
+			expdesc body = new expdesc();
+			int first, nret;
+			FuncState fs = this.fs;
+			this.expr(body);
+			if (hasmultret(body.k)) {
+				fs.setmultret(body);
+				first = fs.nactvar;
+				nret = Lua.LUA_MULTRET;
+			} else if (body.k == VCALL) {
+				/* single call result: return its value(s) directly */
+				first = fs.exp2anyreg(body);
+				nret = 1;
+			} else {
+				fs.exp2nextreg(body);
+				first = fs.nactvar;
+				nret = fs.freereg - first;
+			}
+			fs.ret(first, nret);
+		} else {
+			this.statlist();
+		}
+		new_fs.f.lastlinedefined = this.linenumber;
+		this.check_match('}', '{', line);
+		this.codeclosure(e);
+		this.close_func();
+	}
+
+	/* Tokens that always begin a regular Lua statement (so the body is a chunk,
+	 * not an implicit-return expression). */
+	private static boolean isLambdaStmtStart(int tok) {
+		switch (tok) {
+		case TK_IF: case TK_WHILE: case TK_DO: case TK_FOR:
+		case TK_REPEAT: case TK_FUNCTION: case TK_LOCAL:
+		case TK_RETURN: case TK_BREAK: case TK_GOTO:
+		case ';': case TK_DBCOLON:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	/* Returns the number of declared parameters, or 0 if the lambda body starts
+	 * with a chunk expression (zero-arg form). Must be called with `{` already
+	 * consumed and the first body token as t.token. */
+	private int parseLambdaParList() {
+		/* Try the args form: NAME (, NAME)* -> ... */
+		if (this.t.token != TK_NAME)
+			return 0;
+		/* Peek the token AFTER the first NAME without committing to consume it.
+		 * Save the NAME, call llex() on a throwaway SemInfo, then either
+		 * restore t (chunk form) or register the saved NAME and advance
+		 * (args form). */
+		LuaValue savedR = this.t.seminfo.r;
+		LuaString savedTs = this.t.seminfo.ts;
+		SemInfo peek = new SemInfo();
+		int peekTok = this.llex(peek);
+		if (peekTok != ',' && peekTok != TK_DARROW) {
+			/* Chunk form: restore t to the original NAME and put the peeked
+			 * token into the look-ahead buffer so the next next() picks it up. */
+			this.t.token = TK_NAME;
+			this.t.seminfo.r = savedR;
+			this.t.seminfo.ts = savedTs;
+			this.lookahead.token = peekTok;
+			this.lookahead.seminfo.r = peek.r;
+			this.lookahead.seminfo.ts = peek.ts;
+			return 0;
+		}
+		/* Args form: register the saved NAME as the first parameter, then put
+		 * the peeked token into t so the standard parser loop can continue. */
+		int n = 0;
+		this.new_localvar(savedTs);
+		++n;
+		this.t.token = peekTok;
+		this.t.seminfo.r = peek.r;
+		this.t.seminfo.ts = peek.ts;
+		while (this.testnext(',')) {
+			if (this.t.token != TK_NAME)
+				this.syntaxerror("<name> expected in lambda parameter list");
+			this.new_localvar(this.str_checkname());
+			++n;
+		}
+		this.checknext(TK_DARROW);
+		return n;
+	}
 	
 	int explist(expdesc v) {
 		/* explist1 -> expr { `,' expr } */
@@ -1358,6 +1519,23 @@ public class LexState extends Constants {
 			this.syntaxerror("function arguments expected");
 			return;
 		}
+		}
+		/* PxLuaNova extension: optional trailing \{ ... } or \{ args -> body } block
+		 * sugar after a function call. The lambda becomes one more argument to the
+		 * same call. Trailing-block bodies are always parsed as chunks (no implicit
+		 * return) so the user can write statements like `x = 99` without surprises. */
+		if (this.lambdaSyntax && !hasmultret(args.k) && this.t.token == TK_LAMBDA) {
+			if (args.k != VVOID) {
+				/* Materialize the last original arg into a register so that
+				 * the lambda appends cleanly after it. */
+				fs.exp2nextreg(args);
+			}
+			expdesc fn = new expdesc();
+			int lline = this.linenumber;
+			this.next(); /* consume TK_LAMBDA (the synthesized \{ token) */
+			this.lambdaBody(fn, lline, false);
+			fs.exp2nextreg(fn); /* place closure in the next free register */
+			args.k = VVOID;      /* post-switch math: nothing left to materialize */
 		}
 		_assert (f.k == VNONRELOC);
 		base = f.u.info; /* base register for call */
@@ -1437,6 +1615,24 @@ public class LexState extends Constants {
 				this.funcargs(v, line);
 				break;
 			}
+			case TK_LAMBDA: { /* PxLuaNova: trailing \{ ... } block on a function value */
+				if (!this.lambdaSyntax) {
+					this.syntaxerror("'\\{' is a lambda literal; enable with `--# nova syntax` on line 1");
+					return;
+				}
+				/* Treat the function value as a function being called with one
+				 * arg (the trailing lambda). Same shape as funcargs() but with
+				 * the lambda as the sole argument. */
+				int base = fs.exp2anyreg(v);
+				this.next(); /* consume TK_LAMBDA */
+				expdesc fn = new expdesc();
+				this.lambdaBody(fn, line, false);
+				fs.exp2nextreg(fn);
+				v.init(VCALL, fs.codeABC(Lua.OP_CALL, base, 1 + 1, 2));
+				fs.fixline(line);
+				fs.freereg = (short)(base + 1);
+				break;
+			}
 			default:
 				return;
 			}
@@ -1487,7 +1683,16 @@ public class LexState extends Constants {
 			this.body(v, false, this.linenumber);
 			return;
 		}
+		case TK_LAMBDA: { /* PxLuaNova: \{ ... } or \{ args -> body } */
+			if (!this.lambdaSyntax)
+				this.syntaxerror("'\\{' is a lambda literal; enable with `--# nova syntax` on line 1");
+			this.next();
+			this.lambdaBody(v, this.linenumber);
+			return;
+		}
 		default: {
+			if (this.t.token == '\\')
+				this.syntaxerror("'\\' is only valid as '\\{' (lambda literal) in source; enable with `--# nova syntax` on line 1");
 			this.suffixedexp(v);
 			return;
 		}
@@ -1620,6 +1825,8 @@ public class LexState extends Constants {
 		switch (t.token) {
 		    case TK_ELSE: case TK_ELSEIF: case TK_END: case TK_EOS:
 		    	return true;
+			case '}': /* PxLuaNova: end of \{ ... } lambda body */
+				return true;
 			case TK_UNTIL:
 		    	return withuntil;
 		    default: return false;

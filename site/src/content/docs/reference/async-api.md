@@ -23,6 +23,7 @@ Simple GET request. Returns a response table.
 
 ```lua
 local res = mc.fetch("https://api.example.com/data")
+
 if res.ok then
     mc.broadcast(res.text)
 else
