@@ -3,8 +3,9 @@ title: Nova API
 description: JIT-compile Lua functions to JVM bytecode with nova.sync for 2-10× speedups on hot paths.
 ---
 
-`nova.sync` compiles a Lua function (closure) to **JVM bytecode** via LuaJC, then wraps it with a yield barrier.
-The compiled version runs 2-10× faster on numeric-heavy code by eliminating interpreter dispatch overhead.
+`nova.sync` compiles a Lua function (closure) to **JVM bytecode**.
+
+The compiled version runs 2-10x faster on numeric-heavy code by eliminating interpreter dispatch overhead.
 
 ```lua
 local fast = nova.sync(function(x)
@@ -22,11 +23,12 @@ fast(1000000)  -- runs as JVM bytecode
 
 ```lua
 local fn = nova.sync(f)
-```
 
-| Arg | Type          | Description                         |
-|-----|---------------|-------------------------------------|
-| `f` | `function`    | Lua function (must be a LuaClosure) |
+--# nova syntax
+local fn = nova.sync \{
+    -- your code here
+}
+```
 
 Returns a callable that behaves identically to `f` with the same signature and upvalues.
 
@@ -49,7 +51,9 @@ print(counter) -- 2
 
 Globals (`math`, `string`, etc.) are resolved via `_ENV` just like a regular closure.
 
-## Yield barrier
+## Async API
+
+[Async API](/reference/async-api) is not available inside sync-compiled functions.
 
 `coroutine.yield()` inside a sync-compiled function throws an error:
 
@@ -59,18 +63,15 @@ local fn = nova.sync(function()
 end)
 ```
 
-This is because JVM bytecode cannot suspend and resume — the entire call runs atomically.
-The barrier only activates when the function is called inside a non-main coroutine.
-Direct calls from the main script or command handlers (which don't yield) work fine.
+This is because JVM bytecode cannot suspend and resume, the entire call runs atomically.
 
 ## When to use
 
-- **Hot paths** — tight loops, numeric computations, math-heavy logic called frequently.
-- **Frequent callbacks** — tick handlers, collision checks, AI behaviour steps.
+- **Hot paths** - tight loops, numeric computations, math-heavy logic called frequently.
+- **Frequent callbacks** - tick handlers, collision checks, AI behaviour steps.
 
 ## When to avoid
 
-- One-shot callbacks (the compile cost outweighs the benefit).
 - Functions that need to yield (`mc.sleep`, `mc.fetch`, `coroutine.yield`).
 - Trivially simple logic (single arithmetic op, field access).
 

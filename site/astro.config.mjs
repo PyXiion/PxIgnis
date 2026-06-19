@@ -30,6 +30,7 @@ export default defineConfig({
             { label: "mc.* API", slug: "reference/mc-api" },
             { label: "Commands API", slug: "reference/commands-api" },
             { label: "Async API", slug: "reference/async-api" },
+            { label: "Nova (JIT)", slug: "reference/nova-api" },
             { label: "Events", slug: "reference/events" },
             { label: "Storage", slug: "reference/storage" },
             { label: "Language", slug: "reference/language" },
