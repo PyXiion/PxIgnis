@@ -25,6 +25,7 @@ import org.luaj.vm2.lib.*
 import org.luaj.vm2.lib.jse.JseBaseLib
 import org.luaj.vm2.lib.jse.JseMathLib
 import org.luaj.vm2.lib.jse.JsePlatform
+import org.luaj.vm2.lib.jse.NovaLib
 import ru.pyxiion.ignis.PxIgnis.Companion.logger
 import ru.pyxiion.ignis.api.ItemStackWrapper
 import ru.pyxiion.ignis.api.LuaMcApi
@@ -170,6 +171,7 @@ class LuaCmdLoader(
         globals.load(StringLib())
         globals.load(CoroutineLib())
         globals.load(JseMathLib())
+        globals.load(NovaLib())
 
         val ignisDir = FabricLoader.getInstance().configDir.resolve("ignis").toAbsolutePath()
         globals.get("package").set("path", LuaValue.valueOf("${ignisDir}/?.lua;${ignisDir}/?/init.lua;?.lua"))
