@@ -234,6 +234,10 @@ public class LuaThread extends LuaValue {
 		boolean yieldRequested;
 		boolean yieldIsInterrupt;
 
+		/** Depth of sync-compiled (nova.sync) calls on this thread.
+		 *  Non-zero means yielding is prohibited. */
+		int syncCompiledDepth;
+
 		/** Hook function control state used by debug lib. */
 		public LuaValue hookfunc;
 
@@ -312,6 +316,8 @@ public class LuaThread extends LuaValue {
 		}
 
 		public Varargs lua_yield(Varargs args) {
+			if (syncCompiledDepth > 0)
+				throw new LuaError("attempt to yield across a sync-compiled boundary");
 			getLock().lock();
 			try {
 				try {
@@ -339,6 +345,8 @@ public class LuaThread extends LuaValue {
 		}
 
 		public Varargs lua_yield_sync(Varargs args) {
+			if (syncCompiledDepth > 0)
+				throw new LuaError("attempt to yield across a sync-compiled boundary");
 			this.result = args;
 			this.status = STATUS_SUSPENDED;
 			this.yieldRequested = true;

@@ -34,7 +34,24 @@ public class ProtoInfo {
 	private ProtoInfo(Prototype p, String name, UpvalInfo[] u) {
 		this.name = name;
 		this.prototype = p;
-		this.upvals = u != null? u: new UpvalInfo[] { new UpvalInfo(this) };
+		if (u != null) {
+			this.upvals = u;
+		} else {
+			this.upvals = new UpvalInfo[p.upvalues.length];
+			for (int i = 0; i < p.upvalues.length; i++) {
+				this.upvals[i] = new UpvalInfo(this);
+				this.upvals[i].rw = false;
+			}
+			// Mark upvalues that are written via OP_SETUPVAL as read-write
+			for (int code : p.code) {
+				if ((code & 0x3f) == Lua.OP_SETUPVAL) {
+					int b = code >>> 23;
+					if (b >= 0 && b < p.upvalues.length) {
+						this.upvals[b].rw = true;
+					}
+				}
+			}
+		}
 		this.subprotos = p.p!=null&&p.p.length>0? new ProtoInfo[p.p.length]: null;
 		
 		// find basic blocks

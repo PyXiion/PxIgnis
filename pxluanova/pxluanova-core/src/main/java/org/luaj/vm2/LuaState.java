@@ -1,6 +1,5 @@
 package org.luaj.vm2;
 
-import org.luaj.vm2.interrupt.InterruptAction;
 import org.luaj.vm2.interrupt.InterruptHandler;
 import org.luaj.vm2.lib.BaseLib;
 import org.luaj.vm2.lib.DebugLib;
@@ -272,6 +271,18 @@ public final class LuaState {
 
 	public void leavingJavaCall() {
 		javaCallDepth--;
+	}
+
+	public void enterSyncCompiled() {
+		if (currentThread != null && !currentThread.isMainThread()) {
+			currentThread.threadState.syncCompiledDepth++;
+		}
+	}
+
+	public void leaveSyncCompiled() {
+		if (currentThread != null && !currentThread.isMainThread()) {
+			currentThread.threadState.syncCompiledDepth--;
+		}
 	}
 
 	public boolean isInJavaCall() {

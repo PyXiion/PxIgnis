@@ -72,6 +72,15 @@ public final class UpValue {
 	}
 	
 	/**
+	 * Get the underlying value holder array.
+	 * Used by LuaJC-compiled functions to share mutable upvalue arrays.
+	 * @return the underlying LuaValue[] array
+	 */
+	public final LuaValue[] getValueHolder() {
+		return array;
+	}
+
+	/**
 	 * Close this upvalue so it is no longer on the stack
 	 */
 	public final void close() {
