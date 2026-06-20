@@ -24,25 +24,6 @@ import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
 
-fun LuaValue.checkstringlist(): List<String> {
-    val table = this.checktable()
-    val result = mutableListOf<String>()
-
-    var index = 1
-    while (true) {
-        val value = table.rawget(index++)
-        if (value.isnil()) break
-
-        require(value.isstring()) { "Expected string at index $index, got ${value.typename()}" }
-
-        result.add(value.tojstring())
-    }
-
-    return result
-}
-
-fun Entity.checkPermission(permission: String): Boolean = Permissions.check(this, permission)
-
 fun CommandSource.checkPermission(permission: String): Boolean = Permissions.check(this, permission)
 
 fun luaTableOf(vararg items: Pair<String, LuaValue>): LuaTable {
@@ -53,20 +34,12 @@ fun luaTableOf(vararg items: Pair<String, LuaValue>): LuaTable {
     }
 }
 
-fun luaArrayOf(vararg items: LuaValue): LuaTable {
-    return LuaTable().apply {
-        items.forEachIndexed { i, v -> this.set(i + 1, v) }
-    }
-}
-
-@Suppress("NOTHING_TO_INLINE")
-inline fun ((Varargs) -> Varargs).asVarArgFunction() = object : VarArgFunction() {
+fun ((Varargs) -> Varargs).asVarArgFunction() = object : VarArgFunction() {
     override fun invoke(args: Varargs): Varargs = this@asVarArgFunction(args)
 }
 
 @JvmName("asVarArgFunctionVoid")
-@Suppress("NOTHING_TO_INLINE")
-inline fun ((Varargs) -> Unit).asVarArgFunction() = object : VarArgFunction() {
+fun ((Varargs) -> Unit).asVarArgFunction() = object : VarArgFunction() {
     override fun invoke(args: Varargs): Varargs {
         this@asVarArgFunction(args)
         return NIL
@@ -84,6 +57,15 @@ fun LuaValue.toVec3d(): Vec3d {
 fun LuaValue.toBlockPos(): BlockPos {
     val v = toVec3d()
     return BlockPos.ofFloored(v.x, v.y, v.z)
+}
+
+inline fun <reified T> LuaValue.unwrap(): T =
+    checktable().rawget("__pxrp_object").checkuserdata() as T
+
+inline fun <reified T> LuaValue.unwrapOrNull(): T? {
+    if (!istable()) return null
+    val obj = checktable().rawget("__pxrp_object")
+    return if (obj.isuserdata()) obj.checkuserdata() as? T else null
 }
 
 internal fun nbtToLua(element: NbtElement): LuaValue {

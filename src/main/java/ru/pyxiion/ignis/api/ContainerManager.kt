@@ -116,7 +116,7 @@ object ContainerManager {
 
         if (slot < 0 || slot >= wrapper.inventory.size()) return true
 
-        val luaPlayer = PlayerWrapper(player).toLuaValue()
+        val luaPlayer = PlayerWrap.wrap(player)
         val slotStack = wrapper.inventory.getStack(slot)
         val luaItem = if (slotStack.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(slotStack)
 

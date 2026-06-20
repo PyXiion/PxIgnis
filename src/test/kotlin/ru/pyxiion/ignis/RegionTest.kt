@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 import net.minecraft.util.math.Box
 import net.minecraft.util.math.Vec3d
 import ru.pyxiion.ignis.api.MetaTableRegistry
-import ru.pyxiion.ignis.api.RegionWrapper
+import ru.pyxiion.ignis.api.RegionWrap
 
 class RegionTest {
 
@@ -18,13 +18,13 @@ class RegionTest {
             "id", "world", "getBounds", "players", "entities",
             "setBounds", "on", "off", "destroy", "contains",
         )
-        val keys = RegionWrapper.regionKeys.toSet()
+        val keys = RegionWrap.regionKeys.toSet()
         assertEquals(expected, keys)
     }
 
     @Test
     fun `regionKeys has no duplicates`() {
-        val keys = RegionWrapper.regionKeys
+        val keys = RegionWrap.regionKeys
         assertEquals(keys.size, keys.toSet().size, "regionKeys should not contain duplicates")
     }
 

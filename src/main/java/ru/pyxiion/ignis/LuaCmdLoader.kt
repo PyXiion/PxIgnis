@@ -30,7 +30,7 @@ import ru.pyxiion.ignis.PxIgnis.Companion.logger
 import ru.pyxiion.ignis.api.ItemStackWrapper
 import ru.pyxiion.ignis.api.LuaMcApi
 import ru.pyxiion.ignis.api.MobAIManager
-import ru.pyxiion.ignis.api.PlayerWrapper
+import ru.pyxiion.ignis.api.PlayerWrap
 import ru.pyxiion.ignis.api.RegionManager
 import ru.pyxiion.ignis.api.SidebarManager
 import ru.pyxiion.ignis.api.SidebarWrapper
@@ -76,7 +76,7 @@ class LuaCmdLoader(
         },
         "player" to object : LuaArgumentType {
             override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
-                return PlayerWrapper(EntityArgumentType.getPlayer(ctx, name)!!).toLuaValue()
+                return PlayerWrap.wrap(EntityArgumentType.getPlayer(ctx, name)!!)
             }
 
             override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
@@ -85,7 +85,7 @@ class LuaCmdLoader(
         },
         "target" to object : LuaArgumentType {
             override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
-                return PlayerWrapper(EntityArgumentType.getPlayer(ctx, name)!!).toLuaValue()
+                return PlayerWrap.wrap(EntityArgumentType.getPlayer(ctx, name)!!)
             }
 
             override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
@@ -369,7 +369,7 @@ class LuaCmdLoader(
         variant: List<SyntaxNode>,
         argDefs: Map<String, ArgDef>
     ): Array<LuaValue> {
-        val player = PlayerWrapper(ctx.source.playerOrThrow).toLuaValue()
+        val player = PlayerWrap.wrap(ctx.source.playerOrThrow)
         val ctxTable = luaTableOf("player" to player)
 
         val result = mutableListOf<LuaValue>()

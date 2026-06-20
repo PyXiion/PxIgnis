@@ -311,7 +311,7 @@ object RegionManager {
 
 internal fun regionWrapperFor(entity: Entity): LuaValue {
     return when (entity) {
-        is ServerPlayerEntity -> PlayerWrapper(entity).toLuaValue()
-        else -> EntityWrapper(entity).toLuaValue()
+        is ServerPlayerEntity -> PlayerWrap.wrap(entity)
+        else -> EntityWrap.wrap(entity)
     }
 }

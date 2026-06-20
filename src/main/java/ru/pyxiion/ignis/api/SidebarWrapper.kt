@@ -14,8 +14,7 @@ import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
-import org.luaj.vm2.lib.VarArgFunction
-import org.luaj.vm2.lib.jse.CoerceJavaToLua
+import ru.pyxiion.ignis.unwrap
 import java.util.Optional
 
 class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
@@ -44,7 +43,7 @@ class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
         val t = LuaTable()
         t.setmetatable(MetaTableRegistry.SIDEBAR)
         t.rawset("__pxrp_type", LuaValue.valueOf("sidebar"))
-        t.rawset("__pxrp_object", CoerceJavaToLua.coerce(this))
+        t.rawset("__pxrp_object", LuaValue.userdataOf(this))
         return t
     }
 
@@ -144,106 +143,50 @@ class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
     }
 
     companion object {
-        private val sidebarKeys = listOf("title", "lines", "visible", "lineCount")
+        private val BUILT = metaTable<SidebarWrapper> {
+            prop("title",
+                get = { LuaValue.valueOf(title) },
+                set = { v -> if (v.isstring()) setTitle(v.tojstring()) }
+            )
+            prop("lines",
+                get = {
+                    val t = LuaTable()
+                    val sorted = lines.entries.sortedBy { it.key }
+                    for ((idx, entry) in sorted.withIndex()) {
+                        t.rawset(idx + 1, LuaValue.valueOf(entry.value))
+                    }
+                    t
+                },
+                set = { v -> if (v.istable()) setLinesFromTable(v.checktable()) }
+            )
+            prop("visible") { LuaValue.valueOf(visible) }
+            prop("lineCount") { LuaValue.valueOf(lines.size) }
+
+            method("setLine") { args ->
+                val self = args.arg(1).checktable()
+                val wrapper = self.unwrap<SidebarWrapper>()
+                wrapper.setLine(args.arg(2).checkint(), args.arg(3).checkjstring())
+                LuaValue.NIL
+            }
+
+            method("show") { args ->
+                args.arg(1).checktable().unwrap<SidebarWrapper>().show()
+                LuaValue.NIL
+            }
+
+            method("hide") { args ->
+                args.arg(1).checktable().unwrap<SidebarWrapper>().hide()
+                LuaValue.NIL
+            }
+
+            method("destroy") { args ->
+                args.arg(1).checktable().unwrap<SidebarWrapper>().destroy()
+                LuaValue.NIL
+            }
+        }
 
         fun initMeta(meta: LuaTable) {
-            meta.set("__index", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1).checktable()
-                    val key = args.arg(2).tojstring()
-                    val wrapper = self.rawget("__pxrp_object").checkuserdata() as SidebarWrapper
-
-                    return when (key) {
-                        "title" -> LuaValue.valueOf(wrapper.title)
-                        "visible" -> LuaValue.valueOf(wrapper.visible)
-                        "lineCount" -> LuaValue.valueOf(wrapper.lines.size)
-                        "lines" -> {
-                            val t = LuaTable()
-                            val sorted = wrapper.lines.entries.sortedBy { it.key }
-                            for ((idx, entry) in sorted.withIndex()) {
-                                t.rawset(idx + 1, LuaValue.valueOf(entry.value))
-                            }
-                            t
-                        }
-                        else -> meta.get(key)
-                    }
-                }
-            })
-
-            meta.set("__newindex", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1).checktable()
-                    val key = args.arg(2).tojstring()
-                    val value = args.arg(3)
-                    val wrapper = self.rawget("__pxrp_object").checkuserdata() as SidebarWrapper
-
-                    when (key) {
-                        "title" -> {
-                            if (value.isstring()) wrapper.setTitle(value.tojstring())
-                        }
-                        "lines" -> {
-                            if (value.istable()) wrapper.setLinesFromTable(value.checktable())
-                        }
-                    }
-                    return LuaValue.NIL
-                }
-            })
-
-            meta.set("__pairs", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1)
-                    val keys = sidebarKeys
-                    val iterator = object : VarArgFunction() {
-                        private var index = 0
-                        override fun invoke(args: Varargs): Varargs {
-                            if (index >= keys.size) return LuaValue.NIL
-                            val key = keys[index]
-                            index++
-                            val value = self.get(key)
-                            return LuaValue.varargsOf(arrayOf(LuaValue.valueOf(key), value))
-                        }
-                    }
-                    return LuaValue.varargsOf(arrayOf(iterator, self, LuaValue.NIL))
-                }
-            })
-
-            meta.rawset("setLine", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1).checktable()
-                    val wrapper = self.rawget("__pxrp_object").checkuserdata() as SidebarWrapper
-                    val line = args.arg(2).checkint()
-                    val text = args.arg(3).checkjstring()
-                    wrapper.setLine(line, text)
-                    return LuaValue.NIL
-                }
-            })
-
-            meta.rawset("show", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1).checktable()
-                    val wrapper = self.rawget("__pxrp_object").checkuserdata() as SidebarWrapper
-                    wrapper.show()
-                    return LuaValue.NIL
-                }
-            })
-
-            meta.rawset("hide", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1).checktable()
-                    val wrapper = self.rawget("__pxrp_object").checkuserdata() as SidebarWrapper
-                    wrapper.hide()
-                    return LuaValue.NIL
-                }
-            })
-
-            meta.rawset("destroy", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1).checktable()
-                    val wrapper = self.rawget("__pxrp_object").checkuserdata() as SidebarWrapper
-                    wrapper.destroy()
-                    return LuaValue.NIL
-                }
-            })
+            BUILT.apply(meta)
         }
     }
 }

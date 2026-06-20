@@ -25,6 +25,7 @@ import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.Scheduler
 import ru.pyxiion.ignis.asVarArgFunction
 import ru.pyxiion.ignis.luaTableOf
+import ru.pyxiion.ignis.unwrap
 import ru.pyxiion.ignis.storage.StorageManager
 import java.nio.file.Path
 import java.util.HashSet
@@ -124,7 +125,7 @@ class LuaMcApi(
         val key = RegistryKey.of(RegistryKeys.WORLD, Identifier.of(name))
         val world = server.getWorld(key)
             ?: throw IllegalArgumentException("World '$name' not found")
-        return WorldWrapper(world, playerCache, { scheduler.currentTick }).toLuaValue()
+        return WorldWrap.wrap(world, playerCache, { scheduler.currentTick })
     }
 
     private fun luaLoadStructure(args: Varargs): Varargs {
@@ -132,14 +133,14 @@ class LuaMcApi(
         val manager = server.structureTemplateManager
         val template = manager.getTemplate(Identifier.of(id))
             .orElseThrow { LuaError("Структура '$id' не найдена") }
-        return StructureWrapper(template).toLuaValue()
+        return StructureWrap.wrap(template)
     }
 
     private fun luaLoadStructureFile(args: Varargs): Varargs {
         val path = args.arg(1).checkjstring()
         val nbt = NbtIo.readCompressed(Path.of(path), NbtSizeTracker.ofUnlimitedBytes())
         val template = server.structureTemplateManager.createTemplate(nbt)
-        return StructureWrapper(template).toLuaValue()
+        return StructureWrap.wrap(template)
     }
 
     private fun luaGetMetatable(args: Varargs): Varargs {
@@ -242,8 +243,8 @@ class LuaMcApi(
         for (world in server.worlds) {
             world.getEntity(uuid)?.let {
                 return when (it) {
-                    is MobEntity -> MobWrapper(it).toLuaValue()
-                    else -> EntityWrapper(it).toLuaValue()
+                    is MobEntity -> MobWrap.wrap(it)
+                    else -> EntityWrap.wrap(it)
                 }
             }
         }
@@ -253,7 +254,7 @@ class LuaMcApi(
     private fun luaGetRegion(args: Varargs): Varargs {
         require(args.narg() == 1) { "getRegion(id) requires 1 argument" }
         val id = args.arg(1).checkint()
-        return RegionManager.get(id)?.let { RegionWrapper(it).toLuaValue() } ?: LuaValue.NIL
+        return RegionManager.get(id)?.let { RegionWrap.wrap(it) } ?: LuaValue.NIL
     }
 
     fun toTable(): LuaTable {
@@ -272,8 +273,8 @@ class LuaMcApi(
         MetaTableRegistry.INVENTORY.set("serialise", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val self = args.arg(1).checktable()
-                val inv = self.rawget("__pxrp_object").checkuserdata() as SimpleInventory
-                val json = InvWrapper.serialise(inv, server.registryManager)
+                val inv = self.unwrap<SimpleInventory>()
+                val json = InvWrap.serialise(inv, server.registryManager)
                 return LuaValue.valueOf(json)
             }
         })
@@ -326,8 +327,8 @@ class LuaMcApi(
                         }
                         "inventory" -> {
                             val obj = args.arg(2)
-                            val inv = obj.rawget("__pxrp_object").checkuserdata() as SimpleInventory
-                            val json = InvWrapper.serialise(inv, server.registryManager)
+                            val inv = obj.unwrap<SimpleInventory>()
+                            val json = InvWrap.serialise(inv, server.registryManager)
                             return LuaValue.valueOf(json)
                         }
                         else -> throw LuaError("mc.serialise: неизвестный тип '$type'")
@@ -344,8 +345,8 @@ class LuaMcApi(
                             return if (stack.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(stack)
                         }
                         "inventory" -> {
-                            val inv = InvWrapper.deserialise(data, server.registryManager)
-                            return InvWrapper(inv).toLuaValue()
+                            val inv = InvWrap.deserialise(data, server.registryManager)
+                            return InvWrap.wrap(inv)
                         }
                         else -> throw LuaError("mc.deserialise: неизвестный тип '$type'")
                     }
@@ -356,7 +357,7 @@ class LuaMcApi(
                     val size = args.arg(1).checkint()
                     if (size < 9 || size > 54 || size % 9 != 0)
                         throw LuaError("mc.createInventory: размер должен быть кратен 9 и от 9 до 54")
-                    return InvWrapper(LockableInventory(size)).toLuaValue()
+                    return InvWrap.wrap(LockableInventory(size))
                 }
             },
 

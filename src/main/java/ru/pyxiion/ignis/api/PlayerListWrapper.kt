@@ -20,7 +20,7 @@ class PlayerListWrapper(
 
         val fresh = LuaTable()
         source().forEachIndexed { i, p ->
-            fresh.set(i + 1, playerCache.getOrPut(p.uuid) { PlayerWrapper(p).toLuaValue() })
+            fresh.set(i + 1, playerCache.getOrPut(p.uuid) { PlayerWrap.wrap(p) })
         }
         this.cached = fresh
         this.cachedTick = currentTick

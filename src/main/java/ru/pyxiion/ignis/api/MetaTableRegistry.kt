@@ -7,7 +7,7 @@ object MetaTableRegistry {
     private var _player = LuaTable()
     private var _world = LuaTable()
     private var _structure = LuaTable()
-    private var _item = LuaTable().also { it.set("__index", it) }
+    private var _item = LuaTable()
     private var _vec = LuaTable()
     private var _inventory = LuaTable()
     private var _container = LuaTable()
@@ -49,7 +49,7 @@ object MetaTableRegistry {
         _player = LuaTable()
         _world = LuaTable()
         _structure = LuaTable()
-        _item = LuaTable().also { it.set("__index", it) }
+        _item = LuaTable()
         _vec = LuaTable()
         _inventory = LuaTable()
         _container = LuaTable()
@@ -72,16 +72,16 @@ object MetaTableRegistry {
             "region" to _region,
         )
         initVecMeta(_vec)
-        EntityWrapper.initMeta(_entity)
-        PlayerWrapper.initMeta(_player)
-        WorldWrapper.initMeta(_world)
-        StructureWrapper.initMeta(_structure)
-        InvWrapper.initMeta(_inventory)
+        EntityWrap.initMeta(_entity)
+        PlayerWrap.initMeta(_player)
+        WorldWrap.initMeta(_world)
+        StructureWrap.initMeta(_structure)
+        InvWrap.initMeta(_inventory)
         ContainerWrapper.initMeta(_container)
         SidebarWrapper.initMeta(_sidebar)
-        MobWrapper.initMeta(_mob)
+        MobWrap.initMeta(_mob)
         HologramWrapper.initMeta(_hologram)
-        RegionWrapper.initMeta(_region)
+        RegionWrap.initMeta(_region)
     }
 
     fun get(name: String): LuaTable = byName[name]

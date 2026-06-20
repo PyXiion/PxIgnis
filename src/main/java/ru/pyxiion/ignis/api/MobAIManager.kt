@@ -102,7 +102,7 @@ object MobAIManager {
         mixin.targetSelector.add(0, targetGoal)
 
         val state = LuaTable()
-        mobWrappers[mob.uuid] = MobWrapper(mob).toLuaValue()
+        mobWrappers[mob.uuid] = MobWrap.wrap(mob)
 
         activeMobs[mob.uuid] = ActiveMobAI(id, fn, state, goal, targetGoal, mob)
     }
@@ -136,7 +136,7 @@ object MobAIManager {
         }
 
         val wrapper = mobWrappers.getOrPut(mob.uuid) {
-            MobWrapper(mob).toLuaValue()
+            MobWrap.wrap(mob)
         }
 
         try {
