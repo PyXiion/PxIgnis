@@ -11,6 +11,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [1.21.11, 1.21.10]
+        include:
+          - version: 1.21.11
+            target: ""
+          - version: 1.21.10
+            target: "-PtargetVersion=1.21.10"
     steps:
       - uses: actions/checkout@v4
 
@@ -28,17 +37,14 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Build for 1.21.11
-        run: ./gradlew build --no-daemon
-
-      - name: Build for 1.21.10
-        run: ./gradlew build --no-daemon -PtargetVersion=1.21.10
+      - name: Build for ${{ matrix.version }}
+        run: ./gradlew build --no-daemon ${{ matrix.target }}
 
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: test-reports-${{ matrix.version }}
           path: |
             build/reports/tests/
             build/test-results/
@@ -46,7 +52,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts
+          name: jar-${{ matrix.version }}
           path: build/libs/*.jar
           if-no-files-found: error
 
@@ -62,28 +68,40 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: artifacts
+          path: dist
+          pattern: jar-*
+          merge-multiple: true
 
-      - name: Clean up unwanted JARs
-        run: rm -f *-all.jar *-sources.jar
-
-      - name: Create release
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: PxIgnis-*.jar
+          files: dist/PxIgnis-*.jar
           generate_release_notes: true
 
-      - name: Publish to Modrinth
-        uses: Kir-Antipov/mc-publish@v3.3
+      - name: Publish 1.21.11 to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3.0
         with:
           modrinth-id: SYYlZZEi
           modrinth-token: ${{ secrets.MODRINTH }}
-          files: PxIgnis-*.jar
+          files: dist/PxIgnis-*1.21.11*.jar
+          game-versions: 1.21.11
           loaders: fabric
           version-type: release
-          game-versions: |
-            1.21.10
-            1.21.11
+          modrinth-unfeature-mode: subset
+          dependencies: |
+            fabric-api
+            fabric-language-kotlin
+
+      - name: Publish 1.21.10 to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3.0
+        with:
+          modrinth-id: SYYlZZEi
+          modrinth-token: ${{ secrets.MODRINTH }}
+          files: dist/PxIgnis-*1.21.10*.jar
+          game-versions: 1.21.10
+          loaders: fabric
+          version-type: release
+          modrinth-unfeature-mode: subset
           dependencies: |
             fabric-api
             fabric-language-kotlin

@@ -1,6 +1,6 @@
 # PxIgnis
 
-![version](https://img.shields.io/badge/version-0.13.1-purple)
+![version](https://img.shields.io/badge/version-0.13.2-purple)
 ![version](https://img.shields.io/badge/MC-1.21.10-green)
 ![version](https://img.shields.io/badge/MC-1.21.11-green)
 
