@@ -3,6 +3,7 @@ package ru.pyxiion.ignis
 import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaThread
+import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.PxIgnis.Companion.logger
 import java.util.PriorityQueue
 
@@ -27,8 +28,12 @@ class Scheduler(private val stateProvider: () -> LuaState) {
             }
 
             try {
-                // Allow async inside
-                LuaThread(state, task.callback).call()
+                // Allow async inside (mc.sleep, mc.fetch)
+                val result = LuaThread(state, task.callback).resume(LuaValue.NONE)
+                if (!result.arg1().toboolean()) {
+                    val errMsg = result.arg(2).tojstring()
+                    logger.warn("Ошибка в задании планировщика #${task.id}: $errMsg")
+                }
             } catch (e: Throwable) {
                 logger.warn("Ошибка в задании планировщика #${task.id}: ${e.message}")
             }

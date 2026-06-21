@@ -1121,7 +1121,7 @@ end
 --   - Returning false cancels the click (prevents item removal/swap)
 --   - Rows and cols are 1-based (1..6 rows, 1..9 cols)
 
-local chestgui = require "chestgui"
+local chestgui = require "core:chestgui"
 
 -- Pre-build the shop GUI once — reused for all players
 local shopGui = chestgui.create(3, "§6§lShop")
