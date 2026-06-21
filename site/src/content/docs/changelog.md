@@ -9,11 +9,7 @@ description: Release history for PxIgnis.
 
 ### Breaking changes
 
-- **`entity.pos` is now a plain vector** — the lazy-cached live proxy table was removed.
-  `pos.x`, `pos.y`, `pos.z` still work (vector arithmetic), but the underlying
-  implementation now creates a fresh `Vec3d` snapshot on read and writes directly
-  on write. Any code relying on the pos table identity (e.g. `entity.pos == entity.pos`)
-  will break. Use `vec:length()` instead.
+- **`entity.pos` is now a plain vector** — `entity.pos.x = 5` no longer works. Use `entity.pos = newPos`
 
 ### New API
 
@@ -26,8 +22,7 @@ description: Release history for PxIgnis.
 
 - **`vec(x, y, z)` validation inverted** — the `require(args.narg() == 3)` check was
   incorrectly `!= 3`, causing valid 3-arg calls to throw.
-- **Raycast `ShapeContext`** — uses `ShapeContext.of(source)` instead of the deprecated
-  `source` parameter, fixing compilation with newer Fabric API.
+- **Raycast** — fixed crash
 
 ### Internal
 
@@ -40,7 +35,7 @@ description: Release history for PxIgnis.
   that `__index` on the metatable itself is properly followed.
 - `EntityWrap.pos` — simplified from lazy-cached proxy metatable to direct
   `Vec3d` read/write (removed `livePosTable`).
-- `OperationHelper.checkNumber` — uses `isnumber()` for cleaner type check.
+- `OperationHelper.checkNumber` — fixed operators bug where all `table + table` turned into 0.
 - PxLuaNova regression test for `__add` on tables.
 
 ---
