@@ -1,6 +1,6 @@
 ---
 title: Storage
-description: Persistent JSON data with mc.data, ctx.player.data, and atomic file writes.
+description: Persistent JSON data with mc.data, ctx.player.data.
 ---
 
 PxIgnis provides persistent JSON key-value storage for global and per-player data. Data is saved automatically on server stop, player disconnect, and `/ignis reload`.
@@ -54,8 +54,4 @@ Data is written to disk on:
 - **Player disconnect** (per-player data only)
 - **`/ignis reload`**
 
-Per-player data is removed from the in-memory storage map on disconnect (but remains on disk).
-
-## Atomic Writes
-
-All file writes use an **atomic write pattern**: data is written to a temporary file first, then atomically moved to the target path. This prevents data corruption if the server crashes mid-write.
+Per-player data is removed from memory on disconnect (but remains on disk).

@@ -1,6 +1,6 @@
 ---
 title: Container
-description: Lua wrapper for open container sessions — click callbacks, auto-locking, forced close.
+description: Lua wrapper for open container sessions — click callbacks, auto-locking.
 ---
 
 A `Container` represents an open screen handler session. Returned by
@@ -26,7 +26,7 @@ The backing inventory. Read-only.
 
 ### `container:close()`
 
-Force-closes the container.
+Closes the container.
 
 ```lua
 container:close()
@@ -59,23 +59,9 @@ end)
 container:onClick(nil)  -- remove callback and unlock
 ```
 
-## Notes
-
-When `onClick(fn)` is registered, the inventory is **automatically locked**:
-
-### Slot indexing
-
-PxIgnus uses **0-based** slot indexing in `inv:getItem`, `inv:setItem`, `container:onClick`
+PxIgnis uses **1-based** slot indexing in `inv:getItem`, `inv:setItem`, `container:onClick`
 callbacks, and `chestgui:button`. The exception is `chestgui:set(row, col, item, callback)`
 which uses **1-based** `(row, col)` for human-readable coordinates (rows 1–6, columns 1–9).
 
-## Auto-Locking
-
-When `onClick(fn)` is registered, the inventory is **automatically locked**:
-
-- `removeStack()` returns empty (blocks hoppers/take)
-- `clear()` is a no-op
-- `setStack()` still works (Lua modifications bypass via `unlocked {}`)
-
-Calling `onClick(nil)` unlocks the inventory, restoring normal item movement. This
-prevents item theft when callbacks are active but fail to process (reload, crash).
+When `onClick(fn)` is registered, the inventory is **automatically locked** to prevent
+item theft. Calling `onClick(nil)` unlocks it.

@@ -3,9 +3,6 @@ title: ItemStack
 description: Lua wrapper for Minecraft item stacks — read properties, create items with components, safe reference handling.
 ---
 
-The ItemStack wrapper provides read-only access to Minecraft item stacks. All wrappers
-returned to Lua are **copies** — raw references never leak from the Lua boundary.
-
 Metatable name: `"item"`
 
 ## Properties
@@ -20,13 +17,41 @@ Item identifier (e.g. `"minecraft:diamond"`). Read-only.
 
 **type:** `number`
 
-Stack size. Read-only.
+Stack size.
+
+### `item.name`
+
+**type:** `string` or `nil`
+
+Custom name. Assign or `nil` to remove.
+
+### `item.lore`
+
+**type:** `table`
+
+Lore lines as an array of strings. Assign or `nil` to remove.
+
+```lua
+local item = mc.createItem("diamond")
+item.lore = {
+    "Cool diamond",
+    "Very cool diamond"
+}
+```
+
+### `item.unbreakable`
+
+**type:** `boolean`
 
 ### `item.custom_model_data`
 
 **type:** `number` or `nil`
 
-Custom model data integer. Read-only.
+Custom model data integer.
+
+### `item:copy()`
+
+Returns an independent copy of the item stack.
 
 ## Creating Items
 
@@ -56,8 +81,6 @@ Creates an item stack with full component data.
 | `lore` | `table` | Array of lore lines |
 | `custom_model_data` | `number` | Custom model data |
 | `unbreakable` | `boolean` | Unbreakable flag |
-| `attackDamage` | `number` | Attack damage |
-
 Additional component keys may work depending on the item type (e.g., `potion_effects`, `firework`, `block_state`).
 Keys that don't exist on the given item type are silently ignored.
 
@@ -67,21 +90,20 @@ local sword = mc.createItem("diamond_sword", {
   name = "&bLegendary Blade",
   lore = { "&7A mighty weapon", "", "&6+10 Attack Damage" },
   custom_model_data = 500,
-  unbreakable = true,
-  attackDamage = 10
+  unbreakable = true
 })
 ```
 
 ## Safety
 
-All wrappers returned to Lua are **copies**. This means:
-
-- Lua scripts can never mutate the server's internal item stacks
-- Modifications must go through API methods (`player:setItem()`, `inv:setItem()`)
-- Multiple reads of the same slot return independent copies
+Use `item:copy()` to work with an independent copy.
 
 ```lua
 local item = player.mainhand
-item.count = 99  -- no effect, properties are read-only
-player:setItem(player.selectedSlot, mc.createItem("diamond", 99))
+item.count = 99  -- the amount changes real-time
+local item2 = item:copy() -- A copy
+
+player:setItem(player.selectedSlot, item2) -- Safe
+player:setItem(player.selectedSlot, item)  -- Safe too (implicit copy)
+player.offhand = item -- And this is safe too, yeah
 ```

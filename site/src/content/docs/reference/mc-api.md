@@ -22,7 +22,7 @@ For world-daylight-time in ticks, use `world.time` instead.
 
 ### `mc.players`
 
-A read-only list of all online players as player wrappers. The list is rebuilt each server tick to reflect joins and leaves. Wrappers are cached by UUID — the same player returns the same wrapper across reads.
+A list of all online [players](/reference/player-api).
 
 ```lua
 for _, p in ipairs(mc.players) do
@@ -31,11 +31,12 @@ end
 ```
 
 ### `mc.onlineCount`
-The number of currently online players (a static property, not a function — no parentheses).
+
+The number of currently online players.
 
 ```lua
 if mc.onlineCount == 0 then
-  mc.broadcast("Server is empty...")
+  mc.broadcast("Server is empty... :(")
 end
 ```
 
@@ -52,12 +53,6 @@ Gets an entity by its UUID string. Returns the entity wrapper or `nil`.
 ```lua
 local entity = mc.getEntity("123e4567-e89b-12d3-a456-426614174000")
 ```
-
-### `mc.runtimeNamespace`
-Returns the runtime namespace string (e.g., `"minecraft"`).
-
-### `mc.mapped(className)`
-Translates an obfuscated class name to its mapped name.
 
 ## Chat & Broadcasting
 
@@ -88,7 +83,7 @@ Returns a shared metatable by name. See [MetaTableRegistry](/api/#metatableregis
 local meta = mc.getMetatable("vec")
 ```
 
-## Scheduling & Async
+## Scheduling
 
 ### `mc.schedule(delay, callback)`
 Runs `callback` once after `delay` ticks (20 ticks = 1 second). Returns a task ID.
@@ -115,42 +110,6 @@ Cancels a scheduled task. Returns `false` if the ID was never valid or already c
 ```lua
 mc.cancelTask(id)
 ```
-
-### `mc.sleep(ticks)`
-Yields the current coroutine for the given number of ticks. Must be called inside a
-coroutine (e.g., an event handler or scheduled callback).
-
-```lua
-mc.schedule(0, function()
-  mc.broadcast("Wait for it...")
-  mc.sleep(40)
-  mc.broadcast("2 seconds later!")
-end)
-```
-
-### `mc.fetch(url)` / `mc.fetch({...})`
-Performs an asynchronous HTTP request. Yields the current coroutine and resumes with the
-response table. Accepts a URL string or a config table.
-
-```lua
--- Simple GET
-local res = mc.fetch("https://api.example.com/data")
-if res.status == 200 then
-  mc.broadcast(res.body)
-end
-
--- Config table
-local res = mc.fetch({
-  url = "https://api.example.com/data",
-  method = "POST",
-  headers = { ["Content-Type"] = "application/json" },
-  body = '{"key": "value"}'
-})
-```
-
-The response table has `.status`, `.headers`, `.body`, and `.json` (lazy-parsed via
-metatable — accessed as `res.json`).
-
 ## Items
 
 ### `mc.createItem(id, [count | components])`
@@ -165,9 +124,13 @@ local sword = mc.createItem("diamond_sword", {
   name = "&cLegendary Sword",
   lore = { "&7Wielded by heroes" },
   custom_model_data = 1001,
-  unbreakable = true,
-  attackDamage = 20
+  unbreakable = true
 })
+```
+
+You can also pass a single table with an `id` field:
+```lua
+local sword = mc.createItem({ id = "diamond_sword", count = 1, name = "&cEpic Sword" })
 ```
 
 See [ItemStack API](/reference/itemstack-api) for details.
@@ -205,7 +168,7 @@ mc.data.visits = (mc.data.visits or 0) + 1
 ## Events
 
 ### `mc.on(event, handler)`
-Registers a handler for a server event. Returns `true` on success. Cancellable events:
+Registers a handler for a server event. Returns a numeric handler ID. Cancellable events:
 return `false` to cancel. See [Events](/reference/events) for the full event list.
 
 ```lua

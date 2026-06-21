@@ -34,29 +34,29 @@ Number of slots. Read-only.
 
 Returns the item in the given slot, or `nil` if empty.
 
-- `slot` (`number`) — Slot index (0‑based)
+- `slot` (`number`) — Slot index (1‑based)
 
 ```lua
-local item = inv:getItem(0)
+local item = inv:getItem(1)
 ```
 
 ### `inv:setItem(slot, item)`
 
 Sets a slot to the given item stack.
 
-- `slot` (`number`) — Slot index (0‑based)
+- `slot` (`number`) — Slot index (1‑based)
 - `item` ([`ItemStack`](/reference/itemstack-api) or `nil`) — Item to place, or `nil` to clear
 
 ```lua
-inv:setItem(0, mc.createItem("diamond", 1))
-inv:setItem(1, nil)
+inv:setItem(1, mc.createItem("diamond", 1))
+inv:setItem(2, nil)
 ```
 
 ### `inv:fill(item)`
 
-Fills every empty slot with the given item.
+Fills every slot with the given item (replaces existing contents). Pass `nil` to clear all slots.
 
-- `item` ([`ItemStack`](/reference/itemstack-api)) — Item to fill with
+- `item` ([`ItemStack`](/reference/itemstack-api) or `nil`) - Item to fill with, or `nil` to clear
 
 ```lua
 inv:fill(mc.createItem("stone", 1))
@@ -82,7 +82,7 @@ and access to the backing inventory and player.
 
 ```lua
 local container = inv:open(player, "&6My Chest")
-container:onClick(function(slot, clickType, p, slotItem, cursorItem)
-  if slot == 0 then return false end
+container:onClick(function(p, slot, clickType, slotItem, cursorItem)
+  if slot == 1 then return false end
 end)
 ```

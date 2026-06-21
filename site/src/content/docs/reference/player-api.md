@@ -18,7 +18,7 @@ Metatable name: `"player"`
 - `player.name` (`string`) — Username. Read-only.
 - `player.uuid` (`string`) — UUID. Read-only.
 - `player.displayName` (`string`) — Read-only.
-- `player.customName` (`string` or `nil`) — Assign to set.
+- `player.customName` (`string` or `nil`)
 - `player.isOp` (`boolean`) — Operator status. Read-only.
 - `player.ping` (`number`) — Latency in ms. Read-only.
 
@@ -29,19 +29,20 @@ Metatable name: `"player"`
 
 ### Health & Stats
 
-- `player.food` (`number`) — Assign to set.
+- `player.food` (`number`)
 - `player.saturation` (`number`) — Read-only.
 - `player.xpLevel` (`number`) — Read-only.
 - `player.xpProgress` (`number`) — Progress to next level (0–1). Read-only.
 
 ### Other
 
-- `player.gamemode` (`string`) — `"survival"`, `"creative"`, `"adventure"`, `"spectator"`. Assign to change.
+- `player.gamemode` (`string`) — `"survival"`, `"creative"`, `"adventure"`, `"spectator"`.
 - `player.data` (`table`) — Persistent per-player data. See [Storage](/reference/storage).
 
 ## Methods
 
-Entity methods inherited: `damage()`, `raycast()`, `addEffect()`, `removeEffect()`, `hasEffect()`, `setOnFireFor()`, `readNbt()`, `writeNbt()`.
+Entity methods inherited: `raycast()`, `addEffect()`, `removeEffect()`, `hasEffect()`, `setOnFireFor()`, `readNbt()`, `writeNbt()`.
+`damage()` is overridden for players (always uses generic damage source, no source parameter).
 
 ### `player:sendMessage(text)`
 
@@ -63,31 +64,31 @@ Sends an action bar message.
 player:sendActionBar("&eHotbar message")
 ```
 
-### `player:sendTitle(title, subtitle?, fadeIn?, stay?, fadeOut?)`
+### `player:sendTitle(title, subtitle?)`
 
 Sends a title.
 
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `title` | `string` | — | Title text |
-| `subtitle` | `string` | — | Subtitle text |
-| `fadeIn` | `number` | `10` | Fade-in ticks |
-| `stay` | `number` | `70` | Stay ticks |
-| `fadeOut` | `number` | `20` | Fade-out ticks |
+| Param | Type | Description |
+|---|---|---|
+| `title` | `string` | Title text |
+| `subtitle` | `string` | Subtitle text |
+
+Fade timing is fixed at 20/60/20 ticks (in/stay/out).
 
 ```lua
-player:sendTitle("&cWarning", "&7Danger zone", 10, 70, 20)
+player:sendTitle("&cWarning", "&7Danger zone")
 ```
 
-### `player:teleport(world, pos)`
+### `player:teleport(x, y, z, world?)`
 
-Teleports to a position.
+Teleports to coordinates.
 
-- `world` ([`World`](/reference/world-api)) — Target world
-- `pos` (`table`) — `{x, y, z}` position
+- `x`, `y`, `z` (`number`) — Target coordinates
+- `world` (`string`, optional) — Target world name (e.g. `"minecraft:overworld"`)
 
 ```lua
-player:teleport(mc.world("minecraft:overworld"), { x = 0, y = 64, z = 0 })
+player:teleport(0, 64, 0)
+player:teleport(0, 64, 0, "minecraft:the_nether")
 ```
 
 ### `player:heal(amount)`
@@ -132,14 +133,16 @@ Plays a sound.
 player:playSound("minecraft:entity.ender_dragon.growl", 1.0, 1.0)
 ```
 
-### `player:give(item)`
+### `player:give(item[, count])`
 
-Gives an item to the inventory.
+Gives an item to the inventory. Accepts an ItemStack wrapper or an item ID string.
 
-- `item` ([`ItemStack`](/reference/itemstack-api)) — Item to give
+- `item` ([`ItemStack`](/reference/itemstack-api) or `string`) — Item to give, or item ID
+- `count` (`number`, optional) — Stack size (only with string ID)
 
 ```lua
 player:give(mc.createItem("diamond", 1))
+player:give("diamond", 16)
 ```
 
 ### `player:setItem(slot, item)`
@@ -163,19 +166,11 @@ Clears the inventory.
 player:clear()
 ```
 
-### `player:executeCommand(command)`
 
-Executes a command as the player.
-
-- `command` (`string`) — Command string (no `/` prefix)
-
-```lua
-player:executeCommand("say Hello!")
-```
 
 ## Sidebar
 
-Each player has a per-player sidebar using a local `Scoreboard` instance.
+Each player has a per-player sidebar.
 
 ### `player.sidebar = {...}`
 
@@ -196,7 +191,7 @@ player.sidebar = nil  -- destroy
 
 **type:** `string`
 
-Current title. Assign to update (sends packet if visible).
+Current title. Assign to update.
 
 ### `sb.lines`
 

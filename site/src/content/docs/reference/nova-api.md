@@ -1,6 +1,6 @@
 ---
 title: Nova API
-description: JIT-compile Lua functions to JVM bytecode with nova.sync for 2-10× speedups on hot paths.
+description: Compile Lua functions with nova.sync for 2-10× speedups on hot paths.
 ---
 
 `nova.sync` compiles a Lua function (closure) to **JVM bytecode**.
@@ -49,8 +49,6 @@ print(fn()) -- 2
 print(counter) -- 2
 ```
 
-Globals (`math`, `string`, etc.) are resolved via `_ENV` just like a regular closure.
-
 ## Async API
 
 [Async API](/reference/async-api) is not available inside sync-compiled functions.
@@ -63,7 +61,7 @@ local fn = nova.sync(function()
 end)
 ```
 
-This is because JVM bytecode cannot suspend and resume, the entire call runs atomically.
+JVM bytecode cannot suspend and resume - the entire call runs atomically.
 
 ## When to use
 

@@ -11,44 +11,44 @@ The `simple` library wraps `register()` and the `format` library into one concis
 local registerSimple = require "simple"
 ```
 
-## registerSimple(cmd, args, template, range?, overlay?)
+## registerSimple(cmd, template, range?, overlay?)
 
 | Param | Type | Description |
 |-------|------|-------------|
 | `cmd` | `string` | Command syntax string |
-| `args` | `table` | Table mapping argument names to types |
 | `template` | `string` | Format string passed to `format` |
 | `range` | `number?` | If > 0, uses `world:broadcastInRange` instead of global broadcast |
 | `overlay` | `bool\|number?` | If `true`, sends as title overlay. If a number, acts as both range and overlay flag |
 
-The `p` variable is automatically set to `ctx.player`.
+Argument names are extracted automatically from the syntax string. The `p` variable is
+automatically set to `ctx.player`.
 
 ## Examples
 
 Broadcast a message when a player throws a fireball (global chat):
 
 ```lua
-registerSimple("throw <target:player>", {target = "player"},
+registerSimple("throw <target:player>",
     "*{p.name} throws a fireball at {t.name}*")
 ```
 
 Broadcast in range (50 blocks):
 
 ```lua
-registerSimple("yell <message:text>", {message = "text"},
+registerSimple("yell <message:text>",
     "{p.name} yells: {m}", 50)
 ```
 
 As a title overlay:
 
 ```lua
-registerSimple("announce <message:text>", {message = "text"},
+registerSimple("announce <message:text>",
     "{m}", true)
 ```
 
 With range and overlay:
 
 ```lua
-registerSimple("localmsg <message:text>", {message = "text"},
+registerSimple("localmsg <message:text>",
     "{m}", 50, true)
 ```

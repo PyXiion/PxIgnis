@@ -5,14 +5,84 @@ description: Release history for PxIgnis.
 
 # Changelog
 
-## 0.12.0 — Lambda literal syntax (unreleased)
+## 0.12.0 — Sync compiler, sandboxed require, item builder (2026-06-21)
 
-### New language extension
+### New API
 
-- PxLuaNova's `\{ ... }` lambda literal syntax is now available in PxIgnis scripts.
-  Opt in per file with `--# nova syntax` on line&nbsp;1. See [Language extensions](/reference/language)
-  for all four forms: named-arg (`->`), zero-arg expression, zero-arg chunk, and
-  trailing-block sugar.
+#### `nova.sync()` — JIT compile to JVM bytecode
+
+`nova.sync(fn)` JIT-compiles a Lua function for better performance. The compiled
+function is cached and reused. See [Nova API](/reference/nova-api).
+
+```lua
+local add = nova.sync(\{ a, b -> a + b })
+```
+
+#### Sandboxed `require` - `core:` namespace
+
+`require` now only loads modules from `config/ignis/`. Built-in libraries use a
+`core:` prefix:
+
+| Module       | Old                     | New (`core:` prefix)      |
+|--------------|-------------------------|---------------------------|
+| Format       | `require "format"`      | `require "core:format"`   |
+| Simple       | `require "simple"`      | `require "core:simple"`   |
+| Chest GUI    | `require "chestgui"`    | `require "core:chestgui"` |
+
+Prefixes may become available later for user scripts.
+
+#### `mc.createItem` — table-based signatures
+
+`mc.createItem` now accepts a component table in addition to the positional form:
+
+```lua
+mc.createItem("minecraft:diamond_sword", {
+  name   = "§bBlade",
+  lore   = { "A legendary sword" },
+  count  = 1,
+  unbreakable = true,
+  custom_model_data = 42,
+})
+
+-- Single-table form:
+mc.createItem { id = "minecraft:stone", count = 64 }
+```
+
+#### ItemStack JSON codec
+
+New `mc.serialise` and `mc.deserialise` for ItemStacks:
+
+```lua
+local json = mc.serialise("item", item)    -- ItemStack → JSON string
+local item = mc.deserialise("item", json)   -- JSON string → ItemStack
+```
+
+#### Lambda literal syntax (`\{ ... }`)
+
+PxLuaNova's lambda literal syntax is available in PxIgnis scripts. Opt in per file
+with `--# nova syntax` on line&nbsp;1. See [Language extensions](/reference/language)
+for all four forms: named-arg (`->`), zero-arg expression, zero-arg chunk, and
+trailing-block sugar.
+
+### Breaking changes
+
+| Change | Migration |
+|---|---|
+| `require "format"` / `"simple"` / `"chestgui"` now require `core:` prefix | `require "core:format"` |
+| Built-in Lua libs `io`, `os`, `debug` not loaded | Rely on `math`, `string`, `table`, `bit32`, `coroutine` |
+| `collectgarbage`, `loadfile`, `dofile` removed from globals | Use `nova.sync()` or `require` for loading code |
+| `world:playSound(id, x, y, z, volume?, pitch?)` → `world:playSound(id, pos, volume?, pitch?)` | Pass `vec(x, y, z)` as second argument |
+
+### Internal
+
+- `LuaCmdLoader.kt` split into `IgnisRuntime`, `ScriptEnvironment`, `ScriptLoader`
+- New `MetaTableBuilder` DSL for cleaner metatable construction (used by all wrappers)
+- `Vfs` + `LuaRequire` — sandboxed module loading replacing `PackageLib`
+- Package reorganisation: `commands/`, `api/wrapper/`, `api/manager/`, `api/util/` subpackages
+- `ItemBuilder`, `ItemStackCodec` — new utility classes
+- Test suite cleanup: removed `/ignis reload`-dependent tests (`HologramManagerTest`, `RegionTest`)
+- Built-in Lua libraries (`demo.lua`, `format.lua`, `simple.lua`, `chestgui.lua`) updated
+- All reference docs updated; new guide page *Events & Storage*
 
 ---
 
@@ -272,13 +342,13 @@ Coroutines are now supported!
 ### Breaking changes
 
 - `Player.kt` → `PlayerWrapper.kt`, `World.kt` → `WorldWrapper.kt` (internal refactor, no Lua API change)
-- `player.world:particle(id, x, y, z)` → `player.world:particle(id, Vec(x, y, z), opts?)` (positional args replaced by
+- `player.world:particle(id, x, y, z)` → `player.world:particle(id, vec(x, y, z), opts?)` (positional args replaced by
   vector + options table)
 - Removed dead `coerce/KotlinToLua.kt`
 
 ### New vector API
 
-- `Vec(x, y, z)` global constructor with `+`, `-`, `*`, `/`, `unm`, `==`, `tostring` operators
+- `vec(x, y, z)` global constructor with `+`, `-`, `*`, `/`, `unm`, `==`, `tostring` operators
 - Component-wise for `v1 * v2`, scalar for `v / n`, both `v * n` and `n * v`
 - Vector metatable accessible via `mc.getMetatable("vec")`
 

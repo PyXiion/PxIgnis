@@ -10,125 +10,95 @@ Metatable name: `"entity"`
 
 ## Properties
 
+All properties are read/write unless noted as read-only.
+
 ### `entity.uuid`
 
-**type:** `string`
-
-UUID string. Read-only.
+**type:** `string` (read-only)
 
 ### `entity.type`
 
-**type:** `string`
+**type:** `string` (read-only)
 
-Entity type (e.g. `"minecraft:zombie"`). Read-only.
+Entity type (e.g. `"minecraft:zombie"`).
 
 ### `entity.name`
 
-**type:** `string`
-
-Entity name. Read-only.
+**type:** `string` (read-only)
 
 ### `entity.displayName`
 
-**type:** `string`
-
-Display name. Read-only.
+**type:** `string` (read-only)
 
 ### `entity.customName`
 
 **type:** `string` or `nil`
 
-Custom name. Assign to set.
-
 ### `entity.world`
 
-**type:** [`World`](/reference/world-api)
-
-The world the entity is in. Read-only.
+**type:** [`World`](/reference/world-api) (read-only)
 
 ### `entity.pos`
 
-**type:** `table` (`{x, y, z}`)
-
-Position. Assign to teleport.
+**type:** [Vector](/reference/vector-api)
 
 ### `entity.dir`
 
-**type:** `table` (`{x, y, z}`)
+**type:** [Vector](/reference/vector-api)
 
-Look direction. Read-only.
+The direction of the head.
 
 ### `entity.bodyDir`
 
-**type:** `table` (`{x, y, z}`)
-
-Body direction. Read-only.
+**type:** [Vector](/reference/vector-api)
 
 ### `entity.isSneaking`
 
 **type:** `boolean`
 
-Sneaking state. Assign to set.
-
 ### `entity.isSprinting`
 
 **type:** `boolean`
-
-Sprinting state. Assign to set.
 
 ### `entity.fallDistance`
 
 **type:** `number`
 
-Current fall distance. Assign to set.
+Idk what it means, but it exists.
 
 ### `entity.removed`
 
-**type:** `boolean`
-
-Whether the entity has been removed. Read-only.
+**type:** `boolean` (read-only)
 
 ### `entity.health`
 
 **type:** `number`
 
-Current health. Assign to set.
-
 ### `entity.maxHealth`
 
 **type:** `number`
-
-Maximum health. Assign to set base value; clamps current health.
 
 ### `entity.air`
 
 **type:** `number`
 
-Remaining air. Assign to set.
-
 ### `entity.maxAir`
 
-**type:** `number`
-
-Maximum air. Read-only.
+**type:** `number` (read-only)
 
 ### `entity.fireTicks`
 
 **type:** `number`
 
-Remaining fire ticks. `-1` means not on fire. Assign to set.
+`-1` means not on fire.
 
 ### `entity.glowing`
 
 **type:** `boolean`
 
-Glowing effect state. Assign to set.
-
 ### `entity.invulnerable`
 
 **type:** `boolean`
-
-Invulnerability state. Assign to set.
 
 ## Equipment
 
@@ -136,41 +106,29 @@ Invulnerability state. Assign to set.
 
 **type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
-Main hand item. Assign to set equipped item.
-
 ### `entity.offhand`
 
 **type:** [`ItemStack`](/reference/itemstack-api) or `nil`
-
-Off hand item. Assign to set equipped item.
 
 ### `entity.head`
 
 **type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
-Helmet item. Assign to set equipped item.
-
 ### `entity.chest`
 
 **type:** [`ItemStack`](/reference/itemstack-api) or `nil`
-
-Chestplate item. Assign to set equipped item.
 
 ### `entity.legs`
 
 **type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
-Leggings item. Assign to set equipped item.
-
 ### `entity.feet`
 
 **type:** [`ItemStack`](/reference/itemstack-api) or `nil`
 
-Boots item. Assign to set equipped item.
-
 ## Attributes
 
-All attributes are read/write. Assign to set the base value.
+All attributes are read/write (base value).
 
 ### `entity.speed`
 
@@ -256,7 +214,7 @@ Flying speed.
 
 **type:** `table`
 
-Scoreboard tags proxy table. Read to iterate; assign boolean values to add (`true`) or remove (`false`) tags.
+Scoreboard tags. Read to iterate; assign boolean values to add (`true`) or remove (`false`) tags.
 
 ```lua
 for _, tag in ipairs(entity.tags) do
@@ -280,12 +238,13 @@ entity:damage(10)
 entity:damage(5, attacker)
 ```
 
-### `entity:raycast(range, includeFluids?)`
+### `entity:raycast(range, includeFluids?, includeEntities?)`
 
 Performs a raycast from the entity's eyes.
 
 - `range` (`number`) — Max distance
 - `includeFluids` (`boolean`, optional) — Include fluid blocks
+- `includeEntities` (`boolean`, optional, default `true`) — Include entity hits
 
 Returns a hit result or `nil`.
 
@@ -300,33 +259,33 @@ end
 
 Adds a potion effect.
 
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `effectId` | `number` | — | Effect type ID (1 = Speed, 5 = Strength) |
-| `duration` | `number` | — | Duration in ticks |
-| `amplifier` | `number` | `0` | Effect amplifier |
-| `particles` | `boolean` | `true` | Show particles |
-| `icon` | `boolean` | `true` | Show effect icon |
+| Param       | Type      | Default | Description                               |
+|-------------|-----------|---------|-------------------------------------------|
+| `effectId`  | `string`  | —       | Effect type ID (e.g. `"minecraft:speed"`) |
+| `duration`  | `number`  | —       | Duration in ticks                         |
+| `amplifier` | `number`  | `0`     | Effect amplifier                          |
+| `particles` | `boolean` | `true`  | Show particles                            |
+| `icon`      | `boolean` | `true`  | Show effect icon                          |
 
 ```lua
-entity:addEffect(1, 600, 1, true, true)  -- Speed II, 30s
+entity:addEffect("minecraft:speed", 600, 1, true, true)  -- Speed II, 30s
 ```
 
 ### `entity:removeEffect(effectId)`
 
 Removes a potion effect.
 
-- `effectId` (`number`) — Effect type ID
+- `effectId` (`string`) — Effect type ID (e.g. `"minecraft:speed"`)
 
 ```lua
-entity:removeEffect(1)
+entity:removeEffect("minecraft:speed")
 ```
 
 ### `entity:hasEffect(effectId)`
 
 Checks if an effect is active.
 
-- `effectId` (`number`) — Effect type ID
+- `effectId` (`string`) — Effect type ID (e.g. `"minecraft:speed"`)
 
 Returns `true` or `false`.
 
@@ -348,14 +307,14 @@ Returns the entity's NBT data as a Lua table.
 
 Writes NBT data from a Lua table. Lua types are converted:
 
-| Lua value | NBT type |
-|---|---|
-| `number` | `Double` (whole numbers in int range stored as `Int`) |
-| `string` | `String` |
-| `boolean` | `Byte` (0/1) |
-| `table` (string keys) | `Compound` |
-| `table` (1-indexed numeric) | `List` |
-| `nil` | Key deletion |
+| Lua value                   | NBT type                                              |
+|-----------------------------|-------------------------------------------------------|
+| `number`                    | `Double` (whole numbers in int range stored as `Int`) |
+| `string`                    | `String`                                              |
+| `boolean`                   | `Byte` (0/1)                                          |
+| `table` (string keys)       | `Compound`                                            |
+| `table` (1-indexed numeric) | `List`                                                |
+| `nil`                       | Key deletion                                          |
 
 Text components must be passed as JSON strings (`'{"text":"Bob"}'`), not as Lua tables.
 

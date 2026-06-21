@@ -31,8 +31,8 @@ end, "px.ignis.rp")
 ```lua
 register("gamemode <mode:choice=survival,creative,adventure,spectator> [<target:player>]", function(ctx, mode, target)
     local t = target or ctx.player
+    t.gamemode = mode
     t:sendMessage("Setting gamemode to " .. mode)
-    t:sendMessage("Your gamemode has been changed")
 end)
 ```
 

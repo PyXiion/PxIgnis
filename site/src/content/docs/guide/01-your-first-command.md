@@ -13,7 +13,7 @@ register("ping", function(ctx)
 end)
 ```
 
-The handler receives a `ctx` table with `ctx.player` — a live player wrapper. Call methods on it to mutate the real player.
+The handler receives a `ctx` table with `ctx.player`. Call methods on it to interact with the player.
 
 ## 2. Arguments
 
@@ -67,7 +67,8 @@ Repeating timers with `mc.scheduleRepeating(delay, interval, callback)`:
 ```lua
 register("countdown <seconds:int>", function(ctx, seconds)
     local remaining = seconds
-    local id = mc.scheduleRepeating(0, 20, function()
+    local id -- declare first so the callback can see it
+    id = mc.scheduleRepeating(0, 20, function()
         remaining = remaining - 1
         if remaining <= 0 then
             mc.broadcast("Go!")
@@ -83,10 +84,9 @@ See the [mc.\* API](/reference/mc-api) for scheduler options.
 
 ## 5. Coroutine delays with mc.sleep
 
-All command handlers and `mc.schedule` callbacks run inside an implicit
-coroutine — so you can call `mc.sleep` directly without any extra setup.
+Command handlers and `mc.schedule` callbacks support `mc.sleep` directly.
 
-`mc.sleep(ticks)` yields the current coroutine and resumes after the delay. See [Async API](/reference/async-api) for details:
+`mc.sleep(ticks)` pauses execution for the given number of ticks. See [Async API](/reference/async-api) for details:
 
 ```lua
 register("delayedheal", function(ctx)
@@ -103,7 +103,7 @@ end)
 
 ## 6. Async HTTP with mc.fetch
 
-`mc.fetch(url)` sends an HTTP GET request and yields the coroutine until the response arrives. See [Async API](/reference/async-api) for POST config and response fields:
+`mc.fetch(url)` sends an HTTP GET request and waits for the response. See [Async API](/reference/async-api) for POST config and response fields:
 
 ```lua
 register("playerinfo", function(ctx)
@@ -142,9 +142,11 @@ register("fart", function(ctx)
     })
     p:sendMessage("You farted!")
 end)
+```
 
 ## Next steps
 
+- [Events and storage](/guide/02-events-and-storage) — part 2 of this guide: reacting to events and saving data
 - [Events](/reference/events) — react to player joins, block breaks, chat, and more
 - [Async API](/reference/async-api) — detailed mc.fetch and mc.sleep reference
 - [Storage](/reference/storage) — persist data across reloads with `mc.data` and `player.data`

@@ -1,9 +1,9 @@
 ---
 title: Hologram
-description: Floating text in the world, rendered as a TextDisplayEntity and visible to all nearby players.
+description: Floating text in the world, visible to all nearby players.
 ---
 
-Create floating, billboarded text in the world using the vanilla `minecraft:text_display` entity. Holograms are visible to all players in range of the entity — there is no per-player scope.
+Create floating, billboarded text in the world. Holograms are visible to all players in range — there is no per-player scope.
 
 Metatable name: `"hologram"`
 
@@ -128,7 +128,7 @@ holo:setLine(2, "Updated second line")
 
 ### `holo:destroy()`
 
-Destroys the hologram entity and removes it from the manager.
+Destroys the hologram.
 
 ```lua
 holo:destroy()
@@ -163,4 +163,4 @@ Holograms are global — they are visible to all players in range and persist un
 
 ## Entity passthrough
 
-Holograms are entities, so they expose the [entity properties](entity-api) via metatable delegation: `pos`, `uuid`, `world`, `removed`, `glowing`, `tags`, and so on. You can also call `entity:readNbt()` and `entity:writeNbt(nbt)` to inspect or modify the underlying NBT directly.
+Holograms are entities, so they expose [entity properties](entity-api): `pos`, `uuid`, `world`, `removed`, `glowing`, `tags`, and so on. You can also call `entity:readNbt()` and `entity:writeNbt(nbt)` to inspect or modify the underlying NBT directly.

@@ -85,13 +85,13 @@ local b = r:getBounds()
 
 **type:** sequence of [`Player`](/reference/player-api)
 
-Live array of player wrappers currently inside the region (fresh table each access). Read-only.
+Array of player wrappers currently inside the region. Read-only.
 
 ### `region.entities`
 
 **type:** sequence of [`Entity`](/reference/entity-api) or [`Player`](/reference/player-api)
 
-Live array of entity wrappers currently inside the region (fresh table each access). Read-only.
+Array of entity wrappers currently inside the region. Read-only.
 
 ## Events
 
@@ -170,8 +170,7 @@ Fires when a player inside the region dies.
 
 ### `region:on("tick", function())`
 
-Fires every server tick. The region auto-subscribes to tick dispatching when the first `"tick"` handler is registered.
-No opt-in method is needed.
+Fires every server tick.
 
 ```lua
 r:on("tick", function()
@@ -204,8 +203,7 @@ r:off(id)  -- unsubscribes
 
 ### `region:destroy()`
 
-Destroys the region: fires `destroy` event, unregisters from the manager, clears all handlers and tracked entity sets.
-No `entity_leave` events fire on destruction — the region is immediately inert.
+Destroys the region. No `entity_leave` events fire on destruction.
 
 ```lua
 r:destroy()

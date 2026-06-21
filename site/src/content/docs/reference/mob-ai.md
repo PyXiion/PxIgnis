@@ -10,9 +10,9 @@ Metatable name: `"mob"`
 ## Registering Behaviours
 
 ```lua
-mc.registerBehaviour("my_behaviour", function(self, ctx)
+mc.registerBehaviour("my_behaviour", function(self, state)
     -- self: the mob wrapper
-    -- ctx: {deltaTime, tick}
+    -- state: persistent state table (initially empty), shared across ticks
     
     if self.target then
         self:navigateTo(self.target)
@@ -27,7 +27,7 @@ end)
 mob:setAI("my_behaviour")
 
 -- By inline function
-mob:setAI(function(self, ctx)
+mob:setAI(function(self, state)
     self:lookAt(self.target)
     self:moveToward(self.target.pos, self.speed)
 end)
@@ -42,7 +42,8 @@ mob:clearAI()
 |----------|------|-------------|
 | `mob.isMob` | boolean | Always `true` |
 | `mob.target` | entity or nil | Current target entity. Read/write — assign an entity wrapper (player, mob, etc.), or `nil` to clear. Only `LivingEntity` types are valid targets; non-living entities are silently ignored. |
-| `mob.speed` | number | Movement speed |
+| `mob.speed` | number | Movement speed (entity attribute) |
+| `mob.age` | number | Mob age in ticks. Read-only. |
 | `mob.pathRemaining` | number | Path completion progress (0–1) |
 | `mob.pathFound` | boolean | Whether a valid path was found |
 | `mob.aiActive` | boolean | Whether a behaviour is currently running |
@@ -51,13 +52,14 @@ mob:clearAI()
 
 | Method | Description |
 |--------|-------------|
-| `mob:navigateTo(x, y, z)` | Navigate to a position |
-| `mob:navigateTo(entity)` | Navigate to an entity |
+| `mob:navigateTo(x, y, z, speed?)` | Navigate to a position (returns `true` if path started) |
+| `mob:navigateTo(entity, speed?)` | Navigate to an entity (returns `true` if path started) |
 | `mob:stopNavigation()` | Stop current pathfinding |
 | `mob:lookAt(x, y, z)` | Look at a position |
 | `mob:lookAt(entity)` | Look at an entity |
-| `mob:moveToward(vec, speed)` | Move toward a vector at given speed |
+| `mob:moveToward(vec, speed)` | Move toward a vector at given speed (speed defaults to 1.0) |
 | `mob:jump()` | Make the mob jump |
+| `mob:tryAttack(entity)` | Attempt to attack an entity. Returns `true` on success. |
 | `mob:canSee(entity)` | Returns `true` if the mob has line of sight |
 | `mob:distanceTo(entity)` | Returns distance to entity or vector |
 | `mob:distanceTo(vec)` | Returns distance to entity or vector |
@@ -65,7 +67,7 @@ mob:clearAI()
 ```lua
 register("pet", function(ctx)
     local p = ctx.player
-    local spawnAt = p.pos + Vec(2, 0, 0)
+    local spawnAt = p.pos + vec(2, 0, 0)
     local mob = p.world:spawn("wolf", spawnAt)
     mob:setAI("pet")
 end)
@@ -90,7 +92,7 @@ mob:setAI("orbiter")
 `world:spawn()` returns a MobWrapper for mob types:
 
 ```lua
-local zombie = world:spawn("zombie", Vec(100, 64, 200), {
+local zombie = world:spawn("zombie", vec(100, 64, 200), {
     on_spawn = function(mob)
         mob:setAI("guard")
         mob.speed = 0.3

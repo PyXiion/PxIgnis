@@ -22,6 +22,7 @@ export default defineConfig({
           label: "Guide",
           items: [
             { label: "1. Your first command", slug: "guide/01-your-first-command" },
+            { label: "2. Events and storage", slug: "guide/02-events-and-storage" },
           ],
         },
         {

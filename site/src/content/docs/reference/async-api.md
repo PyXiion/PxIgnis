@@ -3,9 +3,8 @@ title: Async API
 description: Coroutine-based HTTP requests and tick delays with mc.fetch and mc.sleep.
 ---
 
-Coroutine-based async operations — sequential code without callback nesting. Under the hood, `mc.fetch` and `mc.sleep`
-yield the execution and resume on the server thread when the operation completes.
-No need to worry about syncing (if you know what it is).
+Coroutine-based async operations. Under the hood, `mc.fetch` and `mc.sleep`
+yield the execution and resume when the operation completes.
 
 ## mc.sleep(ticks)
 
@@ -31,7 +30,7 @@ else
 end
 ```
 
-## mc.fetch({...})
+## mc.fetch {...}
 
 Full request with options:
 
@@ -42,18 +41,18 @@ Full request with options:
 | `headers` | table  | `{}`    | Custom headers                                                 |
 | `body`    | string | `nil`   | Raw request body                                               |
 | `json`    | table  | `nil`   | Auto-encodes to JSON and sets `Content-Type: application/json` |
-| `timeout` | number | `30`    | Timeout in seconds                                             |
+| `timeout` | number | `10`    | Timeout in seconds       |
 
-`body` & `json` are mutually exclusive.
+`body` & `json` are obviously mutually exclusive.
 
 ```lua
-local res = mc.fetch({
+local res = mc.fetch {
     url = "https://api.example.com/data",
     method = "POST",
     json = { key = "value" },
     headers = { Authorization = "Bearer token" },
     timeout = 10
-})
+}
 ```
 
 ## Response Table
@@ -75,9 +74,7 @@ if res.ok then
 end
 ```
 
-## Sequential Example
-
-No callbacks, no nesting — just sequential code:
+## Example
 
 ```lua
 register("fetch", function(ctx)
@@ -116,14 +113,14 @@ coroutine.wrap(function()
 end)()
 ```
 
+**Important**: you **MUST NOT** resume coroutines that were yielded by these async functions. They shall be resumed
+automatically.
+
 ## Lifecycle
 
-Beware, all pending coroutines (sleeps, in-flight HTTP requests) are **discarded** on `/ignis reload`.
-The Lua state is completely torn down and rebuilt.
-This is intended, and you should consider it when reloading/writing scripts.
+All pending coroutines (sleeps, in-flight HTTP requests) are **discarded** on `/ignis reload`.
 
-So don't use it extremely long `mc.sleep` (e.g. for an hour or a day) for critical mechanics (e.g. ban durations or the
-wait time for daily bonuses). For long pauses, use the [persistent storage](/examples/persistence) saving the time
-when player can perform an action again.
+Don't use `mc.sleep` for critical mechanics (e.g. ban durations or daily bonuses). For long pauses,
+save timestamps in [persistent storage](/reference/storage).
 
-`mc.sleep` is ideal for short delays: animations, spell casting & etc.
+`mc.sleep` is ideal for short delays: animations, spell casting, etc.

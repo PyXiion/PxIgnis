@@ -5,7 +5,8 @@ description: Dynamic Brigadier command registration with Lua handlers — syntax
 
 Use `register()` to create dynamic Brigadier commands from Lua without touching Java code.
 
-**Warning:** Commands can only be registered at script load time — you cannot add commands at runtime (e.g. inside event handlers or scheduled callbacks). All `register()` calls must be at the top level of your `.lua` files.
+**Warning:** Commands can only be registered at script load time — you cannot add commands at runtime (e.g. inside event
+handlers or scheduled callbacks). All `register()` calls must be at the top level of your `.lua` files.
 
 ## Signature
 
@@ -22,33 +23,35 @@ register(syntax, handler, permission?)
 ## Syntax format
 
 ```
-command <name:type> [<name:type>] [<name:choice=a,b>]
+command <name:type> [name:type] [name:choice=a,b]
 ```
 
 | Part                | Meaning                              |
 |---------------------|--------------------------------------|
 | `cmd` `sub`         | Literal path tokens                  |
 | `<name:type>`       | Required argument                    |
-| `[<name:type>]`     | Optional trailing argument           |
+| `[name:type]`       | Optional trailing argument           |
 | `<name:choice=a,b>` | Choice argument with tab completions |
 
-Optional arguments can only appear at the end of the syntax. Everything from the first `[...]` to the end is optional —
-omitting any optional arg removes all later ones too.
+Optional `[<name:type>]` is also supported, because i think both of them are pretty.
+
+Optional arguments can only appear such that no required argument follows them. Literals
+may appear after optional arguments. Omitting any optional arg removes all later ones too.
 
 ## Argument types
 
-| Type         | Lua type  | Description                                                    |
-|--------------|-----------|----------------------------------------------------------------|
-| `text`       | `string`  | Greedy: consumes the rest of the command line. **Must be last.** |
-| `word`       | `string`  | Single word (`abc` or `"abc abc"`)                             |
-| `player`     | `player`  | Player                                                         |
-| `target`     | `player`  | Alias for `player`                                             |
-| `int`        | `number`  | Integer                                                        |
-| `double`     | `number`  | Double-precision float                                         |
-| `float`      | `number`  | Single-precision float                                         |
-| `bool`       | `boolean` | Boolean                                                        |
-| `block_pos`  | `table`   | `{x, y, z}` block position table                               |
-| `choice=a,b` | `string`  | Multi-choice — runtime validation + tab completion             |
+| Type         | Lua type  | Description                                        |
+|--------------|-----------|----------------------------------------------------|
+| `text`       | `string`  | Greedy: consumes the rest of the command line.     |
+| `word`       | `string`  | Single word (`abc` or `"abc abc"`)                 |
+| `player`     | `player`  | Player                                             |
+| `target`     | `player`  | Alias for `player`                                 |
+| `int`        | `number`  | Integer                                            |
+| `double`     | `number`  | Double-precision float                             |
+| `float`      | `number`  | Single-precision float                             |
+| `bool`       | `boolean` | Boolean                                            |
+| `block_pos`  | `table`   | Vector                                             |
+| `choice=a,b` | `string`  | Multi-choice — runtime validation + tab completion |
 
 ## Handler arguments
 
@@ -56,9 +59,10 @@ The handler receives `ctx` as the first argument, followed by each argument valu
 order.
 
 ```lua
-register("warn <target:player> <reason:text>", function(ctx, target, reason)
+--# nova syntax
+register("warn <target:player> <reason:text>") \{ctx, target, reason ->
     target:sendMessage("Warning: " .. reason)
-end)
+}
 ```
 
 ### Context object
@@ -70,6 +74,7 @@ end)
 ## Permissions
 
 Pass a permission node as the third argument. Players won't even see the command.
+If omitted, all players can use the command.
 
 ```lua
 register("kick <target:player>", function(ctx, target)
@@ -79,7 +84,7 @@ end, "admin.kick")
 
 ## Reserved commands
 
-These cannot be registered:
+These cannot be registered (for safety):
 
 `ignis`, `stop`, `reload`, `op`, `deop`, `ban`, `ban-ip`, `pardon`, `pardon-ip`, `save-all`, `save-on`, `save-off`,
 `whitelist`
@@ -87,14 +92,16 @@ These cannot be registered:
 ## Examples
 
 ```lua
+--# nova syntax
+
 -- Simple command, no arguments, no permission
-register("healme", function(ctx)
+register("healme") \{ ctx ->
     ctx.player:heal(20)
     ctx.player:sendMessage("Healed!")
-end)
+}
 
 -- Player argument with permission
-register("fly <target:player>", function(ctx, target)
+register("fly <target:player>") \{ ctx, target ->
     target:setFlySpeed(0.1)
 end, "myplugin.fly")
 

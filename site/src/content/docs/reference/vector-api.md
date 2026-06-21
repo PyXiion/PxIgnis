@@ -3,7 +3,7 @@ title: Vector
 description: 3D vector arithmetic with Vec(x, y, z).
 ---
 
-`vec` is a global constructor for 3D vectors. Creates a `{x, y, z}` table with the vector metatable.
+`vec` is a global constructor for 3D vectors. Creates a `{x, y, z}` table.
 All methods that accept vectors will accept `{x, y, z}`, `{x=x, y=y, z=z}` and `vec(x, y, z)`
 
 ```lua
@@ -14,8 +14,7 @@ Metatable name: `"vec"`
 
 ## Properties
 
-Three read/write numeric properties: `v.x`, `v.y`, `v.z`. They can also be accessed via index (`v["x"]`, `v[1]`).
-
+Three read/write numeric properties: `v.x`, `v.y`, `v.z`.
 ## Operators
 
 | Operator   | Example            | Behaviour                       |

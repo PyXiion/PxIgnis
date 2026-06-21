@@ -1,9 +1,9 @@
 ---
 title: Sidebar
-description: Per-player scoreboard sidebars with packet-based rendering.
+description: Per-player scoreboard sidebars.
 ---
 
-Access and control a per-player sidebar through the `player.sidebar` property. Sidebars use a **local `Scoreboard()` instance** and direct packets — no other player sees them.
+Access and control a per-player sidebar through the `player.sidebar` property. No other player sees them.
 
 Metatable name: `"sidebar"`
 
@@ -44,13 +44,13 @@ Reading `player.sidebar` returns a sidebar object:
 
 **type:** `string`
 
-Current title. Assign to update (sends packet if visible).
+Current title. Assign to update.
 
 ### `sb.lines`
 
 **type:** `table`
 
-Lines array (strings). Assign to replace all lines.
+Lines array (strings).
 
 ### `sb.visible`
 

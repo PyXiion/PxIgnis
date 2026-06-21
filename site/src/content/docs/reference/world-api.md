@@ -3,7 +3,7 @@ title: World
 description: Lua wrapper for Minecraft worlds — blocks, entities, particles, weather, and raycasting.
 ---
 
-The world wrapper provides access to a Minecraft `ServerWorld`. Obtain worlds via
+The world wrapper provides access to a Minecraft world. Obtain worlds via
 `mc.world(name)` or from entity/player `.world` properties.
 
 Metatable name: `"world"`
@@ -14,25 +14,25 @@ Metatable name: `"world"`
 
 **type:** `string`
 
-World identifier (e.g. `"minecraft:overworld"`). Read-only.
+World identifier (e.g. `"overworld"`). Read-only.
 
 ### `world.time`
 
 **type:** `number`
 
-World time in ticks. Assign to set.
+World time in ticks.
 
 ### `world.raining`
 
 **type:** `boolean`
 
-Whether it is raining. Assign to set rain state.
+Whether it is raining.
 
 ### `world.thundering`
 
 **type:** `boolean`
 
-Whether it is thundering. Assign to set thunder state.
+Whether it is thundering.
 
 ### `world.players`
 
@@ -78,7 +78,7 @@ local block = world:getBlock({ x = 0, y = 64, z = 0 })
 
 ### `world:fill(pos1, pos2, blockId)`
 
-Fills a cuboid between two positions with a block.
+Fills a cuboid between two positions with a block (max 32,768 blocks).
 
 - `pos1` (`table`) — First corner `{x, y, z}`
 - `pos2` (`table`) — Opposite corner `{x, y, z}`
@@ -96,7 +96,7 @@ Spawns an entity at the given position.
 
 - `entityId` (`string`) — Entity type (e.g. `"pig"`, `"zombie"`)
 - `pos` (`table`) — `{x, y, z}` spawn position
-- `overrides` (`table`, optional) — NBT data overrides
+- `overrides` (`table`, optional) — Override keys: `health` (number) and `custom_name` (string). Arbitrary NBT is not supported.
 
 Returns the spawned entity wrapper, or `nil` on failure.
 
@@ -135,7 +135,7 @@ Optional `opts` table:
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `count` | `number` | `1` | Number of particles |
-| `delta` | `table` | `{0, 0, 0}` | Spread vector |
+| `spread` | `table` | `{0, 0, 0}` | Spread vector (also accepts `delta` as alias) |
 | `speed` | `number` | `0` | Particle speed |
 
 ```lua
@@ -161,6 +161,38 @@ world:playSound("minecraft:entity.experience_orb.pickup", 0, 64, 0)
 world:playSound("minecraft:entity.ender_dragon.growl", 0, 64, 0, 2.0, 0.5)
 ```
 
+## Holograms
+
+### `world:spawnHologram(pos, text, opts?)`
+
+Spawns a hologram at the given position.
+
+- `pos` (`table`) — `{x, y, z}` spawn position
+- `text` (`string`) — Display text
+- `opts` (`table`, optional) — Hologram options
+
+`opts` table:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `alignment` | `string` | `"center"` | Text alignment |
+| `billboard` | `string` | `"center"` | Billboard mode (`"fixed"`, `"vertical"`, `"horizontal"`, `"center"`) |
+| `lineWidth` | `number` | `200` | Line width |
+| `background` | `number` | `0x40000000` | ARGB background color |
+| `opacity` | `number` | `255` | Text opacity (0–255) |
+| `shadow` | `boolean` | `false` | Text shadow |
+| `seeThrough` | `boolean` | `false` | See-through |
+| `glowing` | `boolean` | `false` | Glowing effect |
+
+Returns a [Hologram](/reference/hologram-api).
+
+```lua
+local holo = world:spawnHologram(vec(0, 70, 0), "&6Welcome!", {
+    billboard = "center",
+    background = 0x80000000
+})
+```
+
 ## Broadcasting
 
 ### `world:broadcastInRange(text, x, y, z, range, overlay?)`
@@ -170,7 +202,7 @@ Broadcasts a message to players within range of a position.
 - `text` (`string`) — Message text
 - `x`, `y`, `z` (`number`) — Origin position
 - `range` (`number`) — Radius in blocks
-- `overlay` (`boolean`, optional) — Send as overlay instead of chat
+- `overlay` (`number`, optional) — If provided, sends as title overlay with the given duration in ticks
 
 ```lua
 world:broadcastInRange("&cDanger nearby!", 0, 64, 0, 20)
@@ -226,14 +258,23 @@ Performs a raycast and returns a hit result or `nil`.
 - `includeFluids` (`boolean`, optional) — Include fluid blocks
 - `includeEntities` (`boolean`, optional) — Include entity hits
 
-Returns a hit result with:
-- `hit.pos` — Intersection point `{x, y, z}`
-- `hit.entity` — Hit entity, or `nil`
-- `hit.block` — Block position `{x, y, z}`, or `nil`
+Returns a hit result table or `nil`:
+
+For **entity hits**:
+- `hit.type` — `"entity"`
+- `hit.entity` — Hit entity wrapper
+- `hit.hit` — Intersection point `{x, y, z}`
+
+For **block hits**:
+- `hit.type` — `"block"`
+- `hit.blockPos` — Block position `{x, y, z}`
+- `hit.hit` — Intersection point `{x, y, z}`
+- `hit.side` — Block face (e.g. `"north"`)
+- `hit.normal` — Face normal `{x, y, z}`
 
 ```lua
 local hit = world:raycast({ x = 0, y = 64, z = 0 }, { x = 0, y = -1, z = 0 }, 10)
 if hit then
-  mc.broadcast("Hit at " .. hit.pos.x .. ", " .. hit.pos.y .. ", " .. hit.pos.z)
+  mc.broadcast("Hit at " .. hit.hit.x .. ", " .. hit.hit.y .. ", " .. hit.hit.z)
 end
 ```

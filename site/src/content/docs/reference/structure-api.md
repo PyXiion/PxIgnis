@@ -17,7 +17,7 @@ Loads a structure from the server's `structures/` folder.
 
 - `id` (`string`) — Structure name (without `.nbt`)
 
-Returns a structure wrapper or `nil`.
+Returns a structure wrapper, or throws an error if not found.
 
 ```lua
 local struct = mc.loadStructure("my_house")
@@ -29,7 +29,7 @@ Loads a structure from a file path.
 
 - `path` (`string`) — Absolute or server-relative path
 
-Returns a structure wrapper or `nil`.
+Returns a structure wrapper, or throws an error if not found.
 
 ```lua
 local struct = mc.loadStructureFile("config/ignis/my_build.nbt")
@@ -64,7 +64,7 @@ Places the structure in the world.
 Entity UUIDs are regenerated automatically — no duplicates.
 
 ```lua
-struct:place(world, Vec(100, 64, 200), {
+struct:place(world, vec(100, 64, 200), {
   rotation = "clockwise_90",
   mirror = "left_right",
   on_entity = function(entity)
