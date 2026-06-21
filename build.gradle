@@ -67,7 +67,9 @@ dependencies {
     // Permissions API
     def permApiVersion = buildTarget == '1.21.10' ? '0.5.0' : '0.6.1'
     modImplementation "me.lucko:fabric-permissions-api:${permApiVersion}"
-    shadow "me.lucko:fabric-permissions-api:${permApiVersion}"
+    shadow ("me.lucko:fabric-permissions-api:${permApiVersion}") {
+        transitive = false
+    }
 
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:$kotlin_version"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
@@ -81,7 +83,7 @@ shadowJar {
     configurations = [project.configurations.shadow]
     minimize()
 
-    relocate 'org.luaj', 'ru.pyxiion.lib.luaj'
+    relocate 'org.luaj', 'ru.pyxiion.luanova'
     relocate 'me.lucko.fabric.api.permissions', 'ru.pyxiion.lib.fabric.api.permissions'
 }
 
