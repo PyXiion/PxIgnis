@@ -93,8 +93,6 @@ class DataTableTest {
         val backend = MemoryBackend()
         val dt = DataTable(backend, "test")
         val nested = LuaTable()
-        // Attempt to store a function value
-        val fn = LuaValue.FALSE // need a real function
         assertFailsWith<LuaError> {
             val t = LuaTable()
             t.rawset("fn", object : org.luaj.vm2.lib.ZeroArgFunction() {

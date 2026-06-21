@@ -1,7 +1,3 @@
--- Fully compiled Lua f-string-like formatter with bytecode generation
--- Features: caching, secure env, dot-notation, metatable __tostring support
-
-local format_cache = {}
 local template_cache = {}
 
 local function resolve_dot_path(path)
@@ -51,17 +47,21 @@ local function compile_template(pattern)
     return chunk()
 end
 
-function format(pattern)
-    local fn = template_cache[pattern]
-    if not fn then
-        fn = compile_template(pattern)
-        template_cache[pattern] = fn
+local format = setmetatable({}, {
+    __call = function(_, pattern)
+        local fn = template_cache[pattern]
+        if not fn then
+            fn = compile_template(pattern)
+            template_cache[pattern] = fn
+        end
+        return fn
     end
-    return fn
-end
+})
 
-function broadcastFormat(template)
+function format.broadcast(template)
     return function(args)
         mc.broadcast(format(template)(args))
     end
 end
+
+return format

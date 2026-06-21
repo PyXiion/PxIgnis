@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.wrapper
 
 import net.minecraft.server.network.ServerPlayerEntity
 import org.luaj.vm2.LuaTable

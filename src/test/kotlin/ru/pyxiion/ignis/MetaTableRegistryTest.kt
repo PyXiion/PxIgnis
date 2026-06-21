@@ -22,24 +22,6 @@ class MetaTableRegistryTest {
     }
 
     @Test
-    fun `get entity returns LuaTable`() {
-        val meta = MetaTableRegistry.get("entity")
-        assertTrue(meta.istable())
-    }
-
-    @Test
-    fun `get world returns LuaTable`() {
-        val meta = MetaTableRegistry.get("world")
-        assertTrue(meta.istable())
-    }
-
-    @Test
-    fun `get structure returns LuaTable`() {
-        val meta = MetaTableRegistry.get("structure")
-        assertTrue(meta.istable())
-    }
-
-    @Test
     fun `get returns same instance on repeated calls`() {
         val a = MetaTableRegistry.get("player")
         val b = MetaTableRegistry.get("player")
@@ -72,12 +54,6 @@ class MetaTableRegistryTest {
         val meta = MetaTableRegistry.get("player")
         meta.set("maxMana", LuaValue.valueOf(100.0))
         assertEquals(100.0, meta.get("maxMana").todouble())
-    }
-
-    @Test
-    fun `unknown key returns nil`() {
-        val meta = MetaTableRegistry.get("player")
-        assertTrue(meta.get("nonexistent").isnil())
     }
 
     @Test

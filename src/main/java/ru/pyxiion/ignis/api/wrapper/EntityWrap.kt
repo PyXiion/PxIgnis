@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.wrapper
 
 import net.minecraft.entity.Entity
 import net.minecraft.entity.EquipmentSlot
@@ -21,6 +21,11 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
+import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.Vector
+import ru.pyxiion.ignis.api.initVecMeta
+import ru.pyxiion.ignis.api.util.metaTable
+import ru.pyxiion.ignis.api.util.performRaycast
 import ru.pyxiion.ignis.luaToNbt
 import ru.pyxiion.ignis.nbtToLua
 import ru.pyxiion.ignis.toVec3d
@@ -62,14 +67,13 @@ object EntityWrap {
         "feet" to EquipmentSlot.FEET,
     )
 
-    internal val entityKeys: List<String> get() = BUILT.keys.map { it.tojstring() }
-
-    private val BUILT = metaTable<Entity> {
+    internal val BUILT = metaTable<Entity> {
         prop("uuid") { LuaValue.valueOf(uuid.toString()) }
         prop("type") { LuaValue.valueOf(Registries.ENTITY_TYPE.getId(type).toString()) }
         prop("name") { LuaValue.valueOf(name.literalString ?: name.string) }
         prop("displayName") { LuaValue.valueOf(displayName?.string ?: name.literalString!!) }
-        prop("customName",
+        prop(
+            "customName",
             get = {
                 val cn = customName
                 if (cn != null) LuaValue.valueOf(cn.string) else LuaValue.NIL
@@ -78,56 +82,67 @@ object EntityWrap {
         )
         prop("world") { WorldWrap.wrap(entityWorld as ServerWorld) }
 
-        lazy("pos",
-            factory = { e -> livePosTable(e) },
+        lazy(
+            "pos",
+            factory = { livePosTable(this) },
             set = { v ->
                 val vec = v.toVec3d()
                 setPosition(vec.x, vec.y, vec.z)
-            }
+            },
+            invalidate = false,
         )
 
         prop("dir") { Vector.fromMc(rotationVector).toLuaValue() }
         prop("bodyDir") { Vector.fromRotation(bodyYaw, 0.0f).toLuaValue() }
 
-        prop("fallDistance",
-            get = { LuaValue.valueOf(fallDistance.toDouble()) },
+        prop(
+            "fallDistance",
+            get = { LuaValue.valueOf(fallDistance) },
             set = { v -> fallDistance = v.todouble() }
         )
-        prop("fireTicks",
+        prop(
+            "fireTicks",
             get = { LuaValue.valueOf(fireTicks) },
             set = { v -> fireTicks = v.toint() }
         )
-        prop("glowing",
+        prop(
+            "glowing",
             get = { if (isGlowing) LuaValue.TRUE else LuaValue.FALSE },
             set = { v -> isGlowing = v.toboolean() }
         )
-        prop("invulnerable",
+        prop(
+            "invulnerable",
             get = { if (isInvulnerable) LuaValue.TRUE else LuaValue.FALSE },
             set = { v -> isInvulnerable = v.toboolean() }
         )
-        prop("isSneaking",
+        prop(
+            "isSneaking",
             get = { if (isSneaking) LuaValue.TRUE else LuaValue.FALSE },
             set = { v -> isSneaking = v.toboolean() }
         )
-        prop("isSprinting",
+        prop(
+            "isSprinting",
             get = { if (isSprinting) LuaValue.TRUE else LuaValue.FALSE },
             set = { v -> isSprinting = v.toboolean() }
         )
-        prop("air",
+        prop(
+            "air",
             get = { LuaValue.valueOf(air) },
             set = { v -> air = v.toint() }
         )
         prop("maxAir") { LuaValue.valueOf(maxAir) }
         prop("removed") { if (isRemoved) LuaValue.TRUE else LuaValue.FALSE }
 
-        prop("health",
+        prop(
+            "health",
             get = {
                 val liv = this as? LivingEntity
                 if (liv != null) LuaValue.valueOf(liv.health.toDouble()) else LuaValue.NIL
             },
             set = { v -> (this as? LivingEntity)?.health = v.tofloat() }
         )
-        prop("maxHealth",
+        prop(
+            "maxHealth",
             get = {
                 val v = (this as? LivingEntity)?.getAttributeInstance(EntityAttributes.MAX_HEALTH)?.value
                 if (v != null) LuaValue.valueOf(v) else LuaValue.NIL
@@ -142,7 +157,8 @@ object EntityWrap {
             }
         )
 
-        map(attributeAccessors,
+        map(
+            attributeAccessors,
             getter = { e, attr ->
                 val v = (e as? LivingEntity)?.getAttributeInstance(attr)?.value
                 if (v != null) LuaValue.valueOf(v) else LuaValue.NIL
@@ -152,20 +168,21 @@ object EntityWrap {
             }
         )
 
-        map(equipmentSlots,
+        map(
+            equipmentSlots,
             getter = { e, slot ->
                 val stack = (e as? LivingEntity)?.getEquippedStack(slot)
-                if (stack != null && !stack.isEmpty) ItemStackWrapper.wrap(stack) else LuaValue.NIL
+                if (stack != null && !stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
             setter = { e, slot, v ->
                 val stack = if (v.isnil()) ItemStack.EMPTY
-                            else ItemStackWrapper.unwrap(v)
-                                ?: throw LuaError("setItem: ожидается ItemStack от mc.createItem")
+                else ItemStackWrap.unwrap(v)
+                    ?: throw LuaError("setItem: ожидается ItemStack от mc.createItem")
                 (e as? LivingEntity)?.equipStack(slot, stack)
             }
         )
 
-        lazy("tags", factory = { e -> tagsTable(e) })
+        lazy("tags", factory = { tagsTable(this) })
 
         method("readNbt") { args ->
             val self = args.arg(1).checktable()
@@ -263,6 +280,8 @@ object EntityWrap {
             e.setOnFire(true)
             LuaValue.NIL
         }
+
+        toString { "[Entity $type, $uuid]" }
     }
 
     fun initMeta(meta: LuaTable) {
@@ -274,7 +293,7 @@ object EntityWrap {
         meta.set("__index", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val tag = args.arg(2).tojstring()
-                return LuaValue.valueOf(entity.commandTags.contains(tag))
+                return valueOf(entity.commandTags.contains(tag))
             }
         })
         meta.set("__newindex", object : VarArgFunction() {
@@ -286,7 +305,7 @@ object EntityWrap {
                 } else {
                     entity.removeCommandTag(tag)
                 }
-                return LuaValue.NIL
+                return NIL
             }
         })
         meta.set("__pairs", object : VarArgFunction() {
@@ -295,13 +314,13 @@ object EntityWrap {
                 val iterator = object : VarArgFunction() {
                     private var index = 0
                     override fun invoke(args: Varargs): Varargs {
-                        if (index >= tags.size) return LuaValue.NIL
+                        if (index >= tags.size) return NIL
                         val tag = tags[index]
                         index++
-                        return LuaValue.varargsOf(arrayOf(LuaValue.valueOf(tag), LuaValue.valueOf(true)))
+                        return varargsOf(arrayOf(valueOf(tag), valueOf(true)))
                     }
                 }
-                return LuaValue.varargsOf(arrayOf(iterator, LuaValue.NIL, LuaValue.NIL))
+                return varargsOf(arrayOf(iterator, NIL, NIL))
             }
         })
         val table = LuaTable()
@@ -316,10 +335,10 @@ object EntityWrap {
                 val field = args.arg(2).tojstring()
                 val v = e.entityPos
                 return when (field) {
-                    "x" -> LuaValue.valueOf(v.x)
-                    "y" -> LuaValue.valueOf(v.y)
-                    "z" -> LuaValue.valueOf(v.z)
-                    else -> LuaValue.NIL
+                    "x" -> valueOf(v.x)
+                    "y" -> valueOf(v.y)
+                    "z" -> valueOf(v.z)
+                    else -> NIL
                 }
             }
         })
@@ -333,9 +352,10 @@ object EntityWrap {
                     if (field == "y") value else v.y,
                     if (field == "z") value else v.z,
                 )
-                return LuaValue.NIL
+                return NIL
             }
         })
+        initVecMeta(meta)
         val t = LuaTable()
         t.setmetatable(meta)
         return t

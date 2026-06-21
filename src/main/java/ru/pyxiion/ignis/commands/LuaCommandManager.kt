@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis
+package ru.pyxiion.ignis.commands
 
 import com.mojang.brigadier.Command
 import com.mojang.brigadier.context.CommandContext
@@ -8,6 +8,8 @@ import com.mojang.brigadier.tree.LiteralCommandNode
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.command.CommandManager
 import net.minecraft.server.command.ServerCommandSource
+import ru.pyxiion.ignis.PxIgnis
+import ru.pyxiion.ignis.checkPermission
 import ru.pyxiion.ignis.mixins.CommandNodeMixin
 
 class LuaCommandManager(

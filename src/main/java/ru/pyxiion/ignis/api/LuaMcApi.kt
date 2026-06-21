@@ -1,7 +1,6 @@
 package ru.pyxiion.ignis.api
 
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.entity.Entity
 import net.minecraft.entity.mob.MobEntity
 import net.minecraft.inventory.SimpleInventory
 import net.minecraft.nbt.NbtIo
@@ -18,11 +17,28 @@ import net.minecraft.util.Identifier
 import net.minecraft.util.math.Vec3d
 import net.minecraft.world.World
 import org.luaj.vm2.LuaError
+import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
+import ru.pyxiion.ignis.EventBus
 import ru.pyxiion.ignis.Scheduler
+import ru.pyxiion.ignis.api.AsyncLib
+import ru.pyxiion.ignis.api.manager.HologramManager
+import ru.pyxiion.ignis.api.manager.LockableInventory
+import ru.pyxiion.ignis.api.manager.MobAIManager
+import ru.pyxiion.ignis.api.manager.RegionManager
+import ru.pyxiion.ignis.api.util.ItemBuilder
+import ru.pyxiion.ignis.api.util.ItemStackCodec
+import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.wrapper.InvWrap
+import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
+import ru.pyxiion.ignis.api.wrapper.MobWrap
+import ru.pyxiion.ignis.api.wrapper.PlayerListWrapper
+import ru.pyxiion.ignis.api.wrapper.RegionWrap
+import ru.pyxiion.ignis.api.wrapper.StructureWrap
+import ru.pyxiion.ignis.api.wrapper.WorldWrap
 import ru.pyxiion.ignis.asVarArgFunction
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.unwrap
@@ -33,9 +49,11 @@ import java.util.UUID
 
 class LuaMcApi(
     private val server: MinecraftServer,
-    private val storage: StorageManager
+    private val storage: StorageManager,
+    private val stateProvider: () -> LuaState,
+    private val eventBus: EventBus,
 ) {
-    val scheduler = Scheduler()
+    val scheduler = Scheduler(stateProvider)
     private val playerCache = mutableMapOf<UUID, LuaValue>()
 
     fun invalidatePlayer(uuid: UUID) {
@@ -260,12 +278,23 @@ class LuaMcApi(
     fun toTable(): LuaTable {
         MetaTableRegistry.init()
 
+        val mcMeta = LuaTable()
+        mcMeta.rawset("__index", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val key = args.arg(2).checkjstring()
+                if (key == "onlineCount") {
+                    return LuaValue.valueOf(server.playerManager.currentPlayerCount.toDouble())
+                }
+                return LuaValue.NIL
+            }
+        })
+
         MetaTableRegistry.ITEM.set("serialise", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val self = args.arg(1).checktable()
-                val stack = ItemStackWrapper.unwrap(self)
+                val stack = ItemStackWrap.unwrap(self)
                     ?: throw LuaError("item:serialise(): не ItemStack")
-                val json = ItemStackWrapper.toJson(stack, server.registryManager)
+                val json = ItemStackCodec.encode(stack, server.registryManager)
                 return LuaValue.valueOf(json)
             }
         })
@@ -279,7 +308,7 @@ class LuaMcApi(
             }
         })
 
-        return luaTableOf(
+        val table = luaTableOf(
             "broadcast" to this::broadcast.asVarArgFunction(),
             "data" to storage.getGlobalData(),
             "time" to this::luaTime.asVarArgFunction(),
@@ -309,7 +338,7 @@ class LuaMcApi(
                     return HologramManager.get(uuid)?.toLuaValue() ?: LuaValue.NIL
                 }
             },
-            "onlineCount" to LuaValue.valueOf(server.playerManager.currentPlayerCount.toDouble()),
+            // onlineCount handled via __index on the metatable below
             "loadStructure" to this::luaLoadStructure.asVarArgFunction(),
             "loadStructureFile" to this::luaLoadStructureFile.asVarArgFunction(),
             "dump" to this::luaDump.asVarArgFunction(),
@@ -320,9 +349,9 @@ class LuaMcApi(
                     when (type) {
                         "item" -> {
                             val obj = args.arg(2)
-                            val stack = ItemStackWrapper.unwrap(obj)
+                            val stack = ItemStackWrap.unwrap(obj)
                                 ?: throw LuaError("mc.serialise('item', ...): ожидается ItemStack")
-                            val json = ItemStackWrapper.toJson(stack, server.registryManager)
+                            val json = ItemStackCodec.encode(stack, server.registryManager)
                             return LuaValue.valueOf(json)
                         }
                         "inventory" -> {
@@ -341,8 +370,8 @@ class LuaMcApi(
                     val data = args.arg(2).checkjstring()
                     when (type) {
                         "item" -> {
-                            val stack = ItemStackWrapper.fromJson(data, server.registryManager)
-                            return if (stack.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(stack)
+                            val stack = ItemStackCodec.decode(data, server.registryManager)
+                            return if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
                         }
                         "inventory" -> {
                             val inv = InvWrap.deserialise(data, server.registryManager)
@@ -380,9 +409,48 @@ class LuaMcApi(
                     val id = args.arg(1).checkjstring()
                     val fn = args.arg(2).checkfunction()
                     MobAIManager.registerBehaviour(id, fn)
-                    return NIL
+                    return LuaValue.NIL
                 }
             },
         )
+
+        val onHandler: (Varargs) -> Varargs = { args: Varargs ->
+            require(args.narg() == 2) { "on(event, handler) requires 2 arguments" }
+            val eventName = args.checkjstring(1)
+            val handler = args.checkfunction(2)
+            val id = eventBus.on(eventName, handler)
+            LuaValue.valueOf(id)
+        }
+        table.set("on", onHandler.asVarArgFunction())
+
+        val offHandler: (Varargs) -> Varargs = { args: Varargs ->
+            require(args.narg() == 1) { "off(id) requires 1 argument" }
+            val id = args.checkint(1)
+            LuaValue.valueOf(eventBus.off(id))
+        }
+        table.set("off", offHandler.asVarArgFunction())
+
+        val emitHandler: (Varargs) -> Varargs = { args ->
+            require(args.narg() >= 1) { "emit(event, ...) requires at least 1 argument" }
+            val eventName = args.checkjstring(1)
+            val eventArgs = if (args.narg() >= 2) {
+                (2..args.narg()).map { args.arg(it) }.toTypedArray()
+            } else emptyArray<LuaValue>()
+            eventBus.fire(eventName, *eventArgs)
+            LuaValue.NIL
+        }
+        table.set("emit", emitHandler.asVarArgFunction())
+
+        table.set("createItem", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val stack = ItemBuilder.fromLua(args)
+                return ItemStackWrap.wrap(stack)
+            }
+        })
+
+        AsyncLib(server, stateProvider(), scheduler).install(table)
+
+        table.setmetatable(mcMeta)
+        return table
     }
 }

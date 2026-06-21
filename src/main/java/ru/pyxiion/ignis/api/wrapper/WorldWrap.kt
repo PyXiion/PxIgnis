@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.wrapper
 
 import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
@@ -7,7 +7,9 @@ import net.minecraft.entity.attribute.EntityAttributes
 import net.minecraft.entity.decoration.DisplayEntity
 import net.minecraft.entity.mob.MobEntity
 import net.minecraft.nbt.NbtCompound
+import net.minecraft.nbt.NbtInt
 import net.minecraft.nbt.NbtOps
+import net.minecraft.nbt.NbtString
 import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket
 import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket
 import net.minecraft.particle.ParticleEffect
@@ -25,12 +27,17 @@ import net.minecraft.util.math.Vec3d
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
+import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.manager.HologramManager
+import ru.pyxiion.ignis.api.manager.RegionManager
+import ru.pyxiion.ignis.api.resolveOperand
+import ru.pyxiion.ignis.api.util.metaTable
+import ru.pyxiion.ignis.api.util.performRaycast
 import ru.pyxiion.ignis.luaToNbt
 import ru.pyxiion.ignis.toBlockPos
 import ru.pyxiion.ignis.toVec3d
 import ru.pyxiion.ignis.unwrap
-import java.util.UUID
+import java.util.*
 
 object WorldWrap {
 
@@ -39,7 +46,11 @@ object WorldWrap {
         @JvmField val tickProvider: () -> Long,
     )
 
-    fun wrap(world: ServerWorld, playerCache: MutableMap<UUID, LuaValue> = mutableMapOf(), tickProvider: () -> Long = { 0L }): LuaValue {
+    fun wrap(
+        world: ServerWorld,
+        playerCache: MutableMap<UUID, LuaValue> = mutableMapOf(),
+        tickProvider: () -> Long = { 0L }
+    ): LuaValue {
         val t = LuaTable()
         t.setmetatable(MetaTableRegistry.WORLD)
         t.rawset("__pxrp_type", LuaValue.valueOf("world"))
@@ -50,18 +61,21 @@ object WorldWrap {
 
     private val BUILT = metaTable<ServerWorld> {
         prop("name") { LuaValue.valueOf(registryKey.value.path) }
-        prop("time",
+        prop(
+            "time",
             get = { LuaValue.valueOf(timeOfDay.toDouble()) },
             set = { v -> timeOfDay = v.tolong() }
         )
-        prop("raining",
+        prop(
+            "raining",
             get = { if (isRaining) LuaValue.TRUE else LuaValue.FALSE },
             set = { v ->
                 if (v.toboolean()) setWeather(0, 6000, true, isThundering)
                 else setWeather(0, 0, false, isThundering)
             }
         )
-        prop("thundering",
+        prop(
+            "thundering",
             get = { if (isThundering) LuaValue.TRUE else LuaValue.FALSE },
             set = { v ->
                 if (v.toboolean()) setWeather(0, 6000, isRaining, true)
@@ -84,6 +98,7 @@ object WorldWrap {
             t
         }
 
+        // world:spawn(entityId, pos, overrides?)
         method("spawn") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -109,6 +124,7 @@ object WorldWrap {
             }
         }
 
+        // world:spawnHologram(pos, text, opts?)
         method("spawnHologram") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -139,10 +155,18 @@ object WorldWrap {
                 o.get("background").takeIf { it.isnumber() }?.let { entity.background = it.toint() }
                 o.get("opacity").takeIf { it.isnumber() }?.let { entity.textOpacity = it.toint().toByte() }
                 o.get("shadow").takeIf { it.isboolean() }?.let {
-                    HologramWrapper.applyFlagFromLua(entity, DisplayEntity.TextDisplayEntity.SHADOW_FLAG, it.toboolean())
+                    HologramWrapper.applyFlagFromLua(
+                        entity,
+                        DisplayEntity.TextDisplayEntity.SHADOW_FLAG,
+                        it.toboolean()
+                    )
                 }
                 o.get("seeThrough").takeIf { it.isboolean() }?.let {
-                    HologramWrapper.applyFlagFromLua(entity, DisplayEntity.TextDisplayEntity.SEE_THROUGH_FLAG, it.toboolean())
+                    HologramWrapper.applyFlagFromLua(
+                        entity,
+                        DisplayEntity.TextDisplayEntity.SEE_THROUGH_FLAG,
+                        it.toboolean()
+                    )
                 }
                 o.get("glowing").takeIf { it.isboolean() }?.let { entity.isGlowing = it.toboolean() }
             }
@@ -152,6 +176,7 @@ object WorldWrap {
             HologramManager.create(entity, w).toLuaValue()
         }
 
+        // world:setBlock(pos, blockId)
         method("setBlock") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -165,6 +190,7 @@ object WorldWrap {
             LuaValue.NIL
         }
 
+        // world:getBlock(pos) -> blockId
         method("getBlock") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -173,6 +199,7 @@ object WorldWrap {
             LuaValue.valueOf(Registries.BLOCK.getId(block).toString())
         }
 
+        // world:fill(posA, posB, blockId)
         method("fill") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -202,6 +229,7 @@ object WorldWrap {
             LuaValue.NIL
         }
 
+        // world:particle(particleId, pos, opts?)
         method("particle") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -214,7 +242,9 @@ object WorldWrap {
             val (x, y, z) = resolveOperand(args.arg(3))
 
             val count: Int
-            val deltaX: Double; val deltaY: Double; val deltaZ: Double
+            val deltaX: Double
+            val deltaY: Double
+            val deltaZ: Double
             val speed: Double
             var data: LuaTable?
 
@@ -232,9 +262,15 @@ object WorldWrap {
                 data = opts.get("data").opttable(null)
                 if (data == null) {
                     val known = setOf("count", "spread", "speed", "data")
-                    if (opts.keys().any { !known.contains(it.tojstring()) }) {
-                        data = opts
+                    var hasExtra = false
+                    var cursor = LuaValue.NIL
+                    while (true) {
+                        val entry = opts.next(cursor)
+                        if (entry.isnil(1)) break
+                        cursor = entry.arg(1)
+                        if (!known.contains(cursor.tojstring())) { hasExtra = true; break }
                     }
+                    if (hasExtra) data = opts
                 }
             } else {
                 count = 1; deltaX = 0.0; deltaY = 0.0; deltaZ = 0.0; speed = 0.0; data = null
@@ -242,30 +278,28 @@ object WorldWrap {
 
             val effect = buildParticleEffect(particleType, data, w, resolvedId)
 
-            w.players.forEach { player ->
-                w.spawnParticles(player, effect, true, false, x, y, z, count, deltaX, deltaY, deltaZ, speed)
-            }
+            w.spawnParticles(effect, true, false, x, y, z, count, deltaX, deltaY, deltaZ, speed)
             LuaValue.NIL
         }
 
+        // world:playSound(soundId, pos, voulme?, pitch?)
         method("playSound") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
             val id = args.arg(2).checkjstring()
-            val x = args.arg(3).checkdouble()
-            val y = args.arg(4).checkdouble()
-            val z = args.arg(5).checkdouble()
-            val volume = args.arg(6).optdouble(1.0).toFloat()
-            val pitch = args.arg(7).optdouble(1.0).toFloat()
+            val pos = args.arg(3).toVec3d()
+            val volume = args.arg(4).optdouble(1.0).toFloat()
+            val pitch = args.arg(5).optdouble(1.0).toFloat()
 
             val key = RegistryKey.of(RegistryKeys.SOUND_EVENT, Identifier.of(id))
             val sound = Registries.SOUND_EVENT.get(key)
                 ?: throw LuaError("Звук '$id' не найден")
 
-            w.playSound(null, x, y, z, sound, SoundCategory.PLAYERS, volume, pitch)
+            w.playSound(null, pos.x, pos.y, pos.z, sound, SoundCategory.PLAYERS, volume, pitch)
             LuaValue.NIL
         }
 
+        // world:getEntities(pos, radius, type?) -> {entity,...}
         method("getEntities") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -290,14 +324,17 @@ object WorldWrap {
 
             val list = LuaTable()
             entities.forEachIndexed { i, entity ->
-                list.set(i + 1, when (entity) {
-                    is MobEntity -> MobWrap.wrap(entity)
-                    else -> EntityWrap.wrap(entity)
-                })
+                list.set(
+                    i + 1, when (entity) {
+                        is MobEntity -> MobWrap.wrap(entity)
+                        else -> EntityWrap.wrap(entity)
+                    }
+                )
             }
             list
         }
 
+        // world:raycast(start, dir, range, fluids?, entities?)
         method("raycast") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -310,9 +347,18 @@ object WorldWrap {
             val dirNorm = dir.normalize()
             val end = Vec3d(start.x + dirNorm.x * range, start.y + dirNorm.y * range, start.z + dirNorm.z * range)
 
-            performRaycast(start, end, range, includeFluids, includeEntities, w, null)
+            performRaycast(
+                start,
+                end,
+                range,
+                includeFluids,
+                includeEntities,
+                w,
+                null
+            )
         }
 
+        // world:broadcastInRange(text, pos, range, overlay?)
         method("broadcastInRange") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -343,6 +389,7 @@ object WorldWrap {
             LuaValue.NIL
         }
 
+        // world:createRegion(posA, posB) -> region
         method("createRegion") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -355,6 +402,7 @@ object WorldWrap {
             RegionWrap.wrap(region)
         }
 
+        // world:getRegion(id) -> region?
         method("getRegion") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -364,6 +412,7 @@ object WorldWrap {
             if (r != null && r.world === w) RegionWrap.wrap(r) else LuaValue.NIL
         }
 
+        // world:getRegionsAt(pos) -> {region,...}
         method("getRegionsAt") { args ->
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
@@ -416,7 +465,7 @@ object WorldWrap {
 
         val ops = world.registryManager.getOps(NbtOps.INSTANCE)
         val nbt = if (data != null) {
-            luaToNbt(normalizeData(data)) as NbtCompound
+            particleDataToNbt(data)
         } else {
             NbtCompound()
         }
@@ -426,41 +475,28 @@ object WorldWrap {
             .getOrThrow { msg: String -> LuaError("Частица '$id': $msg") }
     }
 
-    private fun normalizeData(data: LuaTable): LuaTable {
-        val result = LuaTable()
-        for (key in data.keys()) {
-            val k = key.tojstring()
-            val v = data.get(key)
-            when (k) {
-                "block" -> {
-                    val blockId = v.checkjstring()
-                    val resolved = if (blockId.contains(':')) blockId else "minecraft:$blockId"
-                    result.rawset("block_state", LuaValue.valueOf(resolved))
-                }
-                "item" -> {
-                    val itemId = v.checkjstring()
-                    val resolved = if (itemId.contains(':')) itemId else "minecraft:$itemId"
-                    val itemTable = LuaTable()
-                    itemTable.rawset("id", LuaValue.valueOf(resolved))
-                    itemTable.rawset("count", LuaValue.valueOf(1))
-                    result.rawset("item", itemTable)
-                }
-                "color" -> {
-                    val (r, g, b) = extractColorValues(v)
-                    result.rawset("color", LuaValue.valueOf(rgbToInt(r, g, b)))
-                }
-                "fromColor" -> {
-                    val (r, g, b) = extractColorValues(v)
-                    result.rawset("from_color", LuaValue.valueOf(rgbToInt(r, g, b)))
-                }
-                "toColor" -> {
-                    val (r, g, b) = extractColorValues(v)
-                    result.rawset("to_color", LuaValue.valueOf(rgbToInt(r, g, b)))
-                }
-                else -> result.rawset(camelToSnake(k), v)
+    private fun particleDataToNbt(data: LuaTable): NbtCompound {
+        val compound = NbtCompound()
+        var k = LuaValue.NIL
+        while (true) {
+            val entry = data.next(k)
+            if (entry.isnil(1)) break
+            val key = entry.arg(1).tojstring()
+            val v = entry.arg(2)
+            k = entry.arg(1)
+            when (key) {
+                "block" -> compound.put("block_state", NbtString.of(resolveBlockId(v.checkjstring())))
+                "item" -> compound.put("item", NbtCompound().apply {
+                    put("id", NbtString.of(resolveBlockId(v.checkjstring())))
+                    put("count", NbtInt.of(1))
+                })
+                "color" -> { val (r, g, b) = extractColorValues(v); compound.put("color", NbtInt.of(rgbToInt(r, g, b))) }
+                "fromColor" -> { val (r, g, b) = extractColorValues(v); compound.put("from_color", NbtInt.of(rgbToInt(r, g, b))) }
+                "toColor" -> { val (r, g, b) = extractColorValues(v); compound.put("to_color", NbtInt.of(rgbToInt(r, g, b))) }
+                else -> compound.put(camelToSnake(key), luaToNbt(v))
             }
         }
-        return result
+        return compound
     }
 
     private fun extractColorValues(v: LuaValue): Triple<Double, Double, Double> {
@@ -479,7 +515,10 @@ object WorldWrap {
         return (ri shl 16) or (gi shl 8) or bi
     }
 
-    private fun camelToSnake(s: String): String {
-        return s.replace(Regex("([a-z])([A-Z])")) { "${it.groupValues[1]}_${it.groupValues[2].lowercase()}" }
+    private fun camelToSnake(s: String): String = buildString(s.length + 2) {
+        for (c in s) {
+            if (c.isUpperCase()) { append('_'); append(c.lowercase()) }
+            else append(c)
+        }
     }
 }

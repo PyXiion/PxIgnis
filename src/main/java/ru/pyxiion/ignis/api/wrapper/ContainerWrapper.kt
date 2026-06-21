@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.wrapper
 
 import net.minecraft.inventory.SimpleInventory
 import net.minecraft.screen.ScreenHandler
@@ -6,7 +6,10 @@ import net.minecraft.server.network.ServerPlayerEntity
 import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
+import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.manager.ContainerManager
+import ru.pyxiion.ignis.api.manager.LockableInventory
+import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.unwrap
 
 
@@ -27,8 +30,8 @@ class ContainerWrapper(
 
     companion object {
         private val BUILT = metaTable<ContainerWrapper> {
-            prop("player") { PlayerWrap.wrap(player) }
-            prop("inventory") { InvWrap.wrap(inventory) }
+            lazy("player") { PlayerWrap.wrap(player) }
+            lazy("inventory") { InvWrap.wrap(inventory) }
 
             method("close") { args ->
                 val self = args.arg(1).checktable()

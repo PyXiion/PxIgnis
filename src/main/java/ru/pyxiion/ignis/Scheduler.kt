@@ -1,10 +1,12 @@
 package ru.pyxiion.ignis
 
 import org.luaj.vm2.LuaFunction
+import org.luaj.vm2.LuaState
+import org.luaj.vm2.LuaThread
 import ru.pyxiion.ignis.PxIgnis.Companion.logger
 import java.util.PriorityQueue
 
-class Scheduler {
+class Scheduler(private val stateProvider: () -> LuaState) {
     private var nextId = 0
     var currentTick = 0L
     private val tasks = PriorityQueue(compareBy<ScheduledTask> { it.fireAtTick })
@@ -12,6 +14,8 @@ class Scheduler {
 
     fun tick() {
         currentTick++
+
+        val state = stateProvider()
 
         // Limiting the cycle to avoid hanging the server
         while (tasks.isNotEmpty() && tasks.peek().fireAtTick <= currentTick) {
@@ -23,7 +27,8 @@ class Scheduler {
             }
 
             try {
-                task.callback.call()
+                // Allow async inside
+                LuaThread(state, task.callback).call()
             } catch (e: Throwable) {
                 logger.warn("Ошибка в задании планировщика #${task.id}: ${e.message}")
             }

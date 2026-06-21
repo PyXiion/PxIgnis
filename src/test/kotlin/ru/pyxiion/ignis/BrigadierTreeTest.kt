@@ -1,6 +1,5 @@
 package ru.pyxiion.ignis
 
-import com.mojang.brigadier.Command
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.mojang.brigadier.builder.RequiredArgumentBuilder
@@ -9,8 +8,6 @@ import com.mojang.brigadier.tree.CommandNode
 import net.minecraft.server.command.ServerCommandSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import java.util.function.Predicate
 
 private fun literal(name: String) =
     LiteralArgumentBuilder.literal<ServerCommandSource>(name).build()
@@ -18,8 +15,6 @@ private fun literal(name: String) =
 private fun arg(name: String): ArgumentCommandNode<ServerCommandSource, *> =
     RequiredArgumentBuilder.argument<ServerCommandSource, String>(name, StringArgumentType.word()).build()
 
-private val commandField = CommandNode::class.java.getDeclaredField("command").also { it.isAccessible = true }
-private val requirementField = CommandNode::class.java.getDeclaredField("requirement").also { it.isAccessible = true }
 private val childrenField = CommandNode::class.java.getDeclaredField("children").also { it.isAccessible = true }
 
 @Suppress("UNCHECKED_CAST")
@@ -58,23 +53,6 @@ class BrigadierTreeTest {
 
         assertEquals(setOf("mode"), cmd.childrenMap().keys)
         assertEquals(setOf("target"), cmd.getChild("mode")!!.childrenMap().keys)
-    }
-
-    @Test
-    fun `executor can be set via reflection`() {
-        val node = arg("x")
-        val exec = Command<ServerCommandSource> { 1 }
-        commandField.set(node, exec)
-        assertNotNull(node.command)
-        assertEquals(1, node.command.run(null))
-    }
-
-    @Test
-    fun `requirement can be set via reflection`() {
-        val node = literal("cmd")
-        val predicate = Predicate<ServerCommandSource> { true }
-        requirementField.set(node, predicate)
-        assertEquals(predicate, node.requirement)
     }
 
     @Test

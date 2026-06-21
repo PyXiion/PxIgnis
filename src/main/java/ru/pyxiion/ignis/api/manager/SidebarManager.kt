@@ -1,6 +1,7 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.manager
 
 import net.minecraft.server.network.ServerPlayerEntity
+import ru.pyxiion.ignis.api.wrapper.SidebarWrapper
 
 object SidebarManager {
     private val sidebars = mutableMapOf<ServerPlayerEntity, SidebarWrapper>()

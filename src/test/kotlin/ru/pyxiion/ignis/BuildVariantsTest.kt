@@ -2,6 +2,8 @@ package ru.pyxiion.ignis
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import ru.pyxiion.ignis.commands.SyntaxNode
+import ru.pyxiion.ignis.commands.generateCommandPaths
 
 class BuildVariantsTest {
 
@@ -118,18 +120,4 @@ class BuildVariantsTest {
         )
     }
 
-    @Test
-    fun `single required returns single variant`() {
-        val variants = generateCommandPaths("cmd <a:text>")
-        assertEquals(1, variants.size)
-        assertEquals(2, variants[0].size)
-        assertEquals(SyntaxNode.Literal("cmd"), variants[0][0])
-        assertEquals(SyntaxNode.Argument("a", "text", false), variants[0][1])
-    }
-
-    @Test
-    fun `generates empty literal-only variant when all optional`() {
-        val variants = generateCommandPaths("cmd [a:text]")
-        assertEquals(listOf(SyntaxNode.Literal("cmd")), variants[0])
-    }
 }

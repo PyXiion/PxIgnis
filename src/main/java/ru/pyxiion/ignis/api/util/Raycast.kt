@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.util
 
 import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
@@ -9,7 +9,8 @@ import net.minecraft.world.RaycastContext
 import net.minecraft.world.World
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.luaTableOf
-import ru.pyxiion.ignis.api.EntityWrap
+import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.vecTable
 import kotlin.math.max
 import kotlin.math.min
 

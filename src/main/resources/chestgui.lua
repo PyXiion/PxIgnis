@@ -1,7 +1,7 @@
 -- ==========================================================================
 -- chestgui.lua — Chest GUI library for PxIgnis
 -- ==========================================================================
--- Usage: local chestgui = require "chestgui"
+-- Usage: local chestgui = require "core:chestgui"
 --
 -- Creates a chest-like GUI using mc.createInventory + container primitives.
 --

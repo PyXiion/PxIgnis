@@ -1,14 +1,17 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.manager
 
 import net.minecraft.entity.Entity
 import net.minecraft.entity.ai.brain.Brain
 import net.minecraft.entity.mob.MobEntity
+import net.minecraft.server.MinecraftServer
 import net.minecraft.server.world.ServerWorld
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.PxIgnis
+import ru.pyxiion.ignis.api.util.LuaGoal
+import ru.pyxiion.ignis.api.wrapper.MobWrap
 import ru.pyxiion.ignis.mixins.MobEntityMixin
 import java.util.UUID
 
@@ -195,7 +198,7 @@ object MobAIManager {
         pendingAttachments.clear()
     }
 
-    fun scanAndReapply(server: net.minecraft.server.MinecraftServer) {
+    fun scanAndReapply(server: MinecraftServer) {
         for (world in server.worlds) {
             for (entity in world.iterateEntities()) {
                 if (entity is MobEntity) {

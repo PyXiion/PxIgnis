@@ -68,6 +68,16 @@ inline fun <reified T> LuaValue.unwrapOrNull(): T? {
     return if (obj.isuserdata()) obj.checkuserdata() as? T else null
 }
 
+inline fun LuaTable.forEach(action: (k: LuaValue, v: LuaValue) -> Unit) {
+    var k = LuaValue.NIL
+    while (true) {
+        val next = next(k)
+        if (next.isnil(1)) break
+        k = next.arg(1)
+        action(k, next.arg(2))
+    }
+}
+
 internal fun nbtToLua(element: NbtElement): LuaValue {
     return when (element) {
         is NbtCompound -> {

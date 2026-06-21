@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.manager
 
 import net.minecraft.entity.Entity
 import net.minecraft.server.network.ServerPlayerEntity
@@ -10,6 +10,9 @@ import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.EventBus
 import ru.pyxiion.ignis.PxIgnis
+import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.Vector
+import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import java.util.UUID
 
 class Region internal constructor(
@@ -17,7 +20,7 @@ class Region internal constructor(
     val world: ServerWorld,
     @Volatile var bounds: Box,
 ) {
-    internal val bus = EventBus(" региона #$id", PxIgnis.logger)
+    internal val bus = EventBus(" region #$id", PxIgnis.logger)
     private val contained = mutableSetOf<UUID>()
 
     fun contains(pos: Vec3d): Boolean = bounds.contains(pos)

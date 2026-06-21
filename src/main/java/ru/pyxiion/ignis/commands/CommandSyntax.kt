@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis
+package ru.pyxiion.ignis.commands
 
 import ru.pyxiion.ignis.types.LuaArgumentType
 
@@ -115,5 +115,3 @@ private fun buildSyntaxVariants(nodes: List<SyntaxNode>): List<List<SyntaxNode>>
         nodes.filterIndexed { index, _ -> index !in omit }
     }
 }
-
-

@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.manager
 
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.entity.player.PlayerInventory
@@ -12,6 +12,9 @@ import net.minecraft.screen.slot.SlotActionType
 import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.text.Text
 import org.luaj.vm2.LuaValue
+import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
+import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
+import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 
 class LockableInventory(size: Int) : SimpleInventory(size) {
     var locked = false
@@ -118,10 +121,10 @@ object ContainerManager {
 
         val luaPlayer = PlayerWrap.wrap(player)
         val slotStack = wrapper.inventory.getStack(slot)
-        val luaItem = if (slotStack.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(slotStack)
+        val luaItem = if (slotStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(slotStack)
 
         val cursorStack = player.currentScreenHandler.cursorStack
-        val luaCursor = if (cursorStack.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(cursorStack.copy())
+        val luaCursor = if (cursorStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(cursorStack.copy())
 
         val result = cb.invoke(LuaValue.varargsOf(arrayOf(
             luaPlayer,

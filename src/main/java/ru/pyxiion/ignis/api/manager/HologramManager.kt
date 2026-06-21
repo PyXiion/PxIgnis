@@ -1,12 +1,14 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.manager
 
+import net.minecraft.entity.decoration.DisplayEntity
 import net.minecraft.server.world.ServerWorld
+import ru.pyxiion.ignis.api.wrapper.HologramWrapper
 import java.util.UUID
 
 object HologramManager {
     private val holograms = mutableMapOf<UUID, HologramWrapper>()
 
-    fun create(entity: net.minecraft.entity.decoration.DisplayEntity.TextDisplayEntity, world: ServerWorld): HologramWrapper {
+    fun create(entity: DisplayEntity.TextDisplayEntity, world: ServerWorld): HologramWrapper {
         val wrapper = HologramWrapper(entity, world)
         holograms[entity.uuid] = wrapper
         return wrapper

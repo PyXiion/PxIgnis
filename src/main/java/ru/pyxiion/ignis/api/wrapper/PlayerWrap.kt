@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.wrapper
 
 import net.minecraft.command.DefaultPermissions
 import net.minecraft.entity.EquipmentSlot
@@ -23,9 +23,12 @@ import net.minecraft.world.TeleportTarget
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
 import me.lucko.fabric.api.permissions.v0.Permissions
 import ru.pyxiion.ignis.PxIgnis
+import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.manager.SidebarManager
+import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.unwrap
 
 object PlayerWrap {
@@ -41,15 +44,16 @@ object PlayerWrap {
     }
 
     private val BUILT = metaTable<ServerPlayerEntity> {
-        inherit { MetaTableRegistry.ENTITY }
-        pairsKeys(EntityWrap.entityKeys)
+        inherit(EntityWrap.BUILT)
 
-        prop("food",
+        prop(
+            "food",
             get = { LuaValue.valueOf(hungerManager.foodLevel) },
             set = { v -> hungerManager.foodLevel = v.toint() }
         )
         prop("saturation") { LuaValue.valueOf(hungerManager.saturationLevel.toDouble()) }
-        prop("gamemode",
+        prop(
+            "gamemode",
             get = { LuaValue.valueOf(interactionManager.gameMode.id) },
             set = { v -> GameMode.byId(v.tojstring())?.let { changeGameMode(it) } }
         )
@@ -59,7 +63,8 @@ object PlayerWrap {
         prop("isOp") { LuaValue.valueOf(getPermissions().hasPermission(DefaultPermissions.GAMEMASTERS)) }
         prop("selectedSlot") { LuaValue.valueOf(inventory.selectedSlot) }
         prop("isFlying") { LuaValue.valueOf(abilities.flying) }
-        prop("sidebar",
+        prop(
+            "sidebar",
             get = {
                 SidebarManager.get(this)?.toLuaValue() ?: LuaValue.NIL
             },
@@ -69,7 +74,10 @@ object PlayerWrap {
                 } else if (v.istable()) {
                     val config = v.checktable()
                     val existing = SidebarManager.get(this)
-                    val wrapper = existing ?: SidebarManager.create(this, config.rawget("title").optjstring("Sidebar"))
+                    val wrapper = existing ?: SidebarManager.create(
+                        this,
+                        config.rawget("title").optjstring("Sidebar")
+                    )
 
                     val title = config.rawget("title")
                     if (title.isstring()) wrapper.setTitle(title.tojstring())
@@ -88,45 +96,51 @@ object PlayerWrap {
         )
         prop("data") { _, self -> self.rawget("data") }
 
-        prop("head",
+        prop(
+            "head",
             get = {
                 val stack = getEquippedStack(EquipmentSlot.HEAD)
-                if (!stack.isEmpty) ItemStackWrapper.wrap(stack) else LuaValue.NIL
+                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
             set = { v -> setSlot(this, EquipmentSlot.HEAD.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE), v) }
         )
-        prop("chest",
+        prop(
+            "chest",
             get = {
                 val stack = getEquippedStack(EquipmentSlot.CHEST)
-                if (!stack.isEmpty) ItemStackWrapper.wrap(stack) else LuaValue.NIL
+                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
             set = { v -> setSlot(this, EquipmentSlot.CHEST.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE), v) }
         )
-        prop("legs",
+        prop(
+            "legs",
             get = {
                 val stack = getEquippedStack(EquipmentSlot.LEGS)
-                if (!stack.isEmpty) ItemStackWrapper.wrap(stack) else LuaValue.NIL
+                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
             set = { v -> setSlot(this, EquipmentSlot.LEGS.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE), v) }
         )
-        prop("feet",
+        prop(
+            "feet",
             get = {
                 val stack = getEquippedStack(EquipmentSlot.FEET)
-                if (!stack.isEmpty) ItemStackWrapper.wrap(stack) else LuaValue.NIL
+                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
             set = { v -> setSlot(this, EquipmentSlot.FEET.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE), v) }
         )
-        prop("mainhand",
+        prop(
+            "mainhand",
             get = {
                 val stack = getEquippedStack(EquipmentSlot.MAINHAND)
-                if (!stack.isEmpty) ItemStackWrapper.wrap(stack) else LuaValue.NIL
+                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
             set = { v -> setSlot(this, inventory.selectedSlot, v) }
         )
-        prop("offhand",
+        prop(
+            "offhand",
             get = {
                 val stack = getEquippedStack(EquipmentSlot.OFFHAND)
-                if (!stack.isEmpty) ItemStackWrapper.wrap(stack) else LuaValue.NIL
+                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
             set = { v -> setSlot(this, PlayerInventory.OFF_HAND_SLOT, v) }
         )
@@ -189,10 +203,12 @@ object PlayerWrap {
             }
 
             if (targetWorld != null && targetWorld != e.entityWorld) {
-                e.teleportTo(TeleportTarget(
-                    targetWorld, Vec3d(x, y, z), Vec3d.ZERO,
-                    e.yaw, e.pitch, TeleportTarget.NO_OP
-                ))
+                e.teleportTo(
+                    TeleportTarget(
+                        targetWorld, Vec3d(x, y, z), Vec3d.ZERO,
+                        e.yaw, e.pitch, TeleportTarget.NO_OP
+                    )
+                )
             } else {
                 e.requestTeleport(x, y, z)
             }
@@ -245,10 +261,12 @@ object PlayerWrap {
                         ?: throw LuaError("Предмет '$id' не найден")
                     ItemStack(item, count)
                 }
+
                 first.istable() -> {
-                    ItemStackWrapper.unwrap(first)
+                    ItemStackWrap.unwrap(first)
                         ?: throw LuaError("give: ожидается ItemStack от mc.createItem или ID предмета")
                 }
+
                 else -> throw LuaError("give: ожидается строка (ID предмета) или ItemStack от mc.createItem")
             }
             e.inventory.offerOrDrop(stack)
@@ -269,7 +287,7 @@ object PlayerWrap {
             val stack = if (itemVal.isnil()) {
                 ItemStack.EMPTY
             } else {
-                ItemStackWrapper.unwrap(itemVal)
+                ItemStackWrap.unwrap(itemVal)
                     ?: throw LuaError("setItem: ожидается ItemStack от mc.createItem")
             }
 
@@ -285,7 +303,7 @@ object PlayerWrap {
             val inv = e.inventory
             if (slot < 0 || slot >= inv.size()) return@method LuaValue.NIL
             val stack = inv.getStack(slot)
-            if (stack.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(stack)
+            if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
         }
 
         method("clear") { args ->
@@ -302,7 +320,7 @@ object PlayerWrap {
         val stack = if (value.isnil()) {
             ItemStack.EMPTY
         } else {
-            ItemStackWrapper.unwrap(value)
+            ItemStackWrap.unwrap(value)
                 ?: throw LuaError("setItem: ожидается ItemStack от mc.createItem")
         }
         e.inventory.setStack(slot, stack)

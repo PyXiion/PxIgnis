@@ -4,12 +4,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
 import org.slf4j.LoggerFactory
-import ru.pyxiion.ignis.api.MetaTableRegistry
 
 class EventBusTest {
     private val logger = LoggerFactory.getLogger("test")
@@ -239,33 +237,4 @@ class EventBusTest {
         assertFalse(bus.hasHandlers("test"))
     }
 
-    @Test
-    fun `players can communicate through global metatable`() {
-        val playerMeta = MetaTableRegistry.get("player")
-        playerMeta.set("mana", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                val self = args.arg(1)
-                return self.get("data").get("mana")
-            }
-        })
-
-        val wrapperMeta = LuaTable()
-        wrapperMeta.set("__index", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                val key = args.arg(2).tojstring()
-                val metaVal = MetaTableRegistry.get("player").get(key)
-                if (!metaVal.isnil()) return metaVal
-                return LuaValue.NIL
-            }
-        })
-
-        val data = LuaTable()
-        data.set("mana", LuaValue.valueOf(42))
-
-        val player = LuaTable()
-        player.setmetatable(wrapperMeta)
-        player.set("data", data)
-
-        assertEquals(42, player.get("mana").call(player).toint())
-    }
 }

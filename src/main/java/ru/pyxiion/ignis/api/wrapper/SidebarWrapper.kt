@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.wrapper
 
 import net.minecraft.network.packet.s2c.play.ScoreboardObjectiveUpdateS2CPacket
 import net.minecraft.network.packet.s2c.play.ScoreboardScoreResetS2CPacket
@@ -13,7 +13,9 @@ import net.minecraft.text.Text
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
+import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.manager.SidebarManager
+import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.unwrap
 import java.util.Optional
 
@@ -144,11 +146,13 @@ class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
 
     companion object {
         private val BUILT = metaTable<SidebarWrapper> {
-            prop("title",
+            prop(
+                "title",
                 get = { LuaValue.valueOf(title) },
                 set = { v -> if (v.isstring()) setTitle(v.tojstring()) }
             )
-            prop("lines",
+            prop(
+                "lines",
                 get = {
                     val t = LuaTable()
                     val sorted = lines.entries.sortedBy { it.key }

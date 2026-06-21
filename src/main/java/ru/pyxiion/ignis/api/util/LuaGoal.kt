@@ -1,7 +1,8 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.util
 
 import net.minecraft.entity.ai.goal.Goal
 import net.minecraft.entity.mob.MobEntity
+import ru.pyxiion.ignis.api.manager.MobAIManager
 import java.util.EnumSet
 
 class LuaGoal(private val mob: MobEntity) : Goal() {

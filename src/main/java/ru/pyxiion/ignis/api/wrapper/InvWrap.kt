@@ -1,4 +1,4 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.wrapper
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonNull
@@ -14,7 +14,10 @@ import net.minecraft.text.Text
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
+import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.manager.ContainerManager
+import ru.pyxiion.ignis.api.manager.LockableInventory
+import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.unwrap
 
 object InvWrap {
@@ -44,7 +47,7 @@ object InvWrap {
             val slot = args.arg(2).checkint() - 1
             if (slot < 0 || slot >= inv.size()) return@method LuaValue.NIL
             val stack = inv.getStack(slot)
-            if (stack.isEmpty) LuaValue.NIL else ItemStackWrapper.wrap(stack)
+            if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
         }
 
         method("setItem") { args ->
@@ -56,7 +59,7 @@ object InvWrap {
                 if (args.arg(3).isnil()) {
                     inv.setStack(slot, ItemStack.EMPTY)
                 } else {
-                    val stack = ItemStackWrapper.unwrap(args.arg(3))
+                    val stack = ItemStackWrap.unwrap(args.arg(3))
                         ?: throw LuaError("inv:setItem(): ожидается предмет")
                     inv.setStack(slot, stack)
                 }
@@ -70,7 +73,7 @@ object InvWrap {
             val stack = if (args.arg(2).isnil()) {
                 ItemStack.EMPTY
             } else {
-                ItemStackWrapper.unwrap(args.arg(2))
+                ItemStackWrap.unwrap(args.arg(2))
                     ?: throw LuaError("inv:fill(): ожидается предмет")
             }
             unlock(inv) {

@@ -15,6 +15,7 @@ import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.Scheduler
+import ru.pyxiion.ignis.forEach
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -72,7 +73,7 @@ class AsyncLib(
             else -> builder.method(method.uppercase(), bodyPublisher)
         }
 
-        timeout?.let { builder.timeout(Duration.ofMillis(it)) }
+        timeout?.let { builder.timeout(Duration.ofSeconds(it)) }
 
         val request = builder.build()
         val co = luaState.currentThread
@@ -106,7 +107,7 @@ class AsyncLib(
                 method = "GET",
                 headers = emptyMap(),
                 body = null,
-                timeout = null
+                timeout = DEFAULT_TIMEOUT
             )
         }
 
@@ -114,17 +115,10 @@ class AsyncLib(
         val url = table.get("url").checkjstring()
         val method = table.get("method").optjstring("GET")
 
+        // All headers are lower cased
         val headers = mutableMapOf<String, String>()
-        val headerTable = table.get("headers")
-        if (headerTable.istable()) {
-            val ht = headerTable.checktable()
-            var k = LuaValue.NIL
-            while (true) {
-                val next = ht.next(k)
-                if (next.isnil(1)) break
-                k = next.arg(1)
-                headers[k.checkjstring()] = next.arg(2).checkjstring()
-            }
+        table.get("headers").opttable(null)?.forEach { k, v ->
+            headers[k.checkjstring().lowercase()] = v.checkjstring()
         }
 
         val bodyVal = table.get("body")
@@ -139,17 +133,15 @@ class AsyncLib(
         val body = when {
             hasBody -> bodyVal.checkjstring()
             hasJson -> {
-                if (!headers.containsKey("Content-Type") && !headers.containsKey("content-type")) {
-                    headers["Content-Type"] = "application/json"
+                if (!headers.containsKey("content-type")) {
+                    headers["content-type"] = "application/json"
                 }
                 luaToJsonString(jsonVal)
             }
             else -> null
         }
 
-        val timeout = table.get("timeout").let {
-            if (it.isint() || it.islong()) it.tolong() else null
-        }
+        val timeout = table.get("timeout").optlong(DEFAULT_TIMEOUT)
 
         return RequestConfig(url, method, headers, body, timeout)
     }
@@ -187,8 +179,10 @@ class AsyncLib(
     }
 
     companion object {
+        private const val DEFAULT_TIMEOUT = 10L
+
         private val httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
+            .connectTimeout(Duration.ofSeconds(DEFAULT_TIMEOUT))
             .build()
 
         private val gson = Gson()
@@ -297,16 +291,11 @@ class AsyncLib(
 
         private fun tableToJson(table: LuaTable): JsonElement {
             var hasStringKeys = false
-            var k = LuaValue.NIL
-            while (true) {
-                val next = table.next(k)
-                if (next.isnil(1)) break
-                val key = next.arg(1)
-                if (!key.isint() || key.toint() < 1) {
+            table.forEach { k, v ->
+                if (!k.isint() || k.toint() < 1) {
                     hasStringKeys = true
-                    break
+                    return@forEach
                 }
-                k = key
             }
 
             return if (!hasStringKeys && table.length() > 0) {
@@ -317,16 +306,10 @@ class AsyncLib(
                 arr
             } else {
                 val obj = JsonObject()
-                var k2 = LuaValue.NIL
-                while (true) {
-                    val next = table.next(k2)
-                    if (next.isnil(1)) break
-                    val key = next.arg(1)
-                    val value = next.arg(2)
-                    if (key.isstring()) {
-                        obj.add(key.checkjstring(), luaToJsonElement(value))
+                table.forEach { k, v ->
+                    if (k.isstring()) {
+                        obj.add(k.checkjstring(), luaToJsonElement(v))
                     }
-                    k2 = key
                 }
                 obj
             }

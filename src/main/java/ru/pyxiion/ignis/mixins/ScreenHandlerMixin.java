@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import ru.pyxiion.ignis.api.ContainerManager;
+import ru.pyxiion.ignis.api.manager.ContainerManager;
 
 @Mixin(ScreenHandler.class)
 public abstract class ScreenHandlerMixin {

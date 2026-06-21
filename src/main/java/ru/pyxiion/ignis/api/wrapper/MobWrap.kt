@@ -1,12 +1,16 @@
-package ru.pyxiion.ignis.api
+package ru.pyxiion.ignis.api.wrapper
 
+import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.mob.MobEntity
 import net.minecraft.server.world.ServerWorld
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
+import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.manager.MobAIManager
+import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.toVec3d
 import ru.pyxiion.ignis.unwrap
 import ru.pyxiion.ignis.unwrapOrNull
@@ -23,12 +27,12 @@ object MobWrap {
     }
 
     private val BUILT = metaTable<MobEntity> {
-        inherit { MetaTableRegistry.ENTITY }
-        pairsKeys(EntityWrap.entityKeys)
+        inherit(EntityWrap.BUILT)
 
         prop("isMob") { LuaValue.TRUE }
         prop("aiActive") { LuaValue.valueOf(MobAIManager.hasAI(this)) }
-        prop("target",
+        prop(
+            "target",
             get = {
                 target?.let { EntityWrap.wrap(it) } ?: LuaValue.NIL
             },
@@ -69,7 +73,8 @@ object MobWrap {
         }
 
         method("clearAI") { args ->
-            args.arg(1).checktable().unwrap<MobEntity>().let { MobAIManager.clearAI(it) }
+            args.arg(1).checktable().unwrap<MobEntity>()
+                .let { MobAIManager.clearAI(it) }
             LuaValue.NIL
         }
 
@@ -134,14 +139,14 @@ object MobWrap {
         method("tryAttack") { args ->
             val self = args.arg(1).checktable()
             val m = self.unwrap<MobEntity>()
-            val target = args.arg(2).unwrap<net.minecraft.entity.Entity>()
+            val target = args.arg(2).unwrap<Entity>()
             LuaValue.valueOf(m.tryAttack(m.entityWorld as ServerWorld, target))
         }
 
         method("canSee") { args ->
             val self = args.arg(1).checktable()
             val m = self.unwrap<MobEntity>()
-            val targetEntity = args.arg(2).unwrapOrNull<net.minecraft.entity.Entity>()
+            val targetEntity = args.arg(2).unwrapOrNull<Entity>()
             if (targetEntity == null) return@method LuaValue.FALSE
             LuaValue.valueOf(m.canSee(targetEntity))
         }
@@ -151,7 +156,7 @@ object MobWrap {
             val m = self.unwrap<MobEntity>()
             val targetArg = args.arg(2)
             val result: Double = if (targetArg.istable()) {
-                targetArg.unwrapOrNull<net.minecraft.entity.Entity>()?.let { m.squaredDistanceTo(it) }
+                targetArg.unwrapOrNull<Entity>()?.let { m.squaredDistanceTo(it) }
                     ?: m.squaredDistanceTo(targetArg.toVec3d())
             } else {
                 throw LuaError("distanceTo: ожидается entity или позиция")

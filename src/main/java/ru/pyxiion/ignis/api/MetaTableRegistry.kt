@@ -1,6 +1,17 @@
 package ru.pyxiion.ignis.api
 
 import org.luaj.vm2.LuaTable
+import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
+import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.wrapper.HologramWrapper
+import ru.pyxiion.ignis.api.wrapper.InvWrap
+import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
+import ru.pyxiion.ignis.api.wrapper.MobWrap
+import ru.pyxiion.ignis.api.wrapper.PlayerWrap
+import ru.pyxiion.ignis.api.wrapper.RegionWrap
+import ru.pyxiion.ignis.api.wrapper.SidebarWrapper
+import ru.pyxiion.ignis.api.wrapper.StructureWrap
+import ru.pyxiion.ignis.api.wrapper.WorldWrap
 
 object MetaTableRegistry {
     private var _entity = LuaTable()
@@ -76,6 +87,7 @@ object MetaTableRegistry {
         PlayerWrap.initMeta(_player)
         WorldWrap.initMeta(_world)
         StructureWrap.initMeta(_structure)
+        ItemStackWrap.initMeta(_item)
         InvWrap.initMeta(_inventory)
         ContainerWrapper.initMeta(_container)
         SidebarWrapper.initMeta(_sidebar)

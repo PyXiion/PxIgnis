@@ -1086,25 +1086,23 @@ end
 -- ==========================================================================
 -- Pattern 22: Module system — require "format", require "simple"
 -- ==========================================================================
--- The Lua package.path includes config/ignis/?.lua so you can write:
---   local fmt = require("format")
---   local simple = require("simple")
+-- The VFS-based require resolves dotted and namespaced module names:
+--   require "core:format"   → built-in module
+--   require "core:simple"   → built-in module
+--   require "foo.bar"       → config/ignis/foo/bar.lua
+--   require "mymod:utils"   → config/ignis/mymod/utils.lua
 --
--- format(template):
---   returns a function(args) that substitutes {expr} in the template
---   using values from args. Supports dot notation for nested fields.
+-- require("core:format") returns a callable table:
+--   format(template)   — returns a function(args) that substitutes {expr}
+--   format.broadcast(template) — returns a function(args) that renders and broadcasts.
 --
--- broadcastFormat(template):
---   returns a function(args) that renders the template and broadcasts it.
---
--- registerSimple(syntax, template, range?, overlay?):
+-- simple.register(syntax, template, range?, overlay?):
 --   one-shot registration — no handler needed. The generated handler
 --   builds an args table with {p = ctx.player, ...} and broadcasts.
 --
 -- Uncomment to enable:
---   local format = require("format")
---   local simple = require("simple")
---   registerSimple("shout <msg:text>", "§6[SHOUT] §e{p.name}§7: §f{msg}", 100)
+--   local simple = require("core:simple")
+--   simple.register("shout <msg:text>", "§6[SHOUT] §e{p.name}§7: §f{msg}", 100)
 -- ==========================================================================
 
 -- ==========================================================================

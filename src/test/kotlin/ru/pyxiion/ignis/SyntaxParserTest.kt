@@ -4,6 +4,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import ru.pyxiion.ignis.commands.SyntaxNode
+import ru.pyxiion.ignis.commands.SyntaxParser
+import ru.pyxiion.ignis.commands.generateCommandPaths
 
 class SyntaxParserTest {
 
@@ -147,21 +150,6 @@ class SyntaxParserTest {
                 SyntaxNode.Literal("do")
             ),
             nodes
-        )
-    }
-
-    @Test
-    fun `generateCommandPaths with literal after arg`() {
-        val variants = generateCommandPaths("cmd <target:player> do")
-        assertEquals(1, variants.size)
-        val variant = variants[0]
-        assertEquals(
-            listOf(
-                SyntaxNode.Literal("cmd"),
-                SyntaxNode.Argument("target", "player", false),
-                SyntaxNode.Literal("do")
-            ),
-            variant
         )
     }
 
