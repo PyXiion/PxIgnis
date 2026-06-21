@@ -1,6 +1,6 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.command.DefaultPermissions
+import ru.pyxiion.ignis.Compat
 import net.minecraft.entity.EquipmentSlot
 import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.item.ItemStack
@@ -25,7 +25,6 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import me.lucko.fabric.api.permissions.v0.Permissions
 import ru.pyxiion.ignis.PxIgnis
-import ru.pyxiion.ignis.api.wrapper.EntityWrap
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.SidebarManager
 import ru.pyxiion.ignis.api.util.metaTable
@@ -60,7 +59,7 @@ object PlayerWrap {
         prop("ping") { LuaValue.valueOf(networkHandler.latency) }
         prop("xpLevel") { LuaValue.valueOf(experienceLevel) }
         prop("xpProgress") { LuaValue.valueOf(experienceProgress.toDouble()) }
-        prop("isOp") { LuaValue.valueOf(getPermissions().hasPermission(DefaultPermissions.GAMEMASTERS)) }
+        prop("isOp") { LuaValue.valueOf(Compat.isAdmin(this)) }
         prop("selectedSlot") { LuaValue.valueOf(inventory.selectedSlot) }
         prop("isFlying") { LuaValue.valueOf(abilities.flying) }
         prop(

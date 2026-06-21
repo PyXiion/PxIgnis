@@ -1,19 +1,21 @@
 # PxIgnis — Agent instructions
 
-Fabric mod (MC 1.21.11) — Lua scripting API for Minecraft server. Kotlin 2.3.21, Fabric Loom 1.16, Yarn mappings `1.21.11+build.5`, Java 21.
+Fabric mod — Lua scripting API for Minecraft server. Kotlin 2.3.21, Fabric Loom 1.16, Java 21.
 
 ## Build & test
 
 ```
-./gradlew build         # CI does this (includes tests)
-./gradlew test          # unit tests only, no MC runtime
+./gradlew build -PtargetVersion=1.21.10   # build for 1.21.10
+./gradlew build                           # build for 1.21.11 (default)
+./gradlew test                            # unit tests only, no MC runtime
 ./gradlew runServer
 ```
 
-- Shadow relocates `org.luaj` → `ru.pyxiion.lib.luaj` and `me.lucko.fabric-permissions-api`.
+- **Two builds**: `-PtargetVersion=1.21.10` / `1.21.11` switches MC version, Yarn mappings, Fabric API, and fabric-permissions-api (0.5.0 / 0.6.1). Version-specific code in `src/version-*/kotlin/` (only `Compat.kt`).
+- Shadow relocates `org.luaj` → `ru.pyxiion.lib.luaj` and `me.lucko.fabric.api.permissions` → `ru.pyxiion.lib.fabric.api.permissions`.
 - Build prints 5× `Cannot remap children/literals/command/requirement…` — cosmetic, ignore.
 - Composite build: `includeBuild 'pxluanova'` in `settings.gradle`.
-- CI: `.github/workflows/build.yml` — `./gradlew build --no-daemon` on push/PR to `main`; auto-publishes to Modrinth on tag push.
+- CI: `.github/workflows/build.yml` — both versions on push/PR to `main`; auto-publishes to Modrinth on tag push.
 - Access widener: `src/main/resources/pxignis.accesswidener`.
 - `.luarc.json` disables `undefined-global` diagnostic — Lua globals (`mc`, `vec`, `register`, etc.) are injected at runtime.
 

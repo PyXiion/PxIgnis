@@ -1,7 +1,5 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.entity.EntityType
-import net.minecraft.entity.LoadedEntityProcessor
 import net.minecraft.entity.SpawnReason
 import net.minecraft.nbt.NbtDouble
 import net.minecraft.nbt.NbtList
@@ -14,8 +12,8 @@ import net.minecraft.util.math.BlockPos
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
+import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.api.MetaTableRegistry
-import ru.pyxiion.ignis.api.wrapper.EntityWrap
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.mixins.StructureTemplateMixin
@@ -87,11 +85,10 @@ object StructureWrap {
                     nbt.put("Pos", posList)
                     nbt.remove("UUID")
 
-                    val entity = EntityType.loadEntityWithPassengers(
+                    val entity = Compat.loadEntities(
                         nbt,
                         world,
-                        SpawnReason.STRUCTURE,
-                        LoadedEntityProcessor.NOOP
+                        SpawnReason.STRUCTURE
                     ) ?: continue
 
                     val yaw = entity.applyRotation(rotation) + entity.applyMirror(mirror) - entity.yaw

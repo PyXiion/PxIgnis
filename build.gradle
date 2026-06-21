@@ -17,6 +17,16 @@ plugins {
 apply plugin: 'kotlin'
 apply plugin: 'com.gradleup.shadow'
 
+def buildTarget = project.findProperty('targetVersion') ?: '1.21.11'
+
+// Version-specific overrides
+if (buildTarget == '1.21.10') {
+    project.ext.minecraft_version = '1.21.10'
+    project.ext.yarn_mappings = '1.21.10+build.3'
+    project.ext.fabric_version = '0.138.4+1.21.10'
+    project.ext.fabric_api_version = '0.138.4+1.21.10'
+}
+
 version = project.mod_version
 group = project.maven_group
 
@@ -55,10 +65,9 @@ dependencies {
     shadow "com.pxluanova:pxluanova-jse:3.1.0"
 
     // Permissions API
-    modImplementation "me.lucko:fabric-permissions-api:0.6.1"
-    shadow ("me.lucko:fabric-permissions-api:0.6.1") {
-        transitive = false
-    }
+    def permApiVersion = buildTarget == '1.21.10' ? '0.5.0' : '0.6.1'
+    modImplementation "me.lucko:fabric-permissions-api:${permApiVersion}"
+    shadow "me.lucko:fabric-permissions-api:${permApiVersion}"
 
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:$kotlin_version"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
@@ -73,16 +82,19 @@ shadowJar {
     minimize()
 
     relocate 'org.luaj', 'ru.pyxiion.lib.luaj'
+    relocate 'me.lucko.fabric.api.permissions', 'ru.pyxiion.lib.fabric.api.permissions'
 }
 
 remapJar {
     dependsOn shadowJar
     inputFile.set shadowJar.archiveFile
     archiveBaseName.set "PxIgnis"
-    archiveVersion.set "v${project.version}"
+    archiveVersion.set "${project.version}-fabric-${buildTarget}"
     archiveClassifier.set null
 }
 
+// Version-specific source overrides (src/version-${buildTarget}/kotlin takes priority)
+sourceSets.main.kotlin.srcDirs = ["src/version-${buildTarget}/kotlin", "src/main/java"]
 
 processResources {
     inputs.property "version", project.version
@@ -118,6 +130,10 @@ java {
     // if it is present.
     // If you remove this line, sources will not be generated.
     withSourcesJar()
+}
+
+tasks.named('sourcesJar') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 jar {

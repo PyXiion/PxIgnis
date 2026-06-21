@@ -1,6 +1,8 @@
 # PxIgnis
 
-![version](https://img.shields.io/badge/version-0.13.0-blue)
+![version](https://img.shields.io/badge/version-0.13.1-purple)
+![version](https://img.shields.io/badge/MC-1.21.10-green)
+![version](https://img.shields.io/badge/MC-1.21.11-green)
 
 A Lua-scriptable roleplay command framework for Minecraft Fabric servers. Define custom chat commands and complex server logic using Lua scripts — no Java or Kotlin mod code required.
 

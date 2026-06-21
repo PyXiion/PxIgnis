@@ -13,7 +13,6 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.command.permission.PermissionLevel
 import net.minecraft.item.BlockItem
 import net.minecraft.registry.Registries
 import net.minecraft.server.command.CommandManager
@@ -273,7 +272,7 @@ class PxIgnis : ModInitializer {
         CommandRegistrationCallback.EVENT.register(fun(dispatcher, reg, env) {
             dispatcher.register(
                 CommandManager.literal("ignis")
-                    .requires(Permissions.require("px.ignis", PermissionLevel.ADMINS))
+                    .requires(Permissions.require("px.ignis", 4))
                     .then(
                         CommandManager.literal("reload").executes { ctx ->
                             try {

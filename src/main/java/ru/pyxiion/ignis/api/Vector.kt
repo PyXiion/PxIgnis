@@ -1,12 +1,12 @@
 package ru.pyxiion.ignis.api
 
-import net.minecraft.util.math.MathHelper
 import net.minecraft.util.math.Vec3d
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
+import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.luaTableOf
 
 data class Vector(
@@ -29,10 +29,10 @@ data class Vector(
         fun fromRotation(yaw: Float, pitch: Float): Vector {
             val f = pitch * (Math.PI / 180.0).toDouble()
             val g = -yaw * (Math.PI / 180.0).toDouble()
-            val h = MathHelper.cos(g)
-            val i = MathHelper.sin(g)
-            val j = MathHelper.cos(f)
-            val k = MathHelper.sin(f)
+            val h = Compat.fastCos(g)
+            val i = Compat.fastSin(g)
+            val j = Compat.fastCos(f)
+            val k = Compat.fastSin(f)
             return Vector((i * j).toDouble(), -k.toDouble(), (h * j).toDouble())
         }
     }
@@ -107,17 +107,21 @@ internal fun initVecMeta(meta: LuaTable) {
             override fun invoke(args: Varargs): Varargs {
                 val a = args.checktable(1)
                 val b = args.checktable(2)
-                return LuaValue.valueOf(
+                return valueOf(
                     a.get("x").checkdouble() == b.get("x").checkdouble() &&
-                    a.get("y").checkdouble() == b.get("y").checkdouble() &&
-                    a.get("z").checkdouble() == b.get("z").checkdouble()
+                            a.get("y").checkdouble() == b.get("y").checkdouble() &&
+                            a.get("z").checkdouble() == b.get("z").checkdouble()
                 )
             }
         })
         set("__tostring", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val v = args.checktable(1)
-                return LuaValue.valueOf("(${v.get("x").todouble()}, ${v.get("y").todouble()}, ${v.get("z").todouble()})")
+                return valueOf(
+                    "(${v.get("x").todouble()}, ${v.get("y").todouble()}, ${
+                        v.get("z").todouble()
+                    })"
+                )
             }
         })
     }

@@ -4,9 +4,20 @@
   "version": "${version}",
   "name": "PxIgnis",
   "description": "Lua-scriptable roleplay command framework for Fabric servers.",
-  "authors": ["PyXiion"],
+  "authors": [
+    {
+      "name": "PyXiion",
+      "contact": {
+        "email": "me@pyxiion.ru",
+        "homepage": "https://pyxiion.ru"
+      }
+    }
+  ],
   "contact": {
-    "PyXiion": "me@pyxiion.ru"
+    "email": "ignis@pyxiion.ru",
+    "homepage": "https://ignis.pyxiion.ru",
+    "sources": "https://github.com/PyXiion/PxIgnis",
+    "issues": "https://github.com/PyXiion/PxIgnis/issues"
   },
   "license": "LGPL-3.0",
   "environment": "*",
@@ -21,7 +32,7 @@
   "depends": {
     "fabricloader": ">=${loader_version}",
     "fabric": "*",
-    "minecraft": ">=1.21-",
+    "minecraft": "${minecraft_version}",
     "fabric-language-kotlin": ">=1.10.8+kotlin.1.9.0"
   },
   "accessWidener" : "pxignis.accesswidener",

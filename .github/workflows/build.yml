@@ -28,8 +28,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Build (includes tests via check lifecycle)
+      - name: Build for 1.21.11
         run: ./gradlew build --no-daemon
+
+      - name: Build for 1.21.10
+        run: ./gradlew build --no-daemon -PtargetVersion=1.21.10
 
       - name: Upload test reports on failure
         if: failure()
@@ -79,8 +82,8 @@ jobs:
           loaders: fabric
           version-type: release
           game-versions: |
+            1.21.10
             1.21.11
           dependencies: |
             fabric-api
             fabric-language-kotlin
-            fabric-permissions-api(optional)
