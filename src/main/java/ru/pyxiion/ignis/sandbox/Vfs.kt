@@ -2,6 +2,7 @@ package ru.pyxiion.ignis.sandbox
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import ru.pyxiion.ignis.PxIgnis
 import java.io.File
 import java.io.IOException
 import java.nio.file.Path
@@ -40,6 +41,7 @@ class Vfs(private val ignisDir: Path) {
     private fun resolveUserFile(relPath: String): Module? {
         val file1 = safeFile("$relPath.lua")
         val file2 = safeFile("$relPath/init.lua")
+
         return when {
             file1 != null && file2 != null -> {
                 logger.warn("Ambiguous module '$relPath': both $relPath.lua and $relPath/init.lua exist; preferring init.lua")
@@ -54,7 +56,9 @@ class Vfs(private val ignisDir: Path) {
 
     private fun safeFile(relPath: String): File? {
         val resolved = try {
-            ignisDir.resolve(relPath).toRealPath()
+            // Symlinks shall work (i love symlinks)
+            // was: toRealPath()
+            ignisDir.resolve(relPath).toAbsolutePath().normalize()
         } catch (e: IOException) {
             return null
         }
@@ -69,6 +73,6 @@ class Vfs(private val ignisDir: Path) {
     }
 
     companion object {
-        private val logger: Logger = LoggerFactory.getLogger(Vfs::class.java)
+        private val logger: Logger = LoggerFactory.getLogger(PxIgnis.MOD_ID)
     }
 }
