@@ -59,6 +59,11 @@ class LuaMcApi(
     fun invalidatePlayer(uuid: UUID) {
         playerCache.remove(uuid)
     }
+
+    fun clearPlayerCache() {
+        playerCache.clear()
+    }
+
     private fun <T> getRegistryKey(registryType: RegistryKey<Registry<T>>, key: String): RegistryKey<T> {
         return RegistryKey.of(registryType, Identifier.of(key))
     }

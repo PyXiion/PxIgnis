@@ -26,6 +26,7 @@ class IgnisRuntime(
         storageManager.saveAll()
 
         eventManager.fire("uninit")
+        api.clearPlayerCache()
         commandManager.clear()
         eventManager.clear()
         scheduler.clear()

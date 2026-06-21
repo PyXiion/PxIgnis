@@ -42,6 +42,8 @@ loom {
             sourceSet sourceSets.main
         }
     }
+
+    log4jConfigs.from "log4j-dev.xml"
 }
 
 repositories {

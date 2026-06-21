@@ -39,7 +39,9 @@ import ru.pyxiion.ignis.storage.StorageManager
 
 class PxIgnis : ModInitializer {
     companion object {
-        val logger: Logger = LoggerFactory.getLogger("PxRP")
+        const val MOD_ID = "pxignis"
+
+        val logger: Logger = LoggerFactory.getLogger(MOD_ID)
         lateinit var instance: PxIgnis
         var storageManager: StorageManager? = null
     }

@@ -4,6 +4,7 @@ import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.lib.OneArgFunction
+import ru.pyxiion.ignis.PxIgnis
 import java.io.ByteArrayInputStream
 
 class LuaRequire(
@@ -19,6 +20,7 @@ class LuaRequire(
         loaded[name]?.let { return it }
 
         if (!loading.add(name)) {
+            PxIgnis.logger.error("circular require detected: module '$name' is already being loaded")
             throw LuaError("circular require detected: module '$name' is already being loaded")
         }
 
@@ -29,11 +31,12 @@ class LuaRequire(
             val result = luaState.load(
                 ByteArrayInputStream(module.content),
                 module.sourceName,
-                "bt",
+                "t",
                 luaState.globals
             )
 
             if (!result.arg1().isfunction()) {
+                PxIgnis.logger.error("error loading module: '$name': ${result.arg(2).tojstring()}")
                 throw LuaError("error loading module '$name': ${result.arg(2).tojstring()}")
             }
 
