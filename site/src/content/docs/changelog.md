@@ -5,6 +5,46 @@ description: Release history for PxIgnis.
 
 # Changelog
 
+## 0.14.0 — Entity pos simplification, new argument types, bugfixes (2026-06-21)
+
+### Breaking changes
+
+- **`entity.pos` is now a plain vector** — the lazy-cached live proxy table was removed.
+  `pos.x`, `pos.y`, `pos.z` still work (vector arithmetic), but the underlying
+  implementation now creates a fresh `Vec3d` snapshot on read and writes directly
+  on write. Any code relying on the pos table identity (e.g. `entity.pos == entity.pos`)
+  will break. Use `vec:length()` instead.
+
+### New API
+
+| API                           | Description                           |
+|-------------------------------|---------------------------------------|
+| `vec:length()`                | Returns sqrt(x²+y²+z²)                |
+| `<name:entity>` arg type      | Brigadier entity selector → wrapper   |
+
+### Bugfixes
+
+- **`vec(x, y, z)` validation inverted** — the `require(args.narg() == 3)` check was
+  incorrectly `!= 3`, causing valid 3-arg calls to throw.
+- **Raycast `ShapeContext`** — uses `ShapeContext.of(source)` instead of the deprecated
+  `source` parameter, fixing compilation with newer Fabric API.
+
+### Internal
+
+- `Scheduler` — `LuaClosure` paths use `resumeOrLog` with full stack traces; plain
+  `LuaFunction` callbacks avoid coroutine overhead.
+- `AsyncLib` (`mc.sleep`, `mc.fetch`) — uses `resumeOrLog` helper to log coroutine
+  errors instead of silently failing.
+- `CommandRegistrar` — command execution errors now include full stack traces.
+- `MetaTableBuilder.__index` — uses `mt.get(key)` instead of `mt.rawget(key)` so
+  that `__index` on the metatable itself is properly followed.
+- `EntityWrap.pos` — simplified from lazy-cached proxy metatable to direct
+  `Vec3d` read/write (removed `livePosTable`).
+- `OperationHelper.checkNumber` — uses `isnumber()` for cleaner type check.
+- PxLuaNova regression test for `__add` on tables.
+
+---
+
 ## 0.12.0 & 0.13.0 — Sync compiler, sandboxed require, item builder (2026-06-21)
 
 ### New API
