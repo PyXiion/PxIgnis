@@ -5,7 +5,7 @@ description: Release history for PxIgnis.
 
 # Changelog
 
-## 0.12.0 — Sync compiler, sandboxed require, item builder (2026-06-21)
+## 0.12.0 & 0.13.0 — Sync compiler, sandboxed require, item builder (2026-06-21)
 
 ### New API
 
