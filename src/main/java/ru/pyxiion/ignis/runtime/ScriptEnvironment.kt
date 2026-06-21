@@ -49,7 +49,7 @@ class ScriptEnvironment {
 
         val vecConstructor = object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
-                require(args.narg() != 3) { "vec(x, y, z) require 3 args" }
+                require(args.narg() == 3) { "vec(x, y, z) require 3 args" }
                 val x = args.arg(1).checkdouble()
                 val y = args.arg(2).checkdouble()
                 val z = args.arg(3).checkdouble()

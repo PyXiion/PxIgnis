@@ -17,6 +17,7 @@ import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.types.ChoiceArgumentType
 import ru.pyxiion.ignis.types.LuaArgumentType
 import org.luaj.vm2.LuaValue
+import ru.pyxiion.ignis.api.wrapper.EntityWrap
 
 object ArgumentTypes {
     val builtins: Map<String, LuaArgumentType> = mapOf(
@@ -55,6 +56,15 @@ object ArgumentTypes {
 
             override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
                 return CommandManager.argument(name, EntityArgumentType.player()).build()
+            }
+        },
+        "entity" to object : LuaArgumentType {
+            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
+                return EntityWrap.wrap(EntityArgumentType.getEntity(ctx, name)!!)
+            }
+
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
+                return CommandManager.argument(name, EntityArgumentType.entity()).build()
             }
         },
         "int" to object : LuaArgumentType {

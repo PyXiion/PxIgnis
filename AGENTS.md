@@ -2,6 +2,10 @@
 
 Fabric mod — Lua scripting API for Minecraft server. Kotlin 2.3.21, Fabric Loom 1.16, Java 21.
 
+## Bumping version
+
+Update `mod_version` in `gradle.properties`, the badge in `README.md:3`, commit & tag `v<version>`.
+
 ## Build & test
 
 ```

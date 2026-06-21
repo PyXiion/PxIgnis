@@ -20,6 +20,7 @@ import net.minecraft.util.math.BlockPos
 import net.minecraft.util.math.Vec3d
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
+import org.luaj.vm2.LuaThread
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
@@ -171,4 +172,19 @@ internal fun luaToNbt(value: LuaValue): NbtElement {
         }
         else -> throw LuaError("writeNbt: неподдерживаемый тип Lua: ${value.typename()}")
     }
+}
+
+fun LuaThread.resumeOrThrow(args: Varargs): Varargs {
+    val r = resume(args)
+    if (!r.arg1().toboolean()) throw LuaError(r.arg(2).optjstring("Unknown coroutine error"))
+    return r
+}
+
+fun LuaThread.resumeOrLog(args: Varargs, context: String): Varargs {
+    val r = resume(args)
+    if (!r.arg1().toboolean()) {
+        val err = LuaError(r.arg(2).optjstring("Unknown coroutine error"))
+        PxIgnis.logger.error("$context: ${err.message}", err)
+    }
+    return r
 }

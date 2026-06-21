@@ -840,7 +840,7 @@ end
 function playsoundHandler(ctx, id, volume)
     local p = ctx.player
     local pos = p.pos
-    p.world:playSound(id, pos.x, pos.y, pos.z, volume or 1.0, 1.0)
+    p.world:playSound(id, pos, volume or 1.0, 1.0)
     p:sendMessage("§aPlaying §f" .. id)
 end
 

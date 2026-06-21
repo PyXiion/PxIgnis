@@ -14,8 +14,10 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
+import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.Scheduler
 import ru.pyxiion.ignis.forEach
+import ru.pyxiion.ignis.resumeOrLog
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -44,7 +46,7 @@ class AsyncLib(
         val co = luaState.currentThread
         scheduler.schedule(ticks, object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
-                co.resume(LuaValue.NIL)
+                co.resumeOrLog(LuaValue.NIL, "mc.sleep callback")
                 return LuaValue.NIL
             }
         })
@@ -80,11 +82,11 @@ class AsyncLib(
 
         httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
             .thenAccept { response ->
-                server.execute { co.resume(buildResponse(response)) }
+                server.execute { co.resumeOrLog(buildResponse(response), "mc.fetch callback") }
                 null
             }
             .exceptionally { error ->
-                server.execute { co.resume(buildError(error)) }
+                server.execute { co.resumeOrLog(buildError(error), "mc.fetch callback") }
                 null
             }
 

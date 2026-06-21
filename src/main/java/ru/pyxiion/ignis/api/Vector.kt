@@ -1,13 +1,16 @@
 package ru.pyxiion.ignis.api
 
 import net.minecraft.util.math.Vec3d
+import org.luaj.vm2.LuaDouble
 import org.luaj.vm2.LuaError
+import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.luaTableOf
+import kotlin.math.sqrt
 
 data class Vector(
     @JvmField
@@ -122,6 +125,13 @@ internal fun initVecMeta(meta: LuaTable) {
                         v.get("z").todouble()
                     })"
                 )
+            }
+        })
+
+        set("length", object : LuaFunction() {
+            override fun call(arg1: LuaValue): LuaValue {
+                val (x, y, z) = resolveOperand(arg1)
+                return LuaValue.valueOf(sqrt(x*x+y*y+z*z))
             }
         })
     }

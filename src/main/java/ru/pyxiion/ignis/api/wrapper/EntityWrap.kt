@@ -23,7 +23,6 @@ import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector
-import ru.pyxiion.ignis.api.initVecMeta
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.api.util.performRaycast
 import ru.pyxiion.ignis.luaToNbt
@@ -82,14 +81,13 @@ object EntityWrap {
         )
         prop("world") { WorldWrap.wrap(entityWorld as ServerWorld) }
 
-        lazy(
+        prop(
             "pos",
-            factory = { livePosTable(this) },
+            get = { Vector.fromMc(entityPos).toLuaValue() },
             set = { v ->
                 val vec = v.toVec3d()
                 setPosition(vec.x, vec.y, vec.z)
-            },
-            invalidate = false,
+            }
         )
 
         prop("dir") { Vector.fromMc(rotationVector).toLuaValue() }
@@ -326,38 +324,5 @@ object EntityWrap {
         val table = LuaTable()
         table.setmetatable(meta)
         return table
-    }
-
-    private fun livePosTable(e: Entity): LuaValue {
-        val meta = LuaTable()
-        meta.set("__index", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                val field = args.arg(2).tojstring()
-                val v = e.entityPos
-                return when (field) {
-                    "x" -> valueOf(v.x)
-                    "y" -> valueOf(v.y)
-                    "z" -> valueOf(v.z)
-                    else -> NIL
-                }
-            }
-        })
-        meta.set("__newindex", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                val field = args.arg(2).tojstring()
-                val value = args.arg(3).todouble()
-                val v = e.entityPos
-                e.setPosition(
-                    if (field == "x") value else v.x,
-                    if (field == "y") value else v.y,
-                    if (field == "z") value else v.z,
-                )
-                return NIL
-            }
-        })
-        initVecMeta(meta)
-        val t = LuaTable()
-        t.setmetatable(meta)
-        return t
     }
 }

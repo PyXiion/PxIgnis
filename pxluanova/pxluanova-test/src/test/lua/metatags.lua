@@ -273,6 +273,13 @@ for i=1,#groups do
 	print( debug.setmetatable( b, bmt ) )
 end
 
+-- regression: table+table must invoke __add, not return 0
+local add_mt = { __add = function(a,b) return '__add-ok' end }
+local ta = setmetatable({x=1,y=2,z=3}, add_mt)
+local tb = setmetatable({x=4,y=5,z=6}, add_mt)
+local r = ta + tb
+assert(r == '__add-ok', 'table+table: expected __add-ok, got ' .. tostring(r) .. ' (type ' .. type(r) .. ')')
+
 print( '---- __metatable' )
 values = { aboolean, afunction, athread, atable, "abc" }
 local mtmt = { 	__metatable={}, }

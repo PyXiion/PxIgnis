@@ -162,7 +162,7 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
 
                 val mt = self.getmetatable()
                 if (!mt.isnil()) {
-                    val m = mt.rawget(key)
+                    val m = mt.get(key)
                     if (!m.isnil()) return m
                 }
 

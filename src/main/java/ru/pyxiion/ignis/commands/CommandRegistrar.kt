@@ -10,6 +10,7 @@ import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import ru.pyxiion.ignis.luaTableOf
+import ru.pyxiion.ignis.resumeOrThrow
 import ru.pyxiion.ignis.types.toLuaValue
 
 class CommandRegistrar(
@@ -40,7 +41,7 @@ class CommandRegistrar(
                     throw e
                 } catch (e: LuaError) {
                     ctx.source.sendError(Text.literal("При выполнении команды произошла ошибка в скрипте. Сообщите об этом администратору."))
-                    PxIgnis.logger.error("Ошибка при выполнении команды \"${ctx.command}\": ${e.message}")
+                    PxIgnis.logger.error("Ошибка при выполнении команды \"${ctx.command}\": ${e.message}", e)
                 } catch (e: Throwable) {
                     ctx.source.sendError(Text.literal("При выполнении команды произошла неизвестная ошибка. Сообщите об этом администратору."))
                     PxIgnis.logger.error("Ошибка при выполнении команды \"${ctx.command}\": ${e.message}", e)
@@ -94,6 +95,6 @@ class CommandRegistrar(
         val luaArgs = prepareLuaArgAndContext(ctx, variant, argDefs)
         val luaState = stateProvider()
         val thread = LuaThread(luaState, function)
-        thread.resume(LuaValue.varargsOf(luaArgs))
+        thread.resumeOrThrow(LuaValue.varargsOf(luaArgs))
     }
 }

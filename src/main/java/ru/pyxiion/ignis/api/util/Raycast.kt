@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis.api.util
 
+import net.minecraft.block.ShapeContext
 import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
 import net.minecraft.util.hit.HitResult
@@ -23,11 +24,13 @@ internal fun performRaycast(
     world: World,
     source: Entity?,
 ): LuaValue {
+    val shapeCtx = if (source != null) ShapeContext.of(source) else ShapeContext.absent()
+
     val blockHit = world.raycast(RaycastContext(
         start, end,
         RaycastContext.ShapeType.OUTLINE,
         if (includeFluids) RaycastContext.FluidHandling.ANY else RaycastContext.FluidHandling.NONE,
-        source
+        shapeCtx
     ))
     var blockDist = range
     if (blockHit.type == HitResult.Type.BLOCK) {

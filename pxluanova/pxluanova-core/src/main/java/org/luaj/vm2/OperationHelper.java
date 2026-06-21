@@ -264,6 +264,6 @@ public final class OperationHelper {
 	}
 
 	private static boolean checkNumber(LuaValue lua, double value) {
-		return lua.type() == LuaValue.TNUMBER || !Double.isNaN(value);
+		return lua.isnumber();
 	}
 }
