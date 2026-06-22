@@ -4,7 +4,9 @@ Fabric mod — Lua scripting API for Minecraft server. Kotlin 2.3.21, Fabric Loo
 
 ## Bumping version
 
-Update `mod_version` in `gradle.properties`, the badge in `README.md:3`, commit & tag `v<version>`.
+Update `mod_version` in `gradle.properties`, the badge in `README.md:3`, add changelog entry in `site/src/content/docs/changelog.md`, commit & tag `v<version>`.
+
+**Do NOT commit version bump or changelog without user review first.** Stage the files and let the user decide when to commit and tag.
 
 ## Build & test
 

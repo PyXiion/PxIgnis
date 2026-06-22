@@ -5,6 +5,21 @@ description: Release history for PxIgnis.
 
 # Changelog
 
+## 0.14.1 — MetaTableBuilder inheritance rework, EntityFactory, wrapper cleanup (2026-06-22)
+
+Just bug fixes & refactoring.
+
+### Internal
+
+- **MetaTableBuilder**: `inherit()` now takes a lazy `() -> LuaTable` instead of
+  `BuiltMeta` so it updates dynamically (basically fixed metatables bug).
+- **EntityFactory**: New centralized `EntityFactory.wrap(entity)` that detects
+  that detects the type & uses the best wrapper
+- **PlayerListWrapper**: Filters out removed players from the cached list (bugfix)
+- **MetaTableBuilder test suite**: Full coverage for inheritance, method
+  fallthrough, lazy caching, setters, pairs merging, and multi-level chains.
+- `Iterator<LuaValue>.toLuaArray` helper (refactor).
+
 ## 0.14.0 — Entity pos simplification, new argument types, bugfixes (2026-06-21)
 
 ### Breaking changes
