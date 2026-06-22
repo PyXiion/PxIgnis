@@ -7,7 +7,6 @@ import net.minecraft.server.world.ServerWorld
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
-import ru.pyxiion.ignis.api.wrapper.EntityWrap
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.MobAIManager
 import ru.pyxiion.ignis.api.util.metaTable
@@ -27,14 +26,14 @@ object MobWrap {
     }
 
     private val BUILT = metaTable<MobEntity> {
-        inherit(EntityWrap.BUILT)
+        inherit { MetaTableRegistry.ENTITY }
 
         prop("isMob") { LuaValue.TRUE }
         prop("aiActive") { LuaValue.valueOf(MobAIManager.hasAI(this)) }
         prop(
             "target",
             get = {
-                target?.let { EntityWrap.wrap(it) } ?: LuaValue.NIL
+                target?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL
             },
             set = { v ->
                 if (v.isnil()) {

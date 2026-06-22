@@ -33,17 +33,16 @@ import ru.pyxiion.ignis.unwrap
 object PlayerWrap {
 
     fun wrap(entity: ServerPlayerEntity): LuaValue {
-        val t = LuaTable()
+        val t = EntityWrap.wrap(entity)
         t.setmetatable(MetaTableRegistry.PLAYER)
         t.rawset("__pxrp_type", LuaValue.valueOf("player"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(entity))
         t.rawset("data", PxIgnis.storageManager?.getPlayerData(entity.uuid.toString())
             ?: throw IllegalStateException("PxIgnis not initialized"))
         return t
     }
 
-    private val BUILT = metaTable<ServerPlayerEntity> {
-        inherit(EntityWrap.BUILT)
+    private val BUILT by lazy { metaTable<ServerPlayerEntity> {
+        inherit { MetaTableRegistry.ENTITY }
 
         prop(
             "food",
@@ -309,7 +308,7 @@ object PlayerWrap {
             args.arg(1).checktable().unwrap<ServerPlayerEntity>().inventory.clear()
             LuaValue.NIL
         }
-    }
+    }}
 
     fun initMeta(meta: LuaTable) {
         BUILT.apply(meta)

@@ -11,6 +11,7 @@ import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.HologramManager
 import ru.pyxiion.ignis.api.util.metaTable
+import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.unwrap
 
 
@@ -39,7 +40,7 @@ class HologramWrapper(
     companion object {
         private val BUILT by lazy {
             metaTable<TextDisplayEntity> {
-                inherit(EntityWrap.BUILT)
+                inherit { MetaTableRegistry.ENTITY }
 
                 prop(
                     "text",
@@ -49,10 +50,7 @@ class HologramWrapper(
                 prop(
                     "lines",
                     get = {
-                        val t = LuaTable()
-                        val parts = text.string.split("\n")
-                        for ((i, line) in parts.withIndex()) t.rawset(i + 1, LuaValue.valueOf(line))
-                        t
+                        text.string.split("\n").map(LuaValue::valueOf).toLuaArray()
                     },
                     set = { v ->
                         val ct = v.checktable()
