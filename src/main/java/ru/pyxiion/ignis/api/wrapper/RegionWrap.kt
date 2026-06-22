@@ -1,15 +1,14 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.server.network.ServerPlayerEntity
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
-import ru.pyxiion.ignis.api.wrapper.EntityWrap
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.manager.Region
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.luaTableOf
+import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.toVec3d
 import ru.pyxiion.ignis.unwrap
 
@@ -28,21 +27,10 @@ object RegionWrap {
             prop("id") { LuaValue.valueOf(id) }
             prop("world") { WorldWrap.wrap(world) }
             prop("players") {
-                val t = LuaTable()
-                livePlayers().forEachIndexed { i, p -> t.set(i + 1, PlayerWrap.wrap(p)) }
-                t
+                livePlayers().map(EntityFactory::wrap).toLuaArray()
             }
             prop("entities") {
-                val t = LuaTable()
-                liveEntities().forEachIndexed { i, e ->
-                    t.set(
-                        i + 1, when (e) {
-                            is ServerPlayerEntity -> PlayerWrap.wrap(e)
-                            else -> EntityWrap.wrap(e)
-                        }
-                    )
-                }
-                t
+                liveEntities().map(EntityFactory::wrap).toLuaArray()
             }
 
             method("on") { args ->

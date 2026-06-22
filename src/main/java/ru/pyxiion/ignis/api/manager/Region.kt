@@ -10,9 +10,8 @@ import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.EventBus
 import ru.pyxiion.ignis.PxIgnis
-import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.Vector
-import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import java.util.UUID
 
 class Region internal constructor(
@@ -313,8 +312,5 @@ object RegionManager {
 }
 
 internal fun regionWrapperFor(entity: Entity): LuaValue {
-    return when (entity) {
-        is ServerPlayerEntity -> PlayerWrap.wrap(entity)
-        else -> EntityWrap.wrap(entity)
-    }
+    return EntityFactory.wrap(entity)
 }

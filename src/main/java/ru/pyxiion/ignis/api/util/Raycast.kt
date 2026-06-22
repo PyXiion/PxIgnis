@@ -10,7 +10,7 @@ import net.minecraft.world.RaycastContext
 import net.minecraft.world.World
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.luaTableOf
-import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.vecTable
 import kotlin.math.max
 import kotlin.math.min
@@ -64,7 +64,7 @@ internal fun performRaycast(
     if (closestEntity != null && closestEntityHit != null) {
         return luaTableOf(
             "type" to LuaValue.valueOf("entity"),
-            "entity" to EntityWrap.wrap(closestEntity),
+            "entity" to EntityFactory.wrap(closestEntity),
             "hit" to vecTable(closestEntityHit.x, closestEntityHit.y, closestEntityHit.z),
         )
     }

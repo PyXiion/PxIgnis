@@ -35,6 +35,7 @@ import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.api.util.performRaycast
 import ru.pyxiion.ignis.luaToNbt
 import ru.pyxiion.ignis.toBlockPos
+import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.toVec3d
 import ru.pyxiion.ignis.unwrap
 import java.util.*
@@ -91,11 +92,7 @@ object WorldWrap {
             ).toLuaValue()
         }
         prop("regions") {
-            val t = LuaTable()
-            RegionManager.all(this).forEachIndexed { i, r ->
-                t.set(i + 1, RegionWrap.wrap(r))
-            }
-            t
+            RegionManager.all(this).map(RegionWrap::wrap).toLuaArray()
         }
 
         // world:spawn(entityId, pos, overrides?)
@@ -118,10 +115,7 @@ object WorldWrap {
 
             if (!w.spawnEntity(entity)) return@method LuaValue.NIL
 
-            when (entity) {
-                is MobEntity -> MobWrap.wrap(entity)
-                else -> EntityWrap.wrap(entity)
-            }
+            EntityFactory.wrap(entity)
         }
 
         // world:spawnHologram(pos, text, opts?)
@@ -322,16 +316,7 @@ object WorldWrap {
                 nearby
             }
 
-            val list = LuaTable()
-            entities.forEachIndexed { i, entity ->
-                list.set(
-                    i + 1, when (entity) {
-                        is MobEntity -> MobWrap.wrap(entity)
-                        else -> EntityWrap.wrap(entity)
-                    }
-                )
-            }
-            list
+            entities.map(EntityFactory::wrap).toLuaArray()
         }
 
         // world:raycast(start, dir, range, fluids?, entities?)
@@ -419,9 +404,7 @@ object WorldWrap {
             require(args.narg() == 2) { "getRegionsAt(pos) requires 1 argument" }
             val pos = args.arg(2).toVec3d()
             val list = LuaTable()
-            RegionManager.getAt(w, pos).forEachIndexed { i, r ->
-                list.set(i + 1, RegionWrap.wrap(r))
-            }
+            RegionManager.getAt(w, pos).map(RegionWrap::wrap).toLuaArray()
             list
         }
     }

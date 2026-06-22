@@ -26,7 +26,7 @@ import net.fabricmc.fabric.api.event.player.AttackEntityCallback
 import net.fabricmc.fabric.api.event.player.UseEntityCallback
 import net.fabricmc.fabric.api.event.player.UseItemCallback
 import net.minecraft.util.Hand
-import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.manager.MobAIManager
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
@@ -92,14 +92,14 @@ class PxIgnis : ModInitializer {
             if (::runtime.isInitialized) {
                 MobAIManager.onEntityLoad(entity, world)
                 RegionManager.onEntityChunkLoad(entity)
-                runtime.eventManager.fire("entity_spawn", EntityWrap.wrap(entity))
+                runtime.eventManager.fire("entity_spawn", EntityFactory.wrap(entity))
             }
         }
 
         ServerEntityEvents.ENTITY_UNLOAD.register { entity, world ->
             if (::runtime.isInitialized) {
                 RegionManager.onEntityChunkUnload(entity)
-                runtime.eventManager.fire("entity_despawn", EntityWrap.wrap(entity))
+                runtime.eventManager.fire("entity_despawn", EntityFactory.wrap(entity))
             }
         }
 
@@ -139,7 +139,7 @@ class PxIgnis : ModInitializer {
 
         ServerLivingEntityEvents.ALLOW_DEATH.register { entity, source, amount ->
             if (::runtime.isInitialized) {
-                val results = runtime.eventManager.fireWithResults("entity_death", EntityWrap.wrap(entity), LuaValue.valueOf(source.name), LuaValue.valueOf(amount.toDouble()))
+                val results = runtime.eventManager.fireWithResults("entity_death", EntityFactory.wrap(entity), LuaValue.valueOf(source.name), LuaValue.valueOf(amount.toDouble()))
                 if (results.any { it.isboolean() && !it.toboolean() }) return@register false
             }
             true
@@ -209,7 +209,7 @@ class PxIgnis : ModInitializer {
         AttackEntityCallback.EVENT.register { player, world, hand, entity, hitResult ->
             if (storageManager != null && player is net.minecraft.server.network.ServerPlayerEntity && !world.isClient) {
                 val luaPlayer = PlayerWrap.wrap(player)
-                val luaEntity = EntityWrap.wrap(entity)
+                val luaEntity = EntityFactory.wrap(entity)
                 val results = runtime.eventManager.fireWithResults("player_attack_entity", luaPlayer, luaEntity)
                 if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
             }
@@ -219,7 +219,7 @@ class PxIgnis : ModInitializer {
         UseEntityCallback.EVENT.register { player, world, hand, entity, hitResult ->
             if (storageManager != null && player is net.minecraft.server.network.ServerPlayerEntity && !world.isClient) {
                 val luaPlayer = PlayerWrap.wrap(player)
-                val luaEntity = EntityWrap.wrap(entity)
+                val luaEntity = EntityFactory.wrap(entity)
                 val handStr = if (hand == Hand.MAIN_HAND) "main" else "off"
                 val results = runtime.eventManager.fireWithResults("player_interact_entity", luaPlayer, luaEntity, LuaValue.valueOf(handStr))
                 if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
@@ -234,8 +234,8 @@ class PxIgnis : ModInitializer {
                     val results = runtime.eventManager.fireWithResults("player_hurt", luaPlayer, LuaValue.valueOf(source.name.substringAfterLast(".")), LuaValue.valueOf(amount.toDouble()))
                     if (results.any { it.isboolean() && !it.toboolean() }) return@register false
                 } else {
-                    val luaEntity = EntityWrap.wrap(entity)
-                    val sourceEntity = source.attacker?.let { EntityWrap.wrap(it) } ?: LuaValue.NIL
+                    val luaEntity = EntityFactory.wrap(entity)
+                    val sourceEntity = source.attacker?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL
                     val results = runtime.eventManager.fireWithResults("entity_hurt", luaEntity, LuaValue.valueOf(source.name.substringAfterLast(".")), LuaValue.valueOf(amount.toDouble()), sourceEntity)
                     if (results.any { it.isboolean() && !it.toboolean() }) return@register false
                 }
@@ -252,8 +252,8 @@ class PxIgnis : ModInitializer {
                         LuaValue.valueOf(damageTaken.toDouble()),
                         LuaValue.valueOf(blocked))
                 } else {
-                    val luaEntity = EntityWrap.wrap(entity)
-                    val sourceEntity = source.attacker?.let { EntityWrap.wrap(it) } ?: LuaValue.NIL
+                    val luaEntity = EntityFactory.wrap(entity)
+                    val sourceEntity = source.attacker?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL
                     runtime.eventManager.fire("entity_damage", luaEntity,
                         LuaValue.valueOf(source.name.substringAfterLast(".")),
                         LuaValue.valueOf(damageTaken.toDouble()),
@@ -266,7 +266,7 @@ class PxIgnis : ModInitializer {
         ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register { world, entity, killedEntity, damageSource ->
             if (storageManager != null && entity is net.minecraft.server.network.ServerPlayerEntity) {
                 val luaPlayer = PlayerWrap.wrap(entity)
-                val luaKilled = EntityWrap.wrap(killedEntity)
+                val luaKilled = EntityFactory.wrap(killedEntity)
                 runtime.eventManager.fire("player_kill", luaPlayer, luaKilled, LuaValue.valueOf(damageSource.name.substringAfterLast(".")))
             }
         }

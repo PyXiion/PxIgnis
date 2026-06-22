@@ -1,7 +1,6 @@
 package ru.pyxiion.ignis.api
 
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.entity.mob.MobEntity
 import net.minecraft.inventory.SimpleInventory
 import net.minecraft.nbt.NbtIo
 import net.minecraft.nbt.NbtSizeTracker
@@ -31,10 +30,9 @@ import ru.pyxiion.ignis.api.manager.MobAIManager
 import ru.pyxiion.ignis.api.manager.RegionManager
 import ru.pyxiion.ignis.api.util.ItemBuilder
 import ru.pyxiion.ignis.api.util.ItemStackCodec
-import ru.pyxiion.ignis.api.wrapper.EntityWrap
+import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.wrapper.InvWrap
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
-import ru.pyxiion.ignis.api.wrapper.MobWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerListWrapper
 import ru.pyxiion.ignis.api.wrapper.RegionWrap
 import ru.pyxiion.ignis.api.wrapper.StructureWrap
@@ -43,6 +41,7 @@ import ru.pyxiion.ignis.asVarArgFunction
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.unwrap
 import ru.pyxiion.ignis.storage.StorageManager
+import ru.pyxiion.ignis.toLuaArray
 import java.nio.file.Path
 import java.util.HashSet
 import java.util.UUID
@@ -265,10 +264,7 @@ class LuaMcApi(
         val uuid = UUID.fromString(args.arg(1).checkjstring())
         for (world in server.worlds) {
             world.getEntity(uuid)?.let {
-                return when (it) {
-                    is MobEntity -> MobWrap.wrap(it)
-                    else -> EntityWrap.wrap(it)
-                }
+                    return EntityFactory.wrap(it)
             }
         }
         return LuaValue.NIL
@@ -330,11 +326,7 @@ class LuaMcApi(
             "getRegion" to this::luaGetRegion.asVarArgFunction(),
             "holograms" to object : VarArgFunction() {
                 override fun invoke(args: Varargs): Varargs {
-                    val list = LuaTable()
-                    HologramManager.all().forEachIndexed { i, h ->
-                        list.set(i + 1, h.toLuaValue())
-                    }
-                    return list
+                    return HologramManager.all().map { it.toLuaValue() }.toLuaArray()
                 }
             },
             "getHologram" to object : VarArgFunction() {

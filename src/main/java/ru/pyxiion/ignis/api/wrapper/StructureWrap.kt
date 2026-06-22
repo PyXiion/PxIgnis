@@ -96,7 +96,7 @@ object StructureWrap {
                     entity.setBodyYaw(yaw)
                     entity.setHeadYaw(yaw)
 
-                    val entityWrapper = EntityWrap.wrap(entity)
+                    val entityWrapper = EntityFactory.wrap(entity)
                     val callbackResult = entityCallback.call(entityWrapper)
                     if (callbackResult.isboolean() && !callbackResult.toboolean()) continue
 
