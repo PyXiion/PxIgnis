@@ -4,6 +4,7 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
+import java.util.LinkedHashSet
 
 inline fun <reified T : Any> metaTable(block: MetaTableBuilder<T>.() -> Unit): BuiltMeta =
     MetaTableBuilder<T>(T::class.java).apply(block).build()
@@ -34,7 +35,6 @@ class BuiltMeta(val meta: LuaTable, val keys: List<LuaValue>) {
 class MetaTableBuilder<T : Any>(val type: Class<T>) {
     private val entries = linkedMapOf<LuaValue, Entry<T>>()
     private val methods = mutableListOf<Pair<LuaValue, (Varargs) -> LuaValue>>()
-    private val pairsOnlyKeys = mutableListOf<LuaValue>()
     private var parentIndex: (() -> LuaTable)? = null
     private var parentNewIndex: (() -> LuaTable)? = null
 
@@ -121,25 +121,9 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
         }
     }
 
-    /** Unknown __index / __newindex keys fall through to [table]. */
-    fun inherit(table: () -> LuaTable) {
-        parentIndex = table
-        parentNewIndex = table
-    }
-
-    fun inheritIndex(table: () -> LuaTable) {
-        parentIndex = table
-    }
-
-    fun inheritNewIndex(table: () -> LuaTable) {
-        parentNewIndex = table
-    }
-
-    /** Inherit __index/__newindex AND pairs keys from a parent BuiltMeta. */
-    fun inherit(parent: BuiltMeta) {
-        parentIndex = { parent.meta }
-        parentNewIndex = { parent.meta }
-        pairsOnlyKeys.addAll(parent.keys)
+    fun inherit(parent: () -> LuaTable) {
+        parentIndex = parent
+        parentNewIndex = parent
     }
 
     fun build(): BuiltMeta {
@@ -147,7 +131,6 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
         val keysList = linkedSetOf<LuaValue>().apply {
             addAll(entries.keys)
             addAll(methods.map { it.first })
-            addAll(pairsOnlyKeys)
             removeIf { !it.isstring() || it.tojstring().startsWith("__") }
         }.toList()
 
@@ -168,6 +151,9 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
 
                 val parent = parentIndex?.invoke()
                 if (parent != null) {
+                    val direct = parent.get(key)
+                    if (!direct.isnil()) return direct
+
                     val pi = parent.get("__index")
                     if (pi.isfunction()) return pi.invoke(varargsOf(self, key))
                 }
@@ -214,11 +200,35 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
         meta.set("__pairs", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val self = args.arg(1)
+                val parentMeta = parentIndex?.invoke()
+
+                val merged = linkedSetOf<LuaValue>().apply {
+                    addAll(keysList)
+                    if (parentMeta != null) {
+                        val pp = parentMeta.get("__pairs")
+                        if (pp.isfunction()) {
+                            val triple = pp.invoke(self)
+                            val iterFn = triple.arg(1)
+                            val state = triple.arg(2)
+                            var prevKey = triple.arg(3)
+                            while (true) {
+                                val nxt = iterFn.invoke(varargsOf(state, prevKey))
+                                val k = nxt.arg(1)
+                                if (k.isnil()) break
+                                if (k.isstring() && !k.tojstring().startsWith("__")) {
+                                    add(k)
+                                }
+                                prevKey = k
+                            }
+                        }
+                    }
+                }.toList()
+
                 val iterator = object : VarArgFunction() {
                     private var index = 0
                     override fun invoke(args: Varargs): Varargs {
-                        if (index >= keysList.size) return NIL
-                        val key = keysList[index]
+                        if (index >= merged.size) return NIL
+                        val key = merged[index]
                         index++
                         return varargsOf(key, self.get(key))
                     }
