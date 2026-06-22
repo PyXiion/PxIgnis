@@ -79,9 +79,9 @@ inline fun LuaTable.forEach(action: (k: LuaValue, v: LuaValue) -> Unit) {
     }
 }
 
-inline fun Iterable<LuaValue>.toLuaArray(): LuaTable {
+fun Iterable<LuaValue>?.toLuaArray(): LuaTable {
     return LuaTable().apply {
-        this@toLuaArray.forEachIndexed { i, value -> set(i+1, value) }
+        this@toLuaArray?.forEachIndexed { i, value -> set(i+1, value) }
     }
 }
 
