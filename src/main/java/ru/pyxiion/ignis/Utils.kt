@@ -2,7 +2,6 @@ package ru.pyxiion.ignis
 
 import me.lucko.fabric.api.permissions.v0.Permissions
 import net.minecraft.command.CommandSource
-import net.minecraft.entity.Entity
 import net.minecraft.nbt.NbtByte
 import net.minecraft.nbt.NbtByteArray
 import net.minecraft.nbt.NbtCompound
@@ -24,6 +23,7 @@ import org.luaj.vm2.LuaThread
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
+import org.slf4j.Logger
 
 fun CommandSource.checkPermission(permission: String): Boolean = Permissions.check(this, permission)
 
@@ -79,6 +79,12 @@ inline fun LuaTable.forEach(action: (k: LuaValue, v: LuaValue) -> Unit) {
     }
 }
 
+inline fun Iterable<LuaValue>.toLuaArray(): LuaTable {
+    return LuaTable().apply {
+        this@toLuaArray.forEachIndexed { i, value -> set(i+1, value) }
+    }
+}
+
 internal fun nbtToLua(element: NbtElement): LuaValue {
     return when (element) {
         is NbtCompound -> {
@@ -90,11 +96,7 @@ internal fun nbtToLua(element: NbtElement): LuaValue {
             t
         }
         is NbtList -> {
-            val t = LuaTable()
-            for (i in 0 until element.size) {
-                t.set(i + 1, nbtToLua(element.get(i)))
-            }
-            t
+            element.map(::nbtToLua).toLuaArray()
         }
         is NbtByte -> LuaValue.valueOf(element.value.toInt() != 0)
         is NbtShort -> LuaValue.valueOf(element.value.toInt())
@@ -104,25 +106,14 @@ internal fun nbtToLua(element: NbtElement): LuaValue {
         is NbtDouble -> LuaValue.valueOf(element.value)
         is NbtString -> LuaValue.valueOf(element.value)
         is NbtByteArray -> {
-            val t = LuaTable()
-            for ((i, b) in element.getByteArray().withIndex()) {
-                t.set(i + 1, LuaValue.valueOf(b.toInt() and 0xFF))
-            }
-            t
+            element.byteArray.map { LuaValue.valueOf(it.toInt() and 0xFF) }.toLuaArray()
         }
         is NbtIntArray -> {
-            val t = LuaTable()
-            for ((i, v) in element.getIntArray().withIndex()) {
-                t.set(i + 1, LuaValue.valueOf(v))
-            }
-            t
+            element.intArray.map { LuaValue.valueOf(it) }.toLuaArray()
         }
         is NbtLongArray -> {
-            val t = LuaTable()
-            for ((i, v) in element.getLongArray().withIndex()) {
-                t.set(i + 1, LuaValue.valueOf(v.toDouble()))
-            }
-            t
+            // TODO: introduce LuaLong
+            element.longArray.map { LuaValue.valueOf(it.toInt()) }.toLuaArray()
         }
         else -> LuaValue.NIL
     }
@@ -187,4 +178,10 @@ fun LuaThread.resumeOrLog(args: Varargs, context: String): Varargs {
         PxIgnis.logger.error("$context: ${err.message}", err)
     }
     return r
+}
+
+inline fun Logger.debug(f: () -> String) {
+    if (isDebugEnabled) {
+        debug(f())
+    }
 }

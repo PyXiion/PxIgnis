@@ -19,9 +19,13 @@ class PlayerListWrapper(
         if (cached != null && this.cachedTick == currentTick) return cached
 
         val fresh = LuaTable()
-        source().forEachIndexed { i, p ->
-            fresh.set(i + 1, playerCache.getOrPut(p.uuid) { PlayerWrap.wrap(p) })
-        }
+
+        source()
+            .filterNot { it.isRemoved }
+            .forEachIndexed { i, p ->
+                fresh.set(i + 1, playerCache.getOrPut(p.uuid) { PlayerWrap.wrap(p) })
+            }
+
         this.cached = fresh
         this.cachedTick = currentTick
         return fresh
