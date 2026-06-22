@@ -4,6 +4,7 @@ import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
+import ru.pyxiion.ignis.toLuaArray
 
 class DataTable(
     private val backend: DataBackend?,
@@ -210,11 +211,7 @@ class DataTable(
                 table
             }
             is List<*> -> {
-                val table = LuaTable()
-                for ((i, v) in value.withIndex()) {
-                    table.set(i + 1, toLuaValue(v))
-                }
-                table
+                value.map(::toLuaValue).toLuaArray()
             }
             else -> throw LuaError("Cannot deserialize ${value::class.java.simpleName} from JSON")
         }

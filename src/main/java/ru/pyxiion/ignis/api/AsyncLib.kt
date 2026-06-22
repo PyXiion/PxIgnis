@@ -18,6 +18,7 @@ import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.Scheduler
 import ru.pyxiion.ignis.forEach
 import ru.pyxiion.ignis.resumeOrLog
+import ru.pyxiion.ignis.toLuaArray
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -255,12 +256,7 @@ class AsyncLib(
                     }
                 }
                 element.isJsonArray -> {
-                    val arr = element.asJsonArray
-                    val t = LuaTable()
-                    for (i in 0 until arr.size()) {
-                        t.set(i + 1, jsonToLua(arr[i]))
-                    }
-                    t
+                    element.asJsonArray.map(::jsonToLua).toLuaArray()
                 }
                 element.isJsonObject -> {
                     val obj = element.asJsonObject

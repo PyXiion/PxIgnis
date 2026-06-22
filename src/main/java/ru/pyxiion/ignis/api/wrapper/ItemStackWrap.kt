@@ -11,6 +11,7 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.util.metaTable
+import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.unwrap
 import ru.pyxiion.ignis.unwrapOrNull
 
@@ -79,12 +80,7 @@ object ItemStackWrap {
         prop(
             "lore",
             get = {
-                val t = LuaTable()
-                val lore = get(DataComponentTypes.LORE)
-                lore?.lines()?.forEachIndexed { i, line ->
-                    t.set(i + 1, LuaValue.valueOf(line.string))
-                }
-                t
+                get(DataComponentTypes.LORE)?.lines()?.map { LuaValue.valueOf(it.string) }.toLuaArray()
             },
             set = { v ->
                 if (v.isnil()) {
