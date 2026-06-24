@@ -129,8 +129,8 @@ Fires each tick while an entity is inside the region and changes position. Fires
 teleports.
 
 - `entity` ([`Entity`](/reference/entity-api)) — The moving entity
-- `from` ([`Vec`](/reference/vector-api)) — Previous position
-- `to` ([`Vec`](/reference/vector-api)) — Current position
+- `from` ([`vec`](/reference/vector-api)) — Previous position
+- `to` ([`vec`](/reference/vector-api)) — Current position
 
 ```lua
 r:on("entity_move", function(e, from, to)

@@ -9,8 +9,8 @@ description: Complete examples of common command patterns.
 register("fart", function(ctx)
     local p = ctx.player
     local pos = p.pos
-    p.world:playSound("minecraft:entity.player.burp", pos.x, pos.y, pos.z, 1.0, 1.0)
-    p.world:particle("minecraft:heart", Vec(pos.x, pos.y + 1, pos.z), {count = 5, delta = {0.5, 0.5, 0.5}})
+    p.world:playSound("minecraft:entity.player.burp", pos, 1.0, 1.0)
+    p.world:particle("minecraft:heart", vec(pos.x, pos.y + 1, pos.z), {count = 5, delta = {0.5, 0.5, 0.5}})
     p:sendMessage("You farted!")
 end)
 ```

@@ -22,7 +22,7 @@
 --  11. World & entity         — spawn, tags, time, weather, particle, broadcastInRange
 --  12. Scheduler              — mc.schedule, mc.scheduleRepeating, mc.cancelTask
 --  13. Personal sidebar       — per-player scoreboard display
---  14. Vector arithmetic      — Vec(), +, -, *, /, ==, tostring
+--  14. Vector arithmetic      — vec(), +, -, *, /, ==, tostring
 --  15. World block manip.     — setBlock, getBlock, fill
 --  16. Particles, sounds, …   — particle, playSound, getEntities, raycast
 --  17. Advanced mc API        — world(), players(), getEntity(), dump(), getMetatable()
@@ -508,7 +508,7 @@ end
 --   - Spawned entities have full property access (health, type, uuid, tags, equipment)
 --   - entity.tags is a boolean proxy table backed by command tags
 --   - Setting equipment on spawned entities uses equipStack internally
---   - world:particle(id, pos, {data?, count?, spread?, speed?}) spawns particles (pos is Vec or {x,y,z})
+--   - world:particle(id, pos, {data?, count?, spread?, speed?}) spawns particles (pos is vec or {x,y,z})
 
 function spawnmobHandler(ctx, entityId)
     local player = ctx.player
@@ -778,20 +778,20 @@ end)
 
 
 -- ==========================================================================
--- Pattern 14: Vector arithmetic — Vec(), +, -, *, /, ==, tostring
+-- Pattern 14: Vector arithmetic — vec(), +, -, *, /, ==, tostring
 -- ==========================================================================
 -- /vecadd <x1:int> <y1:int> <z1:int> <x2:int> <y2:int> <z2:int>
 -- /veceq <x1:int> <y1:int> <z1:int> <x2:int> <y2:int> <z2:int>
 
 function vecaddHandler(ctx, x1, y1, z1, x2, y2, z2)
-    local a = Vec(x1, y1, z1)
-    local b = Vec(x2, y2, z2)
+    local a = vec(x1, y1, z1)
+    local b = vec(x2, y2, z2)
     ctx.player:sendMessage("§a" .. tostring(a) .. " + " .. tostring(b) .. " = " .. tostring(a + b))
 end
 
 function veceqHandler(ctx, x1, y1, z1, x2, y2, z2)
-    local a = Vec(x1, y1, z1)
-    local b = Vec(x2, y2, z2)
+    local a = vec(x1, y1, z1)
+    local b = vec(x2, y2, z2)
     ctx.player:sendMessage("§a" .. tostring(a) .. " == " .. tostring(b) .. " §7→ §f" .. tostring(a == b))
 end
 
@@ -831,7 +831,7 @@ function particleHandler(ctx, id, count)
     local p = ctx.player
     p.world:particle(id, p.pos, {
         count = count or 10,
-        spread = Vec(0.5, 0.5, 0.5),
+        spread = vec(0.5, 0.5, 0.5),
         speed = 0.1,
     })
     p:sendMessage("§aSpawned §f" .. (count or 10) .. " §aof §f" .. id)

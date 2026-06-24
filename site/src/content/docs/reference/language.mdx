@@ -23,15 +23,17 @@ syntax error.
 
 ### Named-arg lambda
 
-`\{ args -> body }` — arguments followed by `->` and an expression body.
-The body expression is implicitly returned.
+`\{ args -> body }` — arguments followed by `->` and the body.
+
+I tried to implement implicit return like `\{ 5 }` that returns 5,
+but in Lua is too buggy. So just use `return`.
 
 <Tabs>
 <TabItem label="Lambda">
 
 ```lua
 --# nova syntax
-local double = \{ x -> x * 2 }
+local double = \{ x -> return x * 2 }
 print(double(21))  -- 42
 ```
 
@@ -55,7 +57,7 @@ Multi-arg:
 
 ```lua
 --# nova syntax
-local sum = \{ a, b, c -> a + b + c }
+local sum = \{ a, b, c -> return a + b + c }
 print(sum(1, 2, 3))  -- 6
 ```
 
@@ -72,16 +74,16 @@ print(sum(1, 2, 3))
 </TabItem>
 </Tabs>
 
-### Zero-arg expression
+### Zero-arg
 
-No arrow, no parameters — a single expression is implicitly returned:
+No parameters. Body is always a chunk; use `return` for values:
 
 <Tabs>
 <TabItem label="Lambda">
 
 ```lua
 --# nova syntax
-local answer = \{ 40 + 2 }
+local answer = \{ return 40 + 2 }
 print(answer())  -- 42
 ```
 
@@ -98,10 +100,7 @@ print(answer())
 </TabItem>
 </Tabs>
 
-### Zero-arg chunk
-
-When the body starts with a keyword like `if`, `for`, `while`, `return`,
-etc., it is parsed as a chunk. Use `return` for explicit values:
+Body can contain statements:
 
 <Tabs>
 <TabItem label="Lambda">

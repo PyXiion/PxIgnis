@@ -21,7 +21,8 @@ Full documentation at **[ignis.pyxiion.ru](https://ignis.pyxiion.ru)**.
 - **Permission system** — Integrates with the Fabric Permissions API (supports both OP-based and permissions plugins like LuckPerms). Check permissions at runtime with `player:hasPermission(perm)`.
 - **Player context** — Handlers receive a live `Player` wrapper object with readable properties (health, position, gamemode, etc.) and methods (`sendMessage`, `teleport`, `kick`, `give`, `hasPermission`).
 - **Structure loading** — Load and place Minecraft structure files with rotation, mirroring, and per-entity Lua callbacks.
-- **Vector API** — `Vec(x, y, z)` global constructor with arithmetic operators (`+`, `-`, `*`, `/`, `unm`, `==`, `tostring`). Component-wise for `v1 * v2`, scalar for `v / n`. Both `v * n` and `n * v` work.
+- **Vector API** — `vec(x, y, z)` global constructor with arithmetic operators (`+`, `-`, `*`, `/`, `unm`, `==`, `tostring`). Component-wise for `v1 * v2`, scalar for `v / n`. Both `v * n` and `n * v` work.
+- **Editor autocomplete** — Ships a [LuaLS](https://luals.github.io/) type library for VS Code. Open the repo root or copy `lua-types/` next to your scripts to get IntelliSense for `mc.*`, all wrappers, events, and `register()`. See the [setup guide](https://ignis.pyxiion.ru/guide/autocomplete).
 - **Entity API** — `entity:damage(amount, source?)`, `entity:raycast(range)`, `entity:addEffect/removeEffect/hasEffect`, `entity:setOnFireFor(ticks)`, `entity:readNbt()/writeNbt(table)`.
 - **Debug dumping** — `mc.dump(obj, depth?)` prints any Lua value as readable nested output with cycle detection.
 - **Metatable extensions** — `mc.getMetatable("player"/"entity"/"world"/"structure"/"vec")` allows adding custom methods to all wrappers of that type.

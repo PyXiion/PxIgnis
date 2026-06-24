@@ -129,14 +129,14 @@ end, "admin.kick")
 
 ## 8. Effects for flair
 
-See [World API](/reference/world-api) and [Vector API](/reference/vector-api) for particle, sound, and Vec options:
+See [World API](/reference/world-api) and [Vector API](/reference/vector-api) for particle, sound, and vec options:
 
 ```lua
 register("fart", function(ctx)
     local p = ctx.player
     local pos = p.pos
-    p.world:playSound("minecraft:entity.player.burp", pos.x, pos.y, pos.z, 1.0, 1.0)
-    p.world:particle("minecraft:heart", Vec(pos.x, pos.y + 1, pos.z), {
+    p.world:playSound("minecraft:entity.player.burp", pos, 1.0, 1.0)
+    p.world:particle("minecraft:heart", vec(pos.x, pos.y + 1, pos.z), {
         count = 5,
         delta = { 0.5, 0.5, 0.5 }
     })
