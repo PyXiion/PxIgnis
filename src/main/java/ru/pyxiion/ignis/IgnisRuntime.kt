@@ -35,6 +35,7 @@ class IgnisRuntime(
         MobAIManager.restoreAll()
         HologramManager.closeAll()
         RegionManager.closeAll()
+        BossBarManager.closeAll()
 
         val state = environment.rebuild(api, commandRegistrar)
 

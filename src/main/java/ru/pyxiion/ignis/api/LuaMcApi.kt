@@ -10,11 +10,14 @@ import net.minecraft.registry.Registry
 import net.minecraft.registry.RegistryKey
 import net.minecraft.registry.RegistryKeys
 import net.minecraft.server.MinecraftServer
+import net.minecraft.server.command.ServerCommandSource
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.text.Text
 import net.minecraft.util.Identifier
 import net.minecraft.util.math.Vec3d
 import net.minecraft.world.World
+import net.minecraft.entity.Entity
+import com.mojang.brigadier.exceptions.CommandSyntaxException
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaTable
@@ -24,12 +27,14 @@ import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.EventBus
 import ru.pyxiion.ignis.Scheduler
 import ru.pyxiion.ignis.api.AsyncLib
+import ru.pyxiion.ignis.api.manager.BossBarManager
 import ru.pyxiion.ignis.api.manager.HologramManager
 import ru.pyxiion.ignis.api.manager.LockableInventory
 import ru.pyxiion.ignis.api.manager.MobAIManager
 import ru.pyxiion.ignis.api.manager.RegionManager
 import ru.pyxiion.ignis.api.util.ItemBuilder
 import ru.pyxiion.ignis.api.util.ItemStackCodec
+import ru.pyxiion.ignis.api.wrapper.BossBarWrapper
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.wrapper.InvWrap
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
@@ -42,6 +47,8 @@ import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.unwrap
 import ru.pyxiion.ignis.storage.StorageManager
 import ru.pyxiion.ignis.toLuaArray
+import ru.pyxiion.ignis.toVec3d
+import ru.pyxiion.ignis.unwrapOrNull
 import java.nio.file.Path
 import java.util.HashSet
 import java.util.UUID
@@ -276,6 +283,44 @@ class LuaMcApi(
         return RegionManager.get(id)?.let { RegionWrap.wrap(it) } ?: LuaValue.NIL
     }
 
+    private fun buildSourceFromOpts(opts: LuaTable): ServerCommandSource {
+        var source = server.commandSource
+        opts.get("as").let { asVal ->
+            if (asVal.istable()) {
+                val entity = asVal.unwrapOrNull<Entity>()
+                if (entity != null) {
+                    source = source.withEntity(entity).withPosition(entity.entityPos)
+                }
+            }
+        }
+        opts.get("at").let { atVal ->
+            if (atVal.istable()) {
+                val pos = atVal.toVec3d()
+                source = source.withPosition(pos)
+            }
+        }
+        return source
+    }
+
+    private fun luaExecute(args: Varargs): Varargs {
+        val cmd = args.arg(1).checkjstring()
+
+        val source = if (args.narg() >= 2 && args.arg(2).istable()) {
+            buildSourceFromOpts(args.arg(2).checktable())
+        } else {
+            server.commandSource
+        }
+
+        return try {
+            val result = server.commandManager.dispatcher.execute(cmd, source)
+            LuaValue.varargsOf(LuaValue.TRUE, LuaValue.valueOf(result))
+        } catch (e: CommandSyntaxException) {
+            LuaValue.varargsOf(LuaValue.FALSE, LuaValue.valueOf(e.message ?: "Syntax error"))
+        } catch (e: Exception) {
+            LuaValue.varargsOf(LuaValue.FALSE, LuaValue.valueOf(e.message ?: "Unknown error"))
+        }
+    }
+
     fun toTable(): LuaTable {
         MetaTableRegistry.init()
 
@@ -409,6 +454,17 @@ class LuaMcApi(
                     return LuaValue.NIL
                 }
             },
+            "createBossBar" to object : VarArgFunction() {
+                override fun invoke(args: Varargs): Varargs {
+                    val title = args.arg(1).checkjstring()
+                    val color = args.arg(2).optjstring("white")
+                    val style = args.arg(3).optjstring("progress")
+                    val wrapper = BossBarWrapper(title, color, style)
+                    BossBarManager.register(wrapper)
+                    return wrapper.toLuaValue()
+                }
+            },
+            "execute" to this::luaExecute.asVarArgFunction(),
         )
 
         val onHandler: (Varargs) -> Varargs = { args: Varargs ->

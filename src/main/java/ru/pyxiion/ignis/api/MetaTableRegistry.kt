@@ -1,17 +1,7 @@
 package ru.pyxiion.ignis.api
 
 import org.luaj.vm2.LuaTable
-import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
-import ru.pyxiion.ignis.api.wrapper.EntityWrap
-import ru.pyxiion.ignis.api.wrapper.HologramWrapper
-import ru.pyxiion.ignis.api.wrapper.InvWrap
-import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
-import ru.pyxiion.ignis.api.wrapper.MobWrap
-import ru.pyxiion.ignis.api.wrapper.PlayerWrap
-import ru.pyxiion.ignis.api.wrapper.RegionWrap
-import ru.pyxiion.ignis.api.wrapper.SidebarWrapper
-import ru.pyxiion.ignis.api.wrapper.StructureWrap
-import ru.pyxiion.ignis.api.wrapper.WorldWrap
+import ru.pyxiion.ignis.api.wrapper.*
 
 object MetaTableRegistry {
     private var _entity = LuaTable()
@@ -26,6 +16,7 @@ object MetaTableRegistry {
     private var _mob = LuaTable()
     private var _hologram = LuaTable()
     private var _region = LuaTable()
+    private var _bossBar = LuaTable()
 
     val ENTITY: LuaTable get() = _entity
     val PLAYER: LuaTable get() = _player
@@ -39,6 +30,7 @@ object MetaTableRegistry {
     val MOB: LuaTable get() = _mob
     val HOLOGRAM: LuaTable get() = _hologram
     val REGION: LuaTable get() = _region
+    val BOSS_BAR: LuaTable get() = _bossBar
 
     private var byName = mapOf(
         "entity" to _entity,
@@ -53,6 +45,7 @@ object MetaTableRegistry {
         "mob" to _mob,
         "hologram" to _hologram,
         "region" to _region,
+        "bossbar" to _bossBar
     )
 
     fun init() {
@@ -68,6 +61,8 @@ object MetaTableRegistry {
         _mob = LuaTable()
         _hologram = LuaTable()
         _region = LuaTable()
+        _bossBar = LuaTable()
+
         byName = mapOf(
             "entity" to _entity,
             "player" to _player,
@@ -81,7 +76,9 @@ object MetaTableRegistry {
             "mob" to _mob,
             "hologram" to _hologram,
             "region" to _region,
+            "bossbar" to _bossBar
         )
+
         initVecMeta(_vec)
         EntityWrap.initMeta(_entity)
         PlayerWrap.initMeta(_player)
@@ -94,6 +91,7 @@ object MetaTableRegistry {
         MobWrap.initMeta(_mob)
         HologramWrapper.initMeta(_hologram)
         RegionWrap.initMeta(_region)
+        BossBarWrapper.initMeta(_bossBar)
     }
 
     fun get(name: String): LuaTable = byName[name]
