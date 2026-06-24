@@ -25,8 +25,6 @@ import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.api.util.performRaycast
-import ru.pyxiion.ignis.luaToNbt
-import ru.pyxiion.ignis.nbtToLua
 import ru.pyxiion.ignis.toVec3d
 import ru.pyxiion.ignis.unwrap
 import java.util.UUID
@@ -182,25 +180,38 @@ object EntityWrap {
 
         lazy("tags", factory = { tagsTable(this) })
 
-        method("readNbt") { args ->
-            val self = args.arg(1).checktable()
-            val e = self.unwrap<Entity>()
-            val writeView = NbtWriteView.create(ErrorReporter.EMPTY)
-            e.saveData(writeView)
-            nbtToLua(writeView.getNbt())
-        }
+        // Deferred, because Lua->NBT conversion is under question
+        // Lua has only two types right now: int & double, but NBT has
+        // Byte, Short, Int, Long, etc.
+        // I'll need a wrapper I guess? And a whole NbtConversionFactory or similar
+        // LuaNbtValue: LuaNbtByte, LuaNbtShort, ..., LuaNbtCompound, LuaNbtList
+        // And map everything with metatables.
+        // That's too much work for something I don't use right now.
+        // Though I could just stick to smth like
+        // local nbt = entity:readNbt()
+        // nbt:setByte("path.to.byte", 5)
+        // But it's not in PxIgnis way, API must be simple
+        // TODO
 
-        method("writeNbt") { args ->
-            val self = args.arg(1).checktable()
-            val nbtTable = args.arg(2)
-            if (!nbtTable.istable()) throw LuaError("writeNbt: ожидается таблица")
-            val compound = luaToNbt(nbtTable) as NbtCompound
-            val e = self.unwrap<Entity>()
-            val world = e.entityWorld as ServerWorld
-            val readView = NbtReadView.create(ErrorReporter.EMPTY, world.registryManager, compound)
-            e.readData(readView)
-            LuaValue.NIL
-        }
+//        method("readNbt") { args ->
+//            val self = args.arg(1).checktable()
+//            val e = self.unwrap<Entity>()
+//            val writeView = NbtWriteView.create(ErrorReporter.EMPTY)
+//            e.saveData(writeView)
+//            nbtToLua(writeView.getNbt())
+//        }
+//
+//        method("writeNbt") { args ->
+//            val self = args.arg(1).checktable()
+//            val nbtTable = args.arg(2)
+//            if (!nbtTable.istable()) throw LuaError("writeNbt: ожидается таблица")
+//            val compound = luaToNbt(nbtTable) as NbtCompound
+//            val e = self.unwrap<Entity>()
+//            val world = e.entityWorld as ServerWorld
+//            val readView = NbtReadView.create(ErrorReporter.EMPTY, world.registryManager, compound)
+//            e.readData(readView)
+//            LuaValue.NIL
+//        }
 
         method("damage") { args ->
             val self = args.arg(1).checktable()

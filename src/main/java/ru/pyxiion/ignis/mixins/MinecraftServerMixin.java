@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
 
 @Mixin(MinecraftServer.class)
 public class MinecraftServerMixin {
-    @Inject(method = "net.minecraft.server.MinecraftServer.reloadResources", at = @At("TAIL"))
+    @Inject(method = "reloadResources", at = @At("TAIL"))
     private void reloadRes(Collection<String> dataPacks, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
         PxIgnis.instance.runtime.reload();
     }

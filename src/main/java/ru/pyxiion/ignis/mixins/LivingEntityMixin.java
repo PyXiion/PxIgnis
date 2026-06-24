@@ -11,7 +11,7 @@ import ru.pyxiion.ignis.api.manager.MobAIManager;
 
 @Mixin(LivingEntity.class)
 public class LivingEntityMixin {
-    @Inject(method = "remove", at = @At("HEAD"))
+    @Inject(method = "remove", at = @At(value="INVOKE", target="Lnet/minecraft/entity/LivingEntity;onRemoval(Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/entity/Entity$RemovalReason;)V"))
     private void onRemove(Entity.RemovalReason reason, CallbackInfo ci) {
         if ((Object) this instanceof MobEntity mob) {
             MobAIManager.INSTANCE.onEntityRemove(mob);

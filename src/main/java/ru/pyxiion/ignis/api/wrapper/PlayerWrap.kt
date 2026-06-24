@@ -165,13 +165,29 @@ object PlayerWrap {
         method("sendTitle") { args ->
             val self = args.arg(1).checktable()
             val e = self.unwrap<ServerPlayerEntity>()
-            val title = args.arg(2).checkjstring()
-            val subtitle = args.arg(3).optjstring(null)
-            e.networkHandler.sendPacket(TitleFadeS2CPacket(20, 60, 20))
-            if (subtitle != null) {
-                e.networkHandler.sendPacket(SubtitleS2CPacket(Text.literal(subtitle)))
+            val arg2 = args.arg(2)
+
+            if (arg2.istable()) {
+                val t = arg2.checktable()
+                val title = t.get("title").optjstring("")
+                val subtitle = t.get("subtitle").optjstring("")
+                val fadeIn = t.get("fadeIn").optint(20)
+                val stay = t.get("stay").optint(60)
+                val fadeOut = t.get("fadeOut").optint(20)
+                e.networkHandler.sendPacket(TitleFadeS2CPacket(fadeIn, stay, fadeOut))
+                if (subtitle.isNotEmpty()) {
+                    e.networkHandler.sendPacket(SubtitleS2CPacket(Text.literal(subtitle)))
+                }
+                e.networkHandler.sendPacket(TitleS2CPacket(Text.literal(title)))
+            } else {
+                val title = arg2.checkjstring()
+                val subtitle = args.arg(3).optjstring(null)
+                e.networkHandler.sendPacket(TitleFadeS2CPacket(20, 60, 20))
+                if (subtitle != null) {
+                    e.networkHandler.sendPacket(SubtitleS2CPacket(Text.literal(subtitle)))
+                }
+                e.networkHandler.sendPacket(TitleS2CPacket(Text.literal(title)))
             }
-            e.networkHandler.sendPacket(TitleS2CPacket(Text.literal(title)))
             LuaValue.NIL
         }
 
