@@ -10,7 +10,10 @@
     "MobEntityMixin",
     "LivingEntityMixin",
     "ScreenHandlerMixin",
-    "StructureTemplateMixin"
+    "StructureTemplateMixin",
+    "ServerPlayNetworkHandlerMixin",
+    "LivingEntityConsumeMixin",
+    "PlayerEntityPickupMixin"
   ],
   "client": [],
   "server": [],

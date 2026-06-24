@@ -1,12 +1,14 @@
 package ru.pyxiion.ignis.mixins;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import ru.pyxiion.ignis.api.PlayerMoveDispatcher;
 import ru.pyxiion.ignis.api.manager.RegionManager;
 
 @Mixin(Entity.class)
@@ -27,6 +29,10 @@ public class EntityMixin {
             Vec3d prev = pxrp$lastPos;
             pxrp$lastPos = cur;
             RegionManager.INSTANCE.onEntityMoved(self, prev, cur);
+
+            if (self instanceof ServerPlayerEntity player) {
+                PlayerMoveDispatcher.INSTANCE.onPlayerMoved(player, prev, cur);
+            }
         }
     }
 }

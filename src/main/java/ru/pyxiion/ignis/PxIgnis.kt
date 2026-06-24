@@ -27,11 +27,12 @@ import net.fabricmc.fabric.api.event.player.UseEntityCallback
 import net.fabricmc.fabric.api.event.player.UseItemCallback
 import net.minecraft.util.Hand
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
+import ru.pyxiion.ignis.api.PlayerMoveDispatcher
+import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.manager.MobAIManager
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import ru.pyxiion.ignis.api.manager.RegionManager
-import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.manager.ContainerManager
 import ru.pyxiion.ignis.api.manager.SidebarManager
 import ru.pyxiion.ignis.storage.JsonBackend
@@ -57,6 +58,12 @@ class PxIgnis : ModInitializer {
                 storageManager = StorageManager(JsonBackend(storagePath))
                 runtime = IgnisRuntime(server, storageManager!!)
                 runtime.reload()
+                PlayerMoveDispatcher.handler = { player, from, to ->
+                    runtime.eventManager.fire("player_move",
+                        PlayerWrap.wrap(player),
+                        Vector.fromMc(from).toLuaValue(),
+                        Vector.fromMc(to).toLuaValue())
+                }
                 runtime.eventManager.fire("server_start")
                 runtime.eventManager.fire("init")
 
