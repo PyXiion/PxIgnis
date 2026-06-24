@@ -41,7 +41,7 @@ Metatable name: `"player"`
 
 ## Methods
 
-Entity methods inherited: `raycast()`, `addEffect()`, `removeEffect()`, `hasEffect()`, `setOnFireFor()`, `readNbt()`, `writeNbt()`.
+Entity methods inherited: `raycast()`, `addEffect()`, `removeEffect()`, `hasEffect()`, `setOnFireFor()`.
 `damage()` is overridden for players (always uses generic damage source, no source parameter).
 
 ### `player:sendMessage(text)`
@@ -65,18 +65,33 @@ player:sendActionBar("&eHotbar message")
 ```
 
 ### `player:sendTitle(title, subtitle?)`
+### `player:sendTitle({title, subtitle?, fadeIn?, stay?, fadeOut?})`
 
-Sends a title.
+Sends a title. Two forms:
+
+**Positional form** — fixed fade timing (20/60/20 ticks):
 
 | Param | Type | Description |
 |---|---|---|
 | `title` | `string` | Title text |
 | `subtitle` | `string` | Subtitle text |
 
-Fade timing is fixed at 20/60/20 ticks (in/stay/out).
-
 ```lua
 player:sendTitle("&cWarning", "&7Danger zone")
+```
+
+**Table form** — custom timing:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `title` | `string` | `""` | Title text |
+| `subtitle` | `string` | `""` | Subtitle text |
+| `fadeIn` | `number` | `20` | Fade-in ticks |
+| `stay` | `number` | `60` | Stay ticks |
+| `fadeOut` | `number` | `20` | Fade-out ticks |
+
+```lua
+player:sendTitle({ title = "&aVictory!", subtitle = "&7You won!", fadeIn = 10, stay = 40 })
 ```
 
 ### `player:teleport(x, y, z, world?)`

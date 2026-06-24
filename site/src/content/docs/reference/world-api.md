@@ -88,6 +88,36 @@ Fills a cuboid between two positions with a block (max 32,768 blocks).
 world:fill({ x = -10, y = 60, z = -10 }, { x = 10, y = 70, z = 10 }, "stone")
 ```
 
+### `world:getBlockState(pos)`
+
+Returns the block state at a position as `{ id, properties }`, or `nil` if air.
+
+- `pos` (`table`) — `{x, y, z}` block position
+
+```lua
+local state = world:getBlockState({ x = 0, y = 64, z = 0 })
+if state then
+  print(state.id)                 -- "minecraft:grass_block"
+  for k, v in pairs(state.properties) do
+    print(k, v)                   -- "snowy", false
+  end
+end
+```
+
+### `world:setBlockState(pos, state)`
+
+Sets a block with property overrides.
+
+- `pos` (`table`) — `{x, y, z}` block position
+- `state` (`table`) — `{ id, properties? }`
+
+```lua
+world:setBlockState({ x = 0, y = 64, z = 0 }, {
+  id = "minecraft:command_block",
+  properties = { conditional = true }
+})
+```
+
 ## Entity Methods
 
 ### `world:spawn(entityId, pos, overrides?)`
@@ -120,6 +150,18 @@ Gets entities within a radius of a position.
 ```lua
 local all = world:getEntities({ x = 0, y = 64, z = 0 }, 10)
 local pigs = world:getEntities({ x = 0, y = 64, z = 0 }, 10, "minecraft:pig")
+```
+
+### `world:getEntitiesBySelector(selector, opts?)`
+
+Queries entities using Minecraft's target selector syntax. Supports `@a`, `@e`, `@p`, `@r`, `@s` and all selector arguments (`type=`, `distance=`, `tag=`, `nbt=`, etc.).
+
+- `selector` (`string`) — Target selector (e.g. `"@e[type=pig,distance=..10]"`)
+- `opts` (`table`, optional) — `{ as = entity, at = pos }` to set context and position
+
+```lua
+local pigs = world:getEntitiesBySelector("@e[type=minecraft:pig,distance=..10]")
+local nearby = world:getEntitiesBySelector("@a", { at = pos })
 ```
 
 ## Effects
@@ -190,6 +232,60 @@ Plays a sound at a position for all players in the world.
 ```lua
 world:playSound("minecraft:entity.experience_orb.pickup", vec(0, 64, 0))
 world:playSound("minecraft:entity.ender_dragon.growl", vec(0, 64, 0), 2.0, 0.5)
+```
+
+### `world:getBiome(pos)`
+
+Returns the biome ID at a position, or `nil`.
+
+- `pos` (`table`) — `{x, y, z}` position
+
+```lua
+local biome = world:getBiome({ x = 0, y = 64, z = 0 }) -- "minecraft:plains"
+```
+
+### `world:getBorder()`
+
+Returns a proxy table for the world border with read/write access:
+
+| Field | Type | Description |
+|---|---|---|
+| `.center` | `{x, z}` | Border center (table with `x`, `z`) |
+| `.size` | `number` | Border diameter |
+| `.damage` | `number` | Damage per block outside the border |
+| `.warningTime` | `number` | Warning time in seconds |
+| `.warningBlocks` | `number` | Warning distance in blocks |
+| `.damageThreshold` | `number` | Safe zone distance before damage starts |
+
+```lua
+local b = world:getBorder()
+print(b.center.x, b.center.z, b.size)
+b.size = 500
+b.center = { x = 100, z = 100 }
+```
+
+### `world:explode(pos, power, opts?)`
+
+Creates an explosion at a position.
+
+- `pos` (`table`) — `{x, y, z}` center
+- `power` (`number`) — Explosion power
+- `opts` (`table`, optional) — `{ fire = bool, destruction = "break"|"destroy"|"none" }`
+
+```lua
+world:explode({ x = 0, y = 64, z = 0 }, 4.0, { fire = true })
+```
+
+### `world:strike(pos, opts?)`
+
+Spawns a lightning bolt at a position.
+
+- `pos` (`table`) — `{x, y, z}` strike position
+- `opts` (`table`, optional) — `{ effect = bool }` (true = cosmetic only, no damage/fire)
+
+```lua
+world:strike({ x = 0, y = 64, z = 0 })
+world:strike({ x = 0, y = 64, z = 0 }, { effect = true })
 ```
 
 ## Holograms

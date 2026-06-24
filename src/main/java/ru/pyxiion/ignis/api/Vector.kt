@@ -7,6 +7,8 @@ import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
+import org.luaj.vm2.lib.OneArgFunction
+import org.luaj.vm2.lib.TwoArgFunction
 import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.luaTableOf
@@ -128,10 +130,68 @@ internal fun initVecMeta(meta: LuaTable) {
             }
         })
 
-        set("length", object : LuaFunction() {
+        set("length", object : OneArgFunction() {
             override fun call(arg1: LuaValue): LuaValue {
                 val (x, y, z) = resolveOperand(arg1)
                 return LuaValue.valueOf(sqrt(x*x+y*y+z*z))
+            }
+        })
+
+        set("lengthSq", object : OneArgFunction() {
+            override fun call(arg1: LuaValue): LuaValue {
+                val (x, y, z) = resolveOperand(arg1)
+                return LuaValue.valueOf(x*x+y*y+z*z)
+            }
+        })
+
+        set("distance", object : TwoArgFunction() {
+            override fun call(arg1: LuaValue, arg2: LuaValue): LuaValue {
+                val (x1, y1, z1) = resolveOperand(arg1)
+                val (x2, y2, z2) = resolveOperand(arg2)
+                val dx = x1 - x2
+                val dy = y1 - y2
+                val dz = z1 - z2
+                return LuaValue.valueOf(sqrt(dx*dx+dy*dy+dz*dz))
+            }
+        })
+
+        set("distanceSq", object : TwoArgFunction() {
+            override fun call(arg1: LuaValue, arg2: LuaValue): LuaValue {
+                val (x1, y1, z1) = resolveOperand(arg1)
+                val (x2, y2, z2) = resolveOperand(arg2)
+                val dx = x1 - x2
+                val dy = y1 - y2
+                val dz = z1 - z2
+                return LuaValue.valueOf(dx*dx+dy*dy+dz*dz)
+            }
+        })
+
+        set("normalized", object : OneArgFunction() {
+            override fun call(arg1: LuaValue): LuaValue {
+                val (x, y, z) = resolveOperand(arg1)
+                val length = sqrt(x*x+y*y+z*z)
+                if (length == 0.0) return vecTable(0.0, 0.0, 0.0)
+                return vecTable(x/length, y/length, z/length)
+            }
+        })
+
+        set("dot", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val (x1, y1, z1) = resolveOperand(args.arg(1))
+                val (x2, y2, z2) = resolveOperand(args.arg(2))
+                return valueOf(x1 * x2 + y1 * y2 + z1 * z2)
+            }
+        })
+
+        set("cross", object : TwoArgFunction() {
+            override fun call(arg1: LuaValue, arg2: LuaValue): LuaValue {
+                val (x1, y1, z1) = resolveOperand(arg1)
+                val (x2, y2, z2) = resolveOperand(arg2)
+                return vecTable(
+                    y1 * z2 - z1 * y2,
+                    z1 * x2 - x1 * z2,
+                    x1 * y2 - y1 * x2
+                )
             }
         })
     }

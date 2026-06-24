@@ -42,6 +42,10 @@ mc.off(id)
 | `entity_spawn`           | `(entity)`                                       |      ❌      |
 | `entity_despawn`         | `(entity)`                                       |      ❌      |
 | `entity_death`           | `(entity, damageType, amount)`                   |      ✅      |
+| `player_consume_item`    | `(player, item)`                                 |      ✅      |
+| `player_pickup_item`     | `(player, itemStack, count)`                     |      ✅      |
+| `player_drop_item`       | `(player, itemStack, count)`                     |      ✅      |
+| `player_move`            | `(player, from, to)`                             |      ❌      |
 | `tick`                   | `()`                                             |      ❌      |
 
 ## `mc.off(id)`
@@ -98,6 +102,7 @@ end)
 - **source** on `entity_hurt` / `entity_damage` is the entity that caused the damage (or `nil`).
 - **pos** is a [Vector](/reference/vector-api).
 - **alive** on `player_respawn` is `true` if the player respawned alive, `false` if they died and respawned.
+- **from**/**to** on `player_move` are [vectors](/reference/vector-api).
 - **player_block_place** only fires when the held item is a `BlockItem` - right-clicking with a non-block item (food,
   tool, etc.) does not trigger it.
 - **Async** is **not available** in event handlers. Use `mc.schedule(0, function() ... end)` to defer async work from an

@@ -30,6 +30,34 @@ local Vec = {}
 ---@return number
 function Vec:length() end
 
+---Returns x² + y² + z² (no sqrt).
+---@return number
+function Vec:lengthSq() end
+
+---Returns the distance to another vector.
+---@param other Vec3Like
+---@return number
+function Vec:distance(other) end
+
+---Returns the squared distance (faster than distance for range checks).
+---@param other Vec3Like
+---@return number
+function Vec:distanceSq(other) end
+
+---Returns a normalized (unit) vector. Zero vector returns (0,0,0).
+---@return Vec
+function Vec:normalized() end
+
+---Returns the dot product.
+---@param other Vec3Like
+---@return number
+function Vec:dot(other) end
+
+---Returns the cross product.
+---@param other Vec3Like
+---@return Vec
+function Vec:cross(other) end
+
 ---Construct a 3D vector.
 ---@param x number
 ---@param y number

@@ -26,6 +26,55 @@ Returns `sqrt(x² + y² + z²)` as a number.
 local len = vec(3, 4, 0):length() -- 5.0
 ```
 
+### `vec:lengthSq()`
+
+Returns `x² + y² + z²` without the square root. Faster than `length()` when only comparison is needed.
+
+```lua
+local sq = vec(3, 4, 0):lengthSq() -- 25.0
+```
+
+### `vec:distance(other)`
+
+Returns the Euclidean distance between two vectors.
+
+```lua
+local d = vec(0, 0, 0):distance(vec(3, 4, 0)) -- 5.0
+```
+
+### `vec:distanceSq(other)`
+
+Returns the squared distance. Faster than `distance()` for range checks.
+
+```lua
+if pos:distanceSq(target) < 100 then -- within 10 blocks
+end
+```
+
+### `vec:normalized()`
+
+Returns a unit vector (length ≈ 1) in the same direction. Returns `(0, 0, 0)` for zero vectors.
+
+```lua
+local dir = vec(3, 4, 0):normalized() -- approx (0.6, 0.8, 0)
+```
+
+### `vec:dot(other)`
+
+Returns the dot product.
+
+```lua
+local d = vec(1, 0, 0):dot(vec(0, 1, 0)) -- 0.0
+```
+
+### `vec:cross(other)`
+
+Returns the cross product.
+
+```lua
+local c = vec(1, 0, 0):cross(vec(0, 1, 0)) -- (0, 0, 1)
+```
+
 ## Operators
 
 | Operator   | Example            | Behaviour                       |

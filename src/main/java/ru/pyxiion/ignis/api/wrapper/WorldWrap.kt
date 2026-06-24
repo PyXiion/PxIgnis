@@ -209,7 +209,6 @@ object WorldWrap {
             val w = self.unwrap<ServerWorld>()
             val pos = args.arg(2).toBlockPos()
             val state = w.getBlockState(pos)
-            if (state.isAir) return@method LuaValue.NIL
             BlockStateCodec.stateToTable(state)
         }
 

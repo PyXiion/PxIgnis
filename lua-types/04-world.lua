@@ -49,7 +49,7 @@ function World:setBlock(pos, blockId) end
 function World:getBlock(pos) end
 
 ---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}
----@return BlockStateTable|nil  -- nil for air
+---@return BlockStateTable
 function World:getBlockState(pos) end
 
 ---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}
