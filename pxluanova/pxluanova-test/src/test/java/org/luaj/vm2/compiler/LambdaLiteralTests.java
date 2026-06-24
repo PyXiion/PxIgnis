@@ -35,7 +35,7 @@ public class LambdaLiteralTests extends TestCase {
 	}
 
 	public void testSingleArgLambda() {
-		LuaValue r = run(PRAGMA + "return (\\{ x -> x * x })(5)");
+		LuaValue r = run(PRAGMA + "return (\\{ x -> return x * x })(5)");
 		assertEquals(25, r.toint());
 	}
 
@@ -47,7 +47,7 @@ public class LambdaLiteralTests extends TestCase {
 	public void testLambdaAssignedToLocal() {
 		LuaValue r = run(
 			PRAGMA +
-			"local f = \\{ x -> x * 2 }\n" +
+			"local f = \\{ x -> return x * 2 }\n" +
 			"return f(21)"
 		);
 		assertEquals(42, r.toint());
@@ -100,7 +100,7 @@ public class LambdaLiteralTests extends TestCase {
 			PRAGMA +
 			"local total = 0\n" +
 			"for i = 1, 4 do\n" +
-			"  total = total + (\\{ x -> x * x })(i)\n" +
+			"  total = total + (\\{ x -> return x * x })(i)\n" +
 			"end\n" +
 			"return total"
 		);
@@ -115,7 +115,7 @@ public class LambdaLiteralTests extends TestCase {
 	public void testLambdaInTableConstructor() {
 		LuaValue r = run(
 			PRAGMA +
-			"local t = { 1, \\{ x -> x * 2 }, \\{ return 99 } }\n" +
+			"local t = { 1, \\{ x -> return x * 2 }, \\{ return 99 } }\n" +
 			"return t[1] + t[2](3) + t[3]()"
 		);
 		assertEquals(1 + 6 + 99, r.toint());
@@ -124,7 +124,7 @@ public class LambdaLiteralTests extends TestCase {
 	public void testNestedLambda() {
 		LuaValue r = run(
 			PRAGMA +
-			"local mk = \\{ base -> return \\{ n -> base + n } }\n" +
+			"local mk = \\{ base -> return \\{ n -> return base + n } }\n" +
 			"local add10 = mk(10)\n" +
 			"return add10(32)"
 		);
@@ -135,15 +135,15 @@ public class LambdaLiteralTests extends TestCase {
 		LuaValue r = run(
 			PRAGMA +
 			"local x = 40\n" +
-			"local f = \\{ y -> x + y }\n" +
+			"local f = \\{ y -> return x + y }\n" +
 			"return f(2)"
 		);
 		assertEquals(42, r.toint());
 	}
 
-	public void testArrowImplicitReturn() {
-		/* \{ a, b -> a + b } -- the last expression is implicitly returned. */
-		LuaValue r = run(PRAGMA + "local f = \\{ a, b -> a + b }\n return f(1, 2)");
+	public void testArrowExplicitReturn() {
+		/* \{ a, b -> return a + b } -- explicit return is required. */
+		LuaValue r = run(PRAGMA + "local f = \\{ a, b -> return a + b }\n return f(1, 2)");
 		assertEquals(3, r.toint());
 	}
 
@@ -194,7 +194,7 @@ public class LambdaLiteralTests extends TestCase {
 	/* ---------- arrow token ---------- */
 
 	public void testArrowInCodeMeansLambdaArrow() {
-		LuaValue r = run(PRAGMA + "return (\\{ x -> x * 2 })(21)");
+		LuaValue r = run(PRAGMA + "return (\\{ x -> return x * 2 })(21)");
 		assertEquals(42, r.toint());
 	}
 
@@ -227,7 +227,7 @@ public class LambdaLiteralTests extends TestCase {
 			"  for i, v in ipairs(t) do out[i] = fn(v) end\n" +
 			"  return out\n" +
 			"end\n" +
-			"local double = \\{ x -> x * 2 }\n" +
+			"local double = \\{ x -> return x * 2 }\n" +
 			"local nums = map({1, 2, 3}, double)\n" +
 			"return results[1] .. ' ' .. results[2] .. ' ' .. sum(10, 20, 30) .. ' ' .. (nums[1] + nums[2] + nums[3])"
 		);

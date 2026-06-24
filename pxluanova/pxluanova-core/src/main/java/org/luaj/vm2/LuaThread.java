@@ -126,6 +126,8 @@ public class LuaThread extends LuaValue {
 	/** Error message handler for this thread, if any.  */
 	public LuaValue errorfunc;
 
+	Throwable lastError = null;
+
 	/** Whether this thread runs synchronously on the calling thread.
 	 * May be changed to support async (virtual thread) mode in the future. */
 	public final boolean isSync;
@@ -164,6 +166,10 @@ public class LuaThread extends LuaValue {
 			}
 		}
 	}
+
+	public Throwable getLastError() {
+		return lastError;
+	}
 	
 	public int type() {
 		return LuaValue.TTHREAD;
@@ -198,6 +204,7 @@ public class LuaThread extends LuaValue {
 	}
 
 	public Varargs resume(Varargs args) {
+		lastError = null;
 		final LuaThread.State s = this.threadState;
 		if (s.status > LuaThread.STATUS_SUSPENDED)
 			return LuaValue.varargsOf(LuaValue.FALSE,
@@ -256,6 +263,13 @@ public class LuaThread extends LuaValue {
 			this.lua_thread = new WeakReference<>(lua_thread);
 			this.function = function;
 		}
+
+		private void setLastError(Throwable e) {
+			var luaThread = lua_thread.get();
+			if (luaThread != null) {
+				luaThread.lastError = e;
+			}
+		}
 		
 		public void run() {
 			LuaState.setCurrent(state);
@@ -267,6 +281,7 @@ public class LuaThread extends LuaValue {
 					this.result = function.invoke(a);
 				} catch (Throwable t) {
 					this.error = t.getMessage();
+					setLastError(t);
 				} finally {
 					this.status = LuaThread.STATUS_DEAD;
 					getCondition().signal();
@@ -403,11 +418,13 @@ public class LuaThread extends LuaValue {
 					return LuaValue.varargsOf(LuaValue.TRUE, result);
 				} catch (LuaError le) {
 					this.error = le.getMessage();
+					setLastError(le);
 					this.status = STATUS_DEAD;
 					frameStack.clear();
 					return LuaValue.varargsOf(LuaValue.FALSE, LuaValue.valueOf(this.error));
 				} catch (Throwable t) {
 					this.error = t.getMessage();
+					setLastError(t);
 					this.status = STATUS_DEAD;
 					frameStack.clear();
 					return LuaValue.varargsOf(LuaValue.FALSE,

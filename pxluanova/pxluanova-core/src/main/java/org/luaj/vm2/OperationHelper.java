@@ -5,6 +5,9 @@ public final class OperationHelper {
 	}
 
 	public static LuaValue add(LuaValue left, LuaValue right) throws LuaError {
+		if (left instanceof LuaInteger l && right instanceof LuaInteger r) {
+			return LuaInteger.valueOf((long) l.v + (long) r.v);
+		}
 		double dLeft, dRight;
 		if (checkNumber(left, dLeft = left.todouble()) && checkNumber(right, dRight = right.todouble())) {
 			return LuaDouble.valueOf(dLeft + dRight);
@@ -14,6 +17,9 @@ public final class OperationHelper {
 	}
 
 	public static LuaValue sub(LuaValue left, LuaValue right) throws LuaError {
+		if (left instanceof LuaInteger l && right instanceof LuaInteger r) {
+			return LuaInteger.valueOf((long) l.v - (long) r.v);
+		}
 		double dLeft, dRight;
 		if (checkNumber(left, dLeft = left.todouble()) && checkNumber(right, dRight = right.todouble())) {
 			return LuaDouble.valueOf(dLeft - dRight);
@@ -45,6 +51,9 @@ public final class OperationHelper {
 	}
 
 	public static LuaValue mod(LuaValue left, LuaValue right) throws LuaError {
+		if (left instanceof LuaInteger l && right instanceof LuaInteger r && r.v != 0) {
+			return LuaInteger.valueOf(Math.floorMod(l.v, r.v));
+		}
 		double dLeft, dRight;
 		if (checkNumber(left, dLeft = left.todouble()) && checkNumber(right, dRight = right.todouble())) {
 			return LuaDouble.valueOf(mod(dLeft, dRight));

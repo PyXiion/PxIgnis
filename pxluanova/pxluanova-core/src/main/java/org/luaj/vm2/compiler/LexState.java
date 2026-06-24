@@ -1368,10 +1368,6 @@ public class LexState extends Constants {
 	 *                                                  always parses a chunk)
 	 */
 	void lambdaBody(expdesc e, int line) {
-		lambdaBody(e, line, true);
-	}
-
-	void lambdaBody(expdesc e, int line, boolean implicitReturnOk) {
 		FuncState new_fs = new FuncState();
 		BlockCnt bl = new BlockCnt();
 		new_fs.f = addprototype();
@@ -1385,52 +1381,16 @@ public class LexState extends Constants {
 		} else {
 			new_fs.f.numparams = 0;
 		}
-		/* Decide between implicit-return expression and regular statement chunk. */
-		boolean exprBody = implicitReturnOk
-				&& this.t.token != '}'
-				&& !isLambdaStmtStart(this.t.token);
-		if (exprBody) {
-			/* Implicit return: parse one expression and emit OP_RETURN.
-			 * Mirrors retstat() but for a single expression without the `return` keyword. */
-			expdesc body = new expdesc();
-			int first, nret;
-			FuncState fs = this.fs;
-			this.expr(body);
-			if (hasmultret(body.k)) {
-				fs.setmultret(body);
-				first = fs.nactvar;
-				nret = Lua.LUA_MULTRET;
-			} else if (body.k == VCALL) {
-				/* single call result: return its value(s) directly */
-				first = fs.exp2anyreg(body);
-				nret = 1;
-			} else {
-				fs.exp2nextreg(body);
-				first = fs.nactvar;
-				nret = fs.freereg - first;
-			}
-			fs.ret(first, nret);
-		} else {
-			this.statlist();
-		}
+		/* Lambda bodies are always parsed as statement chunks.  Implicit return
+		 * of a single expression is intentionally not supported: it interacted
+		 * badly with function-call expressions and produced incorrect bytecode
+		 * that could corrupt the enclosing environment upvalue.  Use an explicit
+		 * `return` when a value is needed. */
+		this.statlist();
 		new_fs.f.lastlinedefined = this.linenumber;
 		this.check_match('}', '{', line);
 		this.codeclosure(e);
 		this.close_func();
-	}
-
-	/* Tokens that always begin a regular Lua statement (so the body is a chunk,
-	 * not an implicit-return expression). */
-	private static boolean isLambdaStmtStart(int tok) {
-		switch (tok) {
-		case TK_IF: case TK_WHILE: case TK_DO: case TK_FOR:
-		case TK_REPEAT: case TK_FUNCTION: case TK_LOCAL:
-		case TK_RETURN: case TK_BREAK: case TK_GOTO:
-		case ';': case TK_DBCOLON:
-			return true;
-		default:
-			return false;
-		}
 	}
 
 	/* Returns the number of declared parameters, or 0 if the lambda body starts
@@ -1533,7 +1493,7 @@ public class LexState extends Constants {
 			expdesc fn = new expdesc();
 			int lline = this.linenumber;
 			this.next(); /* consume TK_LAMBDA (the synthesized \{ token) */
-			this.lambdaBody(fn, lline, false);
+			this.lambdaBody(fn, lline);
 			fs.exp2nextreg(fn); /* place closure in the next free register */
 			args.k = VVOID;      /* post-switch math: nothing left to materialize */
 		}
@@ -1626,7 +1586,7 @@ public class LexState extends Constants {
 				int base = fs.exp2anyreg(v);
 				this.next(); /* consume TK_LAMBDA */
 				expdesc fn = new expdesc();
-				this.lambdaBody(fn, line, false);
+				this.lambdaBody(fn, line);
 				fs.exp2nextreg(fn);
 				v.init(VCALL, fs.codeABC(Lua.OP_CALL, base, 1 + 1, 2));
 				fs.fixline(line);

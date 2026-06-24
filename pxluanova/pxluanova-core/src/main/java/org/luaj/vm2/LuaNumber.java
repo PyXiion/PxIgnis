@@ -32,7 +32,7 @@ package org.luaj.vm2;
  * 
  */
 abstract
-public class LuaNumber extends LuaValue {
+public sealed class LuaNumber extends LuaValue permits LuaDouble, LuaInteger {
 
 	/** Shared static metatable for all number values represented in lua. */
 	public static LuaValue s_metatable;
