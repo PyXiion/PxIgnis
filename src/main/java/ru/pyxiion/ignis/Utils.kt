@@ -69,6 +69,17 @@ inline fun <reified T> LuaValue.unwrapOrNull(): T? {
     return if (obj.isuserdata()) obj.checkuserdata() as? T else null
 }
 
+
+fun LuaTable.asSequence(): Sequence<Pair<LuaValue, LuaValue>> = sequence {
+    var key: LuaValue = LuaValue.NIL
+    while (true) {
+        val next = this@asSequence.next(key)
+        key = next.arg1()
+        if (key.isnil()) break
+        yield(Pair(key, next.arg(2)))
+    }
+}
+
 inline fun LuaTable.forEach(action: (k: LuaValue, v: LuaValue) -> Unit) {
     var k = LuaValue.NIL
     while (true) {
@@ -85,83 +96,9 @@ fun Iterable<LuaValue>?.toLuaArray(): LuaTable {
     }
 }
 
-internal fun nbtToLua(element: NbtElement): LuaValue {
-    return when (element) {
-        is NbtCompound -> {
-            val t = LuaTable()
-            for (key in element.keys) {
-                val value = element.get(key) ?: continue
-                t.set(key, nbtToLua(value))
-            }
-            t
-        }
-        is NbtList -> {
-            element.map(::nbtToLua).toLuaArray()
-        }
-        is NbtByte -> LuaValue.valueOf(element.value.toInt() != 0)
-        is NbtShort -> LuaValue.valueOf(element.value.toInt())
-        is NbtInt -> LuaValue.valueOf(element.value)
-        is NbtLong -> LuaValue.valueOf(element.value.toDouble())
-        is NbtFloat -> LuaValue.valueOf(element.value.toDouble())
-        is NbtDouble -> LuaValue.valueOf(element.value)
-        is NbtString -> LuaValue.valueOf(element.value)
-        is NbtByteArray -> {
-            element.byteArray.map { LuaValue.valueOf(it.toInt() and 0xFF) }.toLuaArray()
-        }
-        is NbtIntArray -> {
-            element.intArray.map { LuaValue.valueOf(it) }.toLuaArray()
-        }
-        is NbtLongArray -> {
-            // TODO: introduce LuaLong
-            element.longArray.map { LuaValue.valueOf(it.toInt()) }.toLuaArray()
-        }
-        else -> LuaValue.NIL
-    }
-}
-
-internal fun luaToNbt(value: LuaValue): NbtElement {
-    return when {
-        value.isboolean() -> NbtByte.of(if (value.toboolean()) 1 else 0)
-        value.isint() -> NbtInt.of(value.toint())
-        value.islong() -> NbtLong.of(value.tolong())
-        value.isnumber() -> NbtDouble.of(value.todouble())
-        value.isstring() -> NbtString.of(value.tojstring())
-        value.istable() -> {
-            val t = value.checktable()
-            var hasStringKeys = false
-            var k = LuaValue.NIL
-            while (true) {
-                val next = t.next(k)
-                if (next.isnil(1)) break
-                val key = next.arg(1)
-                if (!key.isint() || key.toint() < 1) {
-                    hasStringKeys = true
-                    break
-                }
-                k = key
-            }
-
-            if (!hasStringKeys && t.length() > 0) {
-                val list = NbtList()
-                for (i in 1..t.length()) {
-                    list.add(luaToNbt(t.get(i)))
-                }
-                list
-            } else {
-                val compound = NbtCompound()
-                var k2 = LuaValue.NIL
-                while (true) {
-                    val next = t.next(k2)
-                    if (next.isnil(1)) break
-                    val key = next.arg(1).tojstring()
-                    val v = next.arg(2)
-                    compound.put(key, luaToNbt(v))
-                    k2 = next.arg(1)
-                }
-                compound
-            }
-        }
-        else -> throw LuaError("writeNbt: неподдерживаемый тип Lua: ${value.typename()}")
+fun Iterable<Pair<LuaValue, LuaValue>>?.toLuaTable(): LuaTable {
+    return LuaTable().apply {
+        this@toLuaTable?.forEach { (k, v) -> set(k, v) }
     }
 }
 
@@ -174,7 +111,7 @@ fun LuaThread.resumeOrThrow(args: Varargs): Varargs {
 fun LuaThread.resumeOrLog(args: Varargs, context: String): Varargs {
     val r = resume(args)
     if (!r.arg1().toboolean()) {
-        val err = LuaError(r.arg(2).optjstring("Unknown coroutine error"))
+        val err = lastError ?: LuaError(r.arg(2).optjstring("Unknown coroutine error"))
         PxIgnis.logger.error("$context: ${err.message}", err)
     }
     return r

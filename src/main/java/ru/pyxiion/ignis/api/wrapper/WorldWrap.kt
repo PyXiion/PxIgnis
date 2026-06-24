@@ -1,15 +1,18 @@
 package ru.pyxiion.ignis.api.wrapper
 
+import com.mojang.brigadier.StringReader
+import com.mojang.brigadier.exceptions.CommandSyntaxException
+import net.minecraft.command.EntitySelectorReader
 import net.minecraft.entity.Entity
+import net.minecraft.entity.EntityType
 import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.SpawnReason
 import net.minecraft.entity.attribute.EntityAttributes
 import net.minecraft.entity.decoration.DisplayEntity
 import net.minecraft.entity.mob.MobEntity
 import net.minecraft.nbt.NbtCompound
-import net.minecraft.nbt.NbtInt
 import net.minecraft.nbt.NbtOps
-import net.minecraft.nbt.NbtString
+import net.minecraft.particle.ParticleTypes
 import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket
 import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket
 import net.minecraft.particle.ParticleEffect
@@ -17,6 +20,7 @@ import net.minecraft.particle.ParticleType
 import net.minecraft.registry.Registries
 import net.minecraft.registry.RegistryKey
 import net.minecraft.registry.RegistryKeys
+import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.sound.SoundCategory
 import net.minecraft.text.Text
@@ -24,16 +28,22 @@ import net.minecraft.util.Identifier
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.math.Box
 import net.minecraft.util.math.Vec3d
+import net.minecraft.world.World
+import net.minecraft.world.border.WorldBorder
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
+import org.luaj.vm2.Varargs
+import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.HologramManager
 import ru.pyxiion.ignis.api.manager.RegionManager
 import ru.pyxiion.ignis.api.resolveOperand
+import ru.pyxiion.ignis.api.util.BlockStateCodec
+import ru.pyxiion.ignis.luaTableOf
+import ru.pyxiion.ignis.unwrapOrNull
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.api.util.performRaycast
-import ru.pyxiion.ignis.luaToNbt
 import ru.pyxiion.ignis.toBlockPos
 import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.toVec3d
@@ -193,6 +203,38 @@ object WorldWrap {
             LuaValue.valueOf(Registries.BLOCK.getId(block).toString())
         }
 
+        // world:getBlockState(pos) -> { id, properties }
+        method("getBlockState") { args ->
+            val self = args.arg(1).checktable()
+            val w = self.unwrap<ServerWorld>()
+            val pos = args.arg(2).toBlockPos()
+            val state = w.getBlockState(pos)
+            if (state.isAir) return@method LuaValue.NIL
+            BlockStateCodec.stateToTable(state)
+        }
+
+        // world:setBlockState(pos, { id, properties })
+        method("setBlockState") { args ->
+            val self = args.arg(1).checktable()
+            val w = self.unwrap<ServerWorld>()
+            val pos = args.arg(2).toBlockPos()
+            val tbl = args.arg(3).checktable()
+
+            val id = tbl.get("id").checkjstring()
+            val blockId = resolveBlockId(id)
+            val block = Registries.BLOCK.get(Identifier.of(blockId))
+                ?: throw LuaError("Блок '$blockId' не найден")
+
+            val state = if (tbl.get("properties").istable()) {
+                BlockStateCodec.applyProperties(block, tbl.get("properties").checktable())
+            } else {
+                block.defaultState
+            }
+
+            w.setBlockState(pos, state, 0x03)
+            LuaValue.NIL
+        }
+
         // world:fill(posA, posB, blockId)
         method("fill") { args ->
             val self = args.arg(1).checktable()
@@ -254,18 +296,6 @@ object WorldWrap {
                 }
                 speed = opts.get("speed").optdouble(0.0)
                 data = opts.get("data").opttable(null)
-                if (data == null) {
-                    val known = setOf("count", "spread", "speed", "data")
-                    var hasExtra = false
-                    var cursor = LuaValue.NIL
-                    while (true) {
-                        val entry = opts.next(cursor)
-                        if (entry.isnil(1)) break
-                        cursor = entry.arg(1)
-                        if (!known.contains(cursor.tojstring())) { hasExtra = true; break }
-                    }
-                    if (hasExtra) data = opts
-                }
             } else {
                 count = 1; deltaX = 0.0; deltaY = 0.0; deltaZ = 0.0; speed = 0.0; data = null
             }
@@ -348,15 +378,11 @@ object WorldWrap {
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerWorld>()
             val text = args.arg(2).checkjstring()
-            val x = args.arg(3).checkdouble()
-            val y = args.arg(4).checkdouble()
-            val z = args.arg(5).checkdouble()
-            val range = args.arg(6).checkdouble()
-            val overlay = if (args.narg() >= 7 && args.arg(7).isint()) args.arg(7).toint() else null
+            val pos = args.arg(3).toVec3d()
+            val range = args.arg(4).checkdouble()
+            val overlay = if (args.narg() >= 5 && args.arg(5).isint()) args.arg(5).toint() else null
 
             val rangeSquare = range * range
-            val pos = Vec3d(x, y, z)
-
             val players = w.players.filter { it.squaredDistanceTo(pos) < rangeSquare }
 
             if (overlay == null) {
@@ -371,6 +397,111 @@ object WorldWrap {
                     }
                 }
             }
+            LuaValue.NIL
+        }
+
+        // world:getBiome(pos) -> string?
+        method("getBiome") { args ->
+            val self = args.arg(1).checktable()
+            val w = self.unwrap<ServerWorld>()
+            val pos = args.arg(2).toBlockPos()
+            val biome = w.getBiome(pos)
+            val biomeId = biome.key.flatMap { java.util.Optional.of(it.value.toString()) }.orElse(null)
+            if (biomeId != null) LuaValue.valueOf(biomeId) else LuaValue.NIL
+        }
+
+        // world:getBorder() -> { center, size, damage, ... }
+        method("getBorder") { args ->
+            val self = args.arg(1).checktable()
+            val w = self.unwrap<ServerWorld>()
+            val border = w.worldBorder
+
+            val meta = LuaTable()
+            val indexFn = object : VarArgFunction() {
+                override fun invoke(va: Varargs): Varargs {
+                    when (va.arg(2).tojstring()) {
+                        "center" -> return luaTableOf(
+                            "x" to LuaValue.valueOf(border.centerX),
+                            "z" to LuaValue.valueOf(border.centerZ),
+                        )
+                        "size" -> return LuaValue.valueOf(border.size)
+                        "damage" -> return LuaValue.valueOf(border.damagePerBlock)
+                        "warningTime" -> return LuaValue.valueOf(border.warningTime)
+                        "warningBlocks" -> return LuaValue.valueOf(border.warningBlocks)
+                        "damageThreshold" -> return LuaValue.valueOf(border.safeZone)
+                    }
+                    return LuaValue.NIL
+                }
+            }
+            meta.set("__index", indexFn)
+
+            val newIndexFn = object : VarArgFunction() {
+                override fun invoke(va: Varargs): Varargs {
+                    val key = va.arg(2).tojstring()
+                    val value = va.arg(3)
+                    when (key) {
+                        "center" -> {
+                            val t = value.checktable()
+                            border.setCenter(
+                                t.get("x").optdouble(0.0),
+                                t.get("z").optdouble(0.0),
+                            )
+                        }
+                        "size" -> border.setSize(value.todouble())
+                        "damage" -> border.damagePerBlock = value.todouble()
+                        "warningTime" -> border.warningTime = value.toint()
+                        "warningBlocks" -> border.warningBlocks = value.toint()
+                        "damageThreshold" -> border.safeZone = value.todouble()
+                    }
+                    return LuaValue.NIL
+                }
+            }
+            meta.set("__newindex", newIndexFn)
+
+            meta.set("setSize", object : VarArgFunction() {
+                override fun invoke(va: Varargs): Varargs {
+                    val size = va.arg(1).checkdouble()
+                    border.setSize(size)
+                    return LuaValue.NIL
+                }
+            })
+            val t = LuaTable()
+            t.setmetatable(meta)
+            t
+        }
+
+        // world:explode(pos, power, opts?)
+        method("explode") { args ->
+            val self = args.arg(1).checktable()
+            val w = self.unwrap<ServerWorld>()
+            val pos = args.arg(2).toVec3d()
+            val power = args.arg(3).checkdouble().toFloat()
+            val opts = if (args.narg() >= 4 && args.arg(4).istable()) args.arg(4).checktable() else null
+
+            val fire = opts?.get("fire")?.optboolean(false) ?: false
+            val destruction = opts?.get("destruction")?.optjstring("break") ?: "break"
+            val sourceType = try {
+                World.ExplosionSourceType.valueOf(destruction.uppercase())
+            } catch (_: Exception) {
+                World.ExplosionSourceType.BLOCK
+            }
+
+            w.createExplosion(null, pos.x, pos.y, pos.z, power, fire, sourceType)
+            LuaValue.NIL
+        }
+
+        // world:strike(pos, opts?)
+        method("strike") { args ->
+            val self = args.arg(1).checktable()
+            val w = self.unwrap<ServerWorld>()
+            val pos = args.arg(2).toVec3d()
+            val opts = if (args.narg() >= 3 && args.arg(3).istable()) args.arg(3).checktable() else null
+
+            val bolt = EntityType.LIGHTNING_BOLT.create(w, SpawnReason.COMMAND)
+                ?: throw LuaError("Не удалось создать молнию")
+            bolt.setPosition(pos.x, pos.y, pos.z)
+            bolt.setCosmetic(opts?.get("effect")?.optboolean(false) ?: false)
+            w.spawnEntity(bolt)
             LuaValue.NIL
         }
 
@@ -403,9 +534,41 @@ object WorldWrap {
             val w = self.unwrap<ServerWorld>()
             require(args.narg() == 2) { "getRegionsAt(pos) requires 1 argument" }
             val pos = args.arg(2).toVec3d()
-            val list = LuaTable()
             RegionManager.getAt(w, pos).map(RegionWrap::wrap).toLuaArray()
-            list
+        }
+
+        // world:getEntitiesBySelector(selector, opts?) -> {entity,...}
+        method("getEntitiesBySelector") { args ->
+            val self = args.arg(1).checktable()
+            val w = self.unwrap<ServerWorld>()
+            val selector = args.arg(2).checkjstring()
+            val opts = if (args.narg() >= 3 && args.arg(3).istable()) args.arg(3).checktable() else null
+
+            val center = opts?.get("at")?.let { v ->
+                if (v.istable()) v.toVec3d() else null
+            }
+            val sourceEntity = opts?.get("as")?.let { v ->
+                if (v.istable()) v.unwrapOrNull<Entity>() else null
+            }
+
+            val parsed = try {
+                EntitySelectorReader(StringReader(selector), true).read()
+            } catch (e: CommandSyntaxException) {
+                throw LuaError("Неверный селектор '$selector': ${e.message}")
+            }
+
+            val server = w.server ?: throw LuaError("Мировой сервер недоступен")
+            val base = server.commandSource.withWorld(w)
+            val withPos = if (center != null) base.withPosition(center) else base
+            val source = if (sourceEntity != null) withPos.withEntity(sourceEntity) else withPos
+
+            val entities = try {
+                parsed.getEntities(source)
+            } catch (e: CommandSyntaxException) {
+                throw LuaError("Ошибка селектора '$selector': ${e.message}")
+            }
+
+            entities.map(EntityFactory::wrap).toLuaArray()
         }
     }
 
@@ -446,62 +609,133 @@ object WorldWrap {
     ): ParticleEffect {
         if (type is ParticleEffect) return type
 
+        val nbt = buildParticleDataNbt(type, data, world, id)
         val ops = world.registryManager.getOps(NbtOps.INSTANCE)
-        val nbt = if (data != null) {
-            particleDataToNbt(data)
-        } else {
-            NbtCompound()
-        }
-
         return (type as ParticleType<ParticleEffect>).codec.codec()
             .parse(ops, nbt)
             .getOrThrow { msg: String -> LuaError("Частица '$id': $msg") }
     }
 
-    private fun particleDataToNbt(data: LuaTable): NbtCompound {
-        val compound = NbtCompound()
-        var k = LuaValue.NIL
-        while (true) {
-            val entry = data.next(k)
-            if (entry.isnil(1)) break
-            val key = entry.arg(1).tojstring()
-            val v = entry.arg(2)
-            k = entry.arg(1)
-            when (key) {
-                "block" -> compound.put("block_state", NbtString.of(resolveBlockId(v.checkjstring())))
-                "item" -> compound.put("item", NbtCompound().apply {
-                    put("id", NbtString.of(resolveBlockId(v.checkjstring())))
-                    put("count", NbtInt.of(1))
-                })
-                "color" -> { val (r, g, b) = extractColorValues(v); compound.put("color", NbtInt.of(rgbToInt(r, g, b))) }
-                "fromColor" -> { val (r, g, b) = extractColorValues(v); compound.put("from_color", NbtInt.of(rgbToInt(r, g, b))) }
-                "toColor" -> { val (r, g, b) = extractColorValues(v); compound.put("to_color", NbtInt.of(rgbToInt(r, g, b))) }
-                else -> compound.put(camelToSnake(key), luaToNbt(v))
+    private fun buildParticleDataNbt(
+        type: ParticleType<*>,
+        data: LuaTable?,
+        world: ServerWorld,
+        id: String,
+    ): NbtCompound {
+        fun tbl(): LuaTable = data ?: throw LuaError("Частица '$id': data required for this particle type")
+
+        fun rgb(v: LuaValue): Int {
+            val t = v.checktable()
+            val r = t.get(1).optdouble(t.get("r").optdouble(0.0))
+            val g = t.get(2).optdouble(t.get("g").optdouble(0.0))
+            val b = t.get(3).optdouble(t.get("b").optdouble(0.0))
+            val s = if (r > 1.0 || g > 1.0 || b > 1.0) 1.0 else 255.0
+            val ri = (r * s).toInt().coerceIn(0, 255)
+            val gi = (g * s).toInt().coerceIn(0, 255)
+            val bi = (b * s).toInt().coerceIn(0, 255)
+            return (ri shl 16) or (gi shl 8) or bi
+        }
+
+        fun argb(v: LuaValue): Int {
+            val t = v.checktable()
+            val a = t.get(1).optdouble(t.get("a").optdouble(255.0))
+            val r = t.get(2).optdouble(t.get("r").optdouble(0.0))
+            val g = t.get(3).optdouble(t.get("g").optdouble(0.0))
+            val b = t.get(4).optdouble(t.get("b").optdouble(0.0))
+            val ai = a.toInt().coerceIn(0, 255)
+            val ri = r.toInt().coerceIn(0, 255)
+            val gi = g.toInt().coerceIn(0, 255)
+            val bi = b.toInt().coerceIn(0, 255)
+            return (ai shl 24) or (ri shl 16) or (gi shl 8) or bi
+        }
+
+        val c = NbtCompound()
+        when (type) {
+            ParticleTypes.BLOCK,
+            ParticleTypes.BLOCK_MARKER,
+            ParticleTypes.FALLING_DUST,
+            ParticleTypes.DUST_PILLAR,
+            ParticleTypes.BLOCK_CRUMBLE -> {
+                c.putString("block_state", resolveBlockId(tbl().get("block").checkjstring()))
+            }
+
+            ParticleTypes.DRAGON_BREATH -> {
+                c.putFloat("power", tbl().get("power").optdouble(1.0).toFloat())
+            }
+
+            ParticleTypes.DUST -> {
+                val t = tbl()
+                c.putInt("color", rgb(t.get("color")))
+                c.putFloat("scale", t.get("scale").optdouble(1.0).toFloat())
+            }
+
+            ParticleTypes.DUST_COLOR_TRANSITION -> {
+                val t = tbl()
+                c.putInt("from_color", rgb(t.get("fromColor")))
+                c.putInt("to_color", rgb(t.get("toColor")))
+                c.putFloat("scale", t.get("scale").optdouble(1.0).toFloat())
+            }
+
+            ParticleTypes.EFFECT,
+            ParticleTypes.INSTANT_EFFECT -> {
+                val t = tbl()
+                val colorVal = t.get("color")
+                c.putInt("color", if (colorVal.istable()) rgb(colorVal) else -1)
+                c.putFloat("power", t.get("power").optdouble(1.0).toFloat())
+            }
+
+            ParticleTypes.ENTITY_EFFECT,
+            ParticleTypes.TINTED_LEAVES,
+            ParticleTypes.FLASH -> {
+                c.putInt("color", argb(tbl().get("color")))
+            }
+
+            ParticleTypes.ITEM -> {
+                val t = tbl()
+                val itemCompound = NbtCompound()
+                itemCompound.putString("id", resolveBlockId(t.get("item").checkjstring()))
+                itemCompound.putInt("count", t.get("count").optint(1))
+                c.put("item", itemCompound)
+            }
+
+            ParticleTypes.SCULK_CHARGE -> {
+                c.putFloat("roll", tbl().get("roll").optdouble(0.0).toFloat())
+            }
+
+            ParticleTypes.SHRIEK -> {
+                c.putInt("delay", tbl().get("delay").optint(0))
+            }
+
+            ParticleTypes.TRAIL -> {
+                val t = tbl()
+                val target = t.get("target").toVec3d()
+                val targetCompound = NbtCompound()
+                targetCompound.putDouble("x", target.x)
+                targetCompound.putDouble("y", target.y)
+                targetCompound.putDouble("z", target.z)
+                c.put("target", targetCompound)
+                c.putInt("color", rgb(t.get("color")))
+                c.putInt("duration", t.get("duration").optint(20))
+            }
+
+            ParticleTypes.VIBRATION -> {
+                val t = tbl()
+                val from = t.get("from").toVec3d()
+                val dest = NbtCompound()
+                dest.putString("type", "minecraft:block")
+                dest.putInt("x", from.x.toInt())
+                dest.putInt("y", from.y.toInt())
+                dest.putInt("z", from.z.toInt())
+                c.put("destination", dest)
+                c.putInt("arrival_in_ticks", t.get("arrivalInTicks").optint(1))
+            }
+
+            else -> {
+                val name = Registries.PARTICLE_TYPE.getId(type)?.toString() ?: id
+                throw LuaError("Частица '$name' не поддерживается в data")
             }
         }
-        return compound
+        return c
     }
 
-    private fun extractColorValues(v: LuaValue): Triple<Double, Double, Double> {
-        val ct = v.checktable()
-        val r = ct.get(1).optdouble(ct.get("r").optdouble(0.0))
-        val g = ct.get(2).optdouble(ct.get("g").optdouble(0.0))
-        val b = ct.get(3).optdouble(ct.get("b").optdouble(0.0))
-        return Triple(r, g, b)
-    }
-
-    private fun rgbToInt(r: Double, g: Double, b: Double): Int {
-        val scale = if (r > 1.0 || g > 1.0 || b > 1.0) 1.0 else 255.0
-        val ri = (r * scale).toInt().coerceIn(0, 255)
-        val gi = (g * scale).toInt().coerceIn(0, 255)
-        val bi = (b * scale).toInt().coerceIn(0, 255)
-        return (ri shl 16) or (gi shl 8) or bi
-    }
-
-    private fun camelToSnake(s: String): String = buildString(s.length + 2) {
-        for (c in s) {
-            if (c.isUpperCase()) { append('_'); append(c.lowercase()) }
-            else append(c)
-        }
-    }
 }

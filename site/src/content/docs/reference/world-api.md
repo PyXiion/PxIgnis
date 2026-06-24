@@ -96,7 +96,8 @@ Spawns an entity at the given position.
 
 - `entityId` (`string`) — Entity type (e.g. `"pig"`, `"zombie"`)
 - `pos` (`table`) — `{x, y, z}` spawn position
-- `overrides` (`table`, optional) — Override keys: `health` (number) and `custom_name` (string). Arbitrary NBT is not supported.
+- `overrides` (`table`, optional) — Override keys: `health` (number) and `custom_name` (string). Arbitrary NBT is not
+  supported.
 
 Returns the spawned entity wrapper, or `nil` on failure.
 
@@ -132,11 +133,37 @@ Spawns particles at a position.
 
 Optional `opts` table:
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `count` | `number` | `1` | Number of particles |
-| `spread` | `table` | `{0, 0, 0}` | Spread vector (also accepts `delta` as alias) |
-| `speed` | `number` | `0` | Particle speed |
+| Option   | Type     | Default     | Description                                                            |
+|----------|----------|-------------|------------------------------------------------------------------------|
+| `count`  | `number` | `1`         | Number of particles                                                    |
+| `spread` | `table`  | `{0, 0, 0}` | Spread vector (also accepts `delta` as alias)                          |
+| `speed`  | `number` | `0`         | Particle speed                                                         |
+| `data`   | `table`  | —           | Particle-specific NBT fields (required for particles with data codecs) |
+
+The `data` table accepts per-particle fields — the following types are supported:
+
+| Particle id             | `data` fields                                                                     |
+|-------------------------|-----------------------------------------------------------------------------------|
+| `block`                 | `block` (string)                                                                  |
+| `block_marker`          | `block` (string)                                                                  |
+| `block_crumble`         | `block` (string)                                                                  |
+| `dragon_breath`         | `power` (number, default `1.0`)                                                   |
+| `dust`                  | `color` (`{r,g,b}`), `scale` (number, default `1.0`)                              |
+| `dust_color_transition` | `fromColor` (`{r,g,b}`), `toColor` (`{r,g,b}`), `scale` (number, default `1.0`)   |
+| `dust_pillar`           | `block` (string)                                                                  |
+| `effect`                | `color` (`{r,g,b}` — optional, omit for no tint), `power` (number, default `1.0`) |
+| `entity_effect`         | `color` (`{a,r,g,b}` — alpha + RGB)                                               |
+| `falling_dust`          | `block` (string)                                                                  |
+| `flash`                 | `color` (`{a,r,g,b}` — alpha + RGB)                                               |
+| `instant_effect`        | `color` (`{r,g,b}` — optional, omit for no tint), `power` (number, default `1.0`) |
+| `item`                  | `item` (string), `count` (number, default `1`)                                    |
+| `sculk_charge`          | `roll` (number, default `0.0`)                                                    |
+| `shriek`                | `delay` (number, default `0`)                                                     |
+| `tinted_leaves`         | `color` (`{a,r,g,b}` — alpha + RGB)                                               |
+| `trail`                 | `target` (vec), `color` (`{r,g,b}`), `duration` (number, default `20`)            |
+| `vibration`             | `from` (vec), `arrivalInTicks` (number, default `1`)                              |
+
+Simple particles (no `data` needed): `angry_villager`, `ash`, `bubble`, `bubble_column_up`, `bubble_pop`, `campfire_cosy_smoke`, `campfire_signal_smoke`, `cherry_leaves`, `cloud`, `composter`, `copper_fire_flame`, `crit`, `crimson_spore`, `current_down`, `damage_indicator`, `dolphin`, `dripping_dripstone_lava`, `dripping_dripstone_water`, `dripping_honey`, `dripping_lava`, `dripping_obsidian_tear`, `dripping_water`, `dust_plume`, `egg_crack`, `elder_guardian`, `electric_spark`, `enchant`, `enchanted_hit`, `end_rod`, `explosion`, `explosion_emitter`, `falling_dripstone_lava`, `falling_dripstone_water`, `falling_honey`, `falling_lava`, `falling_nectar`, `falling_obsidian_tear`, `falling_spore_blossom`, `falling_water`, `firefly`, `firework`, `fishing`, `flame`, `glow`, `glow_squid_ink`, `gust`, `gust_emitter_large`, `gust_emitter_small`, `happy_villager`, `heart`, `infested`, `item_cobweb`, `item_slime`, `item_snowball`, `landing_honey`, `landing_lava`, `landing_obsidian_tear`, `large_smoke`, `lava`, `mycelium`, `nautilus`, `note`, `ominous_spawning`, `pale_oak_leaves`, `poof`, `portal`, `raid_omen`, `rain`, `reverse_portal`, `scrape`, `sculk_charge_pop`, `sculk_soul`, `small_flame`, `small_gust`, `smoke`, `sneeze`, `snowflake`, `sonic_boom`, `soul`, `soul_fire_flame`, `spit`, `splash`, `spore_blossom_air`, `squid_ink`, `sweep_attack`, `totem_of_undying`, `trial_omen`, `trial_spawner_detection`, `trial_spawner_detection_ominous`, `underwater`, `vault_connection`, `warped_spore`, `wax_off`, `wax_on`, `white_ash`, `white_smoke`, `witch`.
 
 ```lua
 world:particle("minecraft:flame", { x = 0, y = 65, z = 0 })
@@ -145,20 +172,24 @@ world:particle("minecraft:heart", { x = 0, y = 65, z = 0 }, {
   delta = { 0.5, 0.5, 0.5 },
   speed = 0.1
 })
+world:particle("minecraft:dust", { x = 0, y = 65, z = 0 }, {
+  data = { color = { 1, 0, 0 }, scale = 1 },
+  count = 5,
+})
 ```
 
-### `world:playSound(id, x, y, z, volume?, pitch?)`
+### `world:playSound(id, pos, volume?, pitch?)`
 
 Plays a sound at a position for all players in the world.
 
 - `id` (`string`) — Sound identifier
-- `x`, `y`, `z` (`number`) — Position
+- `pos` (`table`) — `{x, y, z}` position
 - `volume` (`number`, default `1.0`) — Volume
 - `pitch` (`number`, default `1.0`) — Pitch
 
 ```lua
-world:playSound("minecraft:entity.experience_orb.pickup", 0, 64, 0)
-world:playSound("minecraft:entity.ender_dragon.growl", 0, 64, 0, 2.0, 0.5)
+world:playSound("minecraft:entity.experience_orb.pickup", vec(0, 64, 0))
+world:playSound("minecraft:entity.ender_dragon.growl", vec(0, 64, 0), 2.0, 0.5)
 ```
 
 ## Holograms
@@ -173,16 +204,16 @@ Spawns a hologram at the given position.
 
 `opts` table:
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `alignment` | `string` | `"center"` | Text alignment |
-| `billboard` | `string` | `"center"` | Billboard mode (`"fixed"`, `"vertical"`, `"horizontal"`, `"center"`) |
-| `lineWidth` | `number` | `200` | Line width |
-| `background` | `number` | `0x40000000` | ARGB background color |
-| `opacity` | `number` | `255` | Text opacity (0–255) |
-| `shadow` | `boolean` | `false` | Text shadow |
-| `seeThrough` | `boolean` | `false` | See-through |
-| `glowing` | `boolean` | `false` | Glowing effect |
+| Option       | Type      | Default      | Description                                                          |
+|--------------|-----------|--------------|----------------------------------------------------------------------|
+| `alignment`  | `string`  | `"center"`   | Text alignment                                                       |
+| `billboard`  | `string`  | `"center"`   | Billboard mode (`"fixed"`, `"vertical"`, `"horizontal"`, `"center"`) |
+| `lineWidth`  | `number`  | `200`        | Line width                                                           |
+| `background` | `number`  | `0x40000000` | ARGB background color                                                |
+| `opacity`    | `number`  | `255`        | Text opacity (0–255)                                                 |
+| `shadow`     | `boolean` | `false`      | Text shadow                                                          |
+| `seeThrough` | `boolean` | `false`      | See-through                                                          |
+| `glowing`    | `boolean` | `false`      | Glowing effect                                                       |
 
 Returns a [Hologram](/reference/hologram-api).
 
@@ -195,17 +226,17 @@ local holo = world:spawnHologram(vec(0, 70, 0), "&6Welcome!", {
 
 ## Broadcasting
 
-### `world:broadcastInRange(text, x, y, z, range, overlay?)`
+### `world:broadcastInRange(text, pos, range, overlay?)`
 
 Broadcasts a message to players within range of a position.
 
 - `text` (`string`) — Message text
-- `x`, `y`, `z` (`number`) — Origin position
+- `pos` (`table`) — `{x, y, z}` origin position
 - `range` (`number`) — Radius in blocks
 - `overlay` (`number`, optional) — If provided, sends as title overlay with the given duration in ticks
 
 ```lua
-world:broadcastInRange("&cDanger nearby!", 0, 64, 0, 20)
+world:broadcastInRange("&cDanger nearby!", vec(0, 64, 0), 20)
 ```
 
 ## Regions
@@ -227,7 +258,8 @@ See the [Region](/reference/region-api) page for events and methods.
 
 ### `world:getRegion(id)`
 
-Returns the [`Region`](/reference/region-api) wrapper for the given ID, or `nil` if no region with that ID exists in this world.
+Returns the [`Region`](/reference/region-api) wrapper for the given ID, or `nil` if no region with that ID exists in
+this world.
 
 ```lua
 local r = world:getRegion(42)
@@ -236,7 +268,8 @@ if r then r:destroy() end
 
 ### `world:getRegionsAt(pos)`
 
-Returns a sequence of all [`Region`](/reference/region-api) wrappers in this world that contain the given position. Returns `{}` if none. Regions may overlap, so multiple results are possible.
+Returns a sequence of all [`Region`](/reference/region-api) wrappers in this world that contain the given position.
+Returns `{}` if none. Regions may overlap, so multiple results are possible.
 
 ```lua
 for _, r in ipairs(world:getRegionsAt({ x = 50, y = 64, z = 50 })) do
@@ -261,11 +294,13 @@ Performs a raycast and returns a hit result or `nil`.
 Returns a hit result table or `nil`:
 
 For **entity hits**:
+
 - `hit.type` — `"entity"`
 - `hit.entity` — Hit entity wrapper
 - `hit.hit` — Intersection point `{x, y, z}`
 
 For **block hits**:
+
 - `hit.type` — `"block"`
 - `hit.blockPos` — Block position `{x, y, z}`
 - `hit.hit` — Intersection point `{x, y, z}`
