@@ -14,7 +14,7 @@ import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.api.LuaMcApi
 import ru.pyxiion.ignis.api.vecTable
 import ru.pyxiion.ignis.commands.CommandRegistrar
-import ru.pyxiion.ignis.sandbox.LuaRequire
+import ru.pyxiion.ignis.sandbox.LuaPackage
 import ru.pyxiion.ignis.sandbox.Vfs
 
 class ScriptEnvironment {
@@ -27,6 +27,12 @@ class ScriptEnvironment {
         LoadState.install(state)
 
         val globals = state.globals
+
+        // Default PackageLib is not safe, so we use our own
+        val ignisDir = FabricLoader.getInstance().configDir.resolve("ignis").toAbsolutePath()
+        val vfs = Vfs(ignisDir)
+        LuaPackage(state, vfs).call(LuaValue.valueOf("package"), globals)
+
         globals.load(JseBaseLib())
         globals.load(Bit32Lib())
         globals.load(TableLib())
@@ -35,10 +41,7 @@ class ScriptEnvironment {
         globals.load(JseMathLib())
         globals.load(NovaLib())
 
-        // Default PackageLib is not safe, so we use our own
-        val ignisDir = FabricLoader.getInstance().configDir.resolve("ignis").toAbsolutePath()
-        val vfs = Vfs(ignisDir)
-        globals.set("require", LuaRequire(state, vfs))
+
 
         // Remove unsafe things from JseBaseLib()
         globals.set("collectgarbage", LuaValue.NIL)
