@@ -152,12 +152,13 @@ local all = world:getEntities({ x = 0, y = 64, z = 0 }, 10)
 local pigs = world:getEntities({ x = 0, y = 64, z = 0 }, 10, "minecraft:pig")
 ```
 
+
 ### `world:getEntitiesBySelector(selector, opts?)`
 
 Queries entities using Minecraft's target selector syntax. Supports `@a`, `@e`, `@p`, `@r`, `@s` and all selector arguments (`type=`, `distance=`, `tag=`, `nbt=`, etc.).
 
 - `selector` (`string`) — Target selector (e.g. `"@e[type=pig,distance=..10]"`)
-- `opts` (`table`, optional) — `{ as = entity, at = pos }` to set context and position
+- `opts` (`table`, optional) — `{ as = entity, at = pos }` to set context entity/position
 
 ```lua
 local pigs = world:getEntitiesBySelector("@e[type=minecraft:pig,distance=..10]")
@@ -233,6 +234,9 @@ Plays a sound at a position for all players in the world.
 world:playSound("minecraft:entity.experience_orb.pickup", vec(0, 64, 0))
 world:playSound("minecraft:entity.ender_dragon.growl", vec(0, 64, 0), 2.0, 0.5)
 ```
+
+
+## World Effects
 
 ### `world:getBiome(pos)`
 

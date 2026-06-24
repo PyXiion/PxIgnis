@@ -77,10 +77,10 @@ mc.dump(mc.players, 2)
 ```
 
 ### `mc.getMetatable(name)`
-Returns a shared metatable by name. Available names: `"vec"`, `"entity"`, `"player"`, `"world"`, `"bossbar"`, `"structure"`, `"item"`, `"inventory"`, `"container"`, `"sidebar"`, `"mob"`, `"hologram"`, `"region"`.
+Returns a shared metatable by name. See [MetaTableRegistry](/api/#metatableregistry).
 
 ```lua
-local meta = mc.getMetatable("vec")
+local meta = mc.getMetatable("vec")  -- "vec", "entity", "player", "world", "bossbar", ...
 ```
 
 ## Scheduling
@@ -105,7 +105,6 @@ end)
 ```
 
 ### `mc.cancelTask(id)`
-
 Cancels a scheduled task. Returns `false` if the ID was never valid or already cancelled.
 
 ```lua
@@ -116,7 +115,8 @@ mc.cancelTask(id)
 
 ### `mc.execute(cmd, opts?)`
 
-Executes a command as the console (or as a specified entity). Returns `true, exitCode` on success, or `false, errorMessage` on failure.
+Executes a command as the console (or as a specified entity). Returns `true, exitCode` on success,
+or `false, errorMessage` on failure.
 
 - `cmd` (`string`) — Command to execute
 - `opts` (`table`, optional) — Options:
@@ -130,23 +130,6 @@ local ok, err = mc.execute("kick nonexistent")
 -- Execute as a player at their position
 mc.execute("kill @e[type=pig,distance=..5]", { as = player, at = player.pos })
 ```
-
-## Boss Bars
-
-### `mc.createBossBar(title, color?, style?)`
-
-Creates a boss bar visible to all players. See [BossBar](/reference/bossbar-api).
-
-- `title` (`string`) — Boss bar display title
-- `color` (`string`, default `"white"`) — `"pink"`, `"blue"`, `"red"`, `"green"`, `"yellow"`, `"purple"`, `"white"`
-- `style` (`string`, default `"progress"`) — `"progress"`, `"notched_6"`, `"notched_10"`, `"notched_12"`, `"notched_20"`
-
-```lua
-local bar = mc.createBossBar("&cBoss Fight", "red", "notched_6")
-bar:addPlayer(player)
-bar.progress = 0.5
-```
-
 ## Items
 
 ### `mc.createItem(id, [count | components])`
@@ -202,6 +185,30 @@ mc.data.welcomeMessage = "Welcome!"
 mc.data.visits = (mc.data.visits or 0) + 1
 ```
 
+
+## Boss Bars
+
+### `mc.createBossBar(title, color?, style?)`
+
+Creates a boss bar visible to all players. See [BossBar](/reference/bossbar-api).
+
+- `title` (`string`) — Boss bar display title
+- `color` (`string`, default `"white"`) — `"pink"`, `"blue"`, `"red"`, `"green"`, `"yellow"`, `"purple"`, `"white"`
+- `style` (`string`, default `"progress"`) — `"progress"`, `"notched_6"`, `"notched_10"`, `"notched_12"`, `"notched_20"`
+
+```lua
+local bar = mc.createBossBar("&cBoss Fight", "red", "notched_6")
+bar:addPlayer(player)
+bar.progress = 0.5
+```
+
+### `mc.bossBars()`
+
+Returns a table of all active boss bars.
+
+### `mc.getBossBar(uuid)`
+
+Returns the boss bar with the given UUID, or `nil`.
 ## Events
 
 ### `mc.on(event, handler)`

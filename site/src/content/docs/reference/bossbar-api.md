@@ -3,7 +3,7 @@ title: BossBar
 description: Global boss bars created with mc.createBossBar().
 ---
 
-Create boss bars visible to all players. Boss bars persist until destroyed or until `/ignis reload`.
+Create boss bars visible to multiple players. Boss bars persist until destroyed or until `/ignis reload`.
 
 Metatable name: `"bossbar"`
 
@@ -37,7 +37,7 @@ bar.progress = 0.75
 
 **type:** `boolean`
 
-Whether the bar is visible. Read/write.
+Whether the bar is visible to its viewers. Read/write.
 
 ```lua
 bar.visible = false

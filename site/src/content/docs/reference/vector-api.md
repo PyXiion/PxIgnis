@@ -28,7 +28,7 @@ local len = vec(3, 4, 0):length() -- 5.0
 
 ### `vec:lengthSq()`
 
-Returns `x² + y² + z²` without the square root. Faster than `length()` when only comparison is needed.
+Returns `x² + y² + z²` without the square root. Faster than `length()` when only comparisons are needed.
 
 ```lua
 local sq = vec(3, 4, 0):lengthSq() -- 25.0
@@ -48,6 +48,7 @@ Returns the squared distance. Faster than `distance()` for range checks.
 
 ```lua
 if pos:distanceSq(target) < 100 then -- within 10 blocks
+  ...
 end
 ```
 
@@ -72,7 +73,7 @@ local d = vec(1, 0, 0):dot(vec(0, 1, 0)) -- 0.0
 Returns the cross product.
 
 ```lua
-local c = vec(1, 0, 0):cross(vec(0, 1, 0)) -- (0, 0, 1)
+local c = vec(1, 0, 0):cross(vec(0, 1, 0)) -- vec(0, 0, 1)
 ```
 
 ## Operators

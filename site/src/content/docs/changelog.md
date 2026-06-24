@@ -5,6 +5,60 @@ description: Release history for PxIgnis.
 
 # Changelog
 
+## 0.15.0 — BossBar, `mc.execute`, world expansion, lambda fix
+
+### Breaking
+
+- **`world:broadcastInRange`**: arguments changed from `(text, x, y, z, range)` to `(text, pos, range)`
+
+### New API
+
+| API                                                          | Description                                                                                                |
+|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| `mc.execute(cmd, opts?)`                                     | Executes a command with `{as=entity, at=pos}` options                                                      |
+| `mc.createBossBar(title, color?, style?)`                    | Creates a boss bar with `addPlayer`, `removePlayer`, `destroy` methods and `progress`/`visible` properties |
+| `mc.getMetatable("bossbar")`                                 | Returns the boss bar shared metatable                                                                      |
+| `world:getBlockState(pos)`                                   | Returns `{ id, properties }` table with typed property values                                              |
+| `world:setBlockState(pos, { id, properties })`               | Sets block with property overrides                                                                         |
+| `world:getBiome(pos)`                                        | Returns biome ID string                                                                                    |
+| `world:getBorder()`                                          | `.center`, `.size`, `.damage`, `.warningTime`, `.warningBlocks`, `.damageThreshold`                        |
+| `world:explode(pos, power, opts?)`                           | Creates explosion with `{fire, destruction}` options                                                       |
+| `world:strike(pos, opts?)`                                   | Spawns lightning bolt with `{effect}` option                                                               |
+| `world:getEntitiesBySelector(selector, opts?)`               | Entity selector queries — `@a`, `@e`, `@e[type=...,distance=..N]`                                          |
+| `player:sendTitle({title, subtitle, fadeIn, stay, fadeOut})` | Table-based title API                                                                                      |
+
+- [Bossbar API](https://ignis.pyxiion.ru/reference/bossbar-api)
+
+### New Events
+
+| Event                 | Cancellable | Args                           | Description                                           |
+|-----------------------|-------------|--------------------------------|-------------------------------------------------------|
+| `player_consume_item` | ✅           | `player`, `item`               | Fires when a living entity finishes consuming an item |
+| `player_pickup_item`  | ✅           | `player`, `itemStack`, `count` | Intercepts item pickup from the ground                |
+| `player_drop_item`    | ✅           | `player`, `itemStack`, `count` | Intercepts Q-drop / inventory click-throw             |
+| `player_move`         | ❌           | `player`, `from`, `to`         | Fires on every position change                        |
+
+### Bugfixes
+
+- **Lambda syntax**: Implicit return was removed — `\{ x -> expr }` must now be `\{ x -> return expr }`. This fixes
+  code generation issues.
+
+### Internal
+
+- **`world:particle`**: now uses a custom builder for all particle types. Modded particles no more supported until
+  Lua2Nbt
+  parser appears.
+- **WorldWrap**: `getBlockState`, `setBlockState`, `getBiome`, `getBorder`, `explode`, `strike`,
+  `getEntitiesBySelector`.
+- **EntityWrap**: `readNbt`/`writeNbt` removed.
+- **PlayerWrap.sendTitle**: Table argument support.
+- **BossBarManager**, **BlockStateCodec**, **LuaPackage**, **PlayerMoveDispatcher**.
+- **PxLuaNova**: Integer fast-paths (`add`/`sub`/`mod`), `LuaThread.lastError` clearing, sealed number hierarchy.
+- **MetaTableRegistry**: Backing-field refactor.
+- **Utils.kt**: `asSequence()`/`toLuaTable()` helpers; removed `nbtToLua`/`luaToNbt`.
+- **Coroutine error logging**: `resumeOrLog` now uses `LuaThread.lastError` for full stack traces instead of only the
+  error message.
+
 ## 0.14.1 — MetaTableBuilder inheritance rework, EntityFactory, wrapper cleanup (2026-06-22)
 
 Just bug fixes & refactoring.
@@ -13,8 +67,7 @@ Just bug fixes & refactoring.
 
 - **MetaTableBuilder**: `inherit()` now takes a lazy `() -> LuaTable` instead of
   `BuiltMeta` so it updates dynamically (basically fixed metatables bug).
-- **EntityFactory**: New centralized `EntityFactory.wrap(entity)` that detects
-  that detects the type & uses the best wrapper
+- **EntityFactory**: New centralized `EntityFactory.wrap(entity)` that detects  the type & uses the best wrapper
 - **PlayerListWrapper**: Filters out removed players from the cached list (bugfix)
 - **MetaTableBuilder test suite**: Full coverage for inheritance, method
   fallthrough, lazy caching, setters, pairs merging, and multi-level chains.
@@ -28,10 +81,10 @@ Just bug fixes & refactoring.
 
 ### New API
 
-| API                           | Description                           |
-|-------------------------------|---------------------------------------|
-| `vec:length()`                | Returns sqrt(x²+y²+z²)                |
-| `<name:entity>` arg type      | Brigadier entity selector → wrapper   |
+| API                      | Description                         |
+|--------------------------|-------------------------------------|
+| `vec:length()`           | Returns sqrt(x²+y²+z²)              |
+| `<name:entity>` arg type | Brigadier entity selector → wrapper |
 
 ### Bugfixes
 
@@ -73,11 +126,11 @@ local add = nova.sync(\{ a, b -> a + b })
 `require` now only loads modules from `config/ignis/`. Built-in libraries use a
 `core:` prefix:
 
-| Module       | Old                     | New (`core:` prefix)      |
-|--------------|-------------------------|---------------------------|
-| Format       | `require "format"`      | `require "core:format"`   |
-| Simple       | `require "simple"`      | `require "core:simple"`   |
-| Chest GUI    | `require "chestgui"`    | `require "core:chestgui"` |
+| Module    | Old                  | New (`core:` prefix)      |
+|-----------|----------------------|---------------------------|
+| Format    | `require "format"`   | `require "core:format"`   |
+| Simple    | `require "simple"`   | `require "core:simple"`   |
+| Chest GUI | `require "chestgui"` | `require "core:chestgui"` |
 
 Prefixes may become available later for user scripts.
 
@@ -116,12 +169,12 @@ trailing-block sugar.
 
 ### Breaking changes
 
-| Change | Migration |
-|---|---|
-| `require "format"` / `"simple"` / `"chestgui"` now require `core:` prefix | `require "core:format"` |
-| Built-in Lua libs `io`, `os`, `debug` not loaded | Rely on `math`, `string`, `table`, `bit32`, `coroutine` |
-| `collectgarbage`, `loadfile`, `dofile` removed from globals | Use `nova.sync()` or `require` for loading code |
-| `world:playSound(id, x, y, z, volume?, pitch?)` → `world:playSound(id, pos, volume?, pitch?)` | Pass `vec(x, y, z)` as second argument |
+| Change                                                                                        | Migration                                               |
+|-----------------------------------------------------------------------------------------------|---------------------------------------------------------|
+| `require "format"` / `"simple"` / `"chestgui"` now require `core:` prefix                     | `require "core:format"`                                 |
+| Built-in Lua libs `io`, `os`, `debug` not loaded                                              | Rely on `math`, `string`, `table`, `bit32`, `coroutine` |
+| `collectgarbage`, `loadfile`, `dofile` removed from globals                                   | Use `nova.sync()` or `require` for loading code         |
+| `world:playSound(id, x, y, z, volume?, pitch?)` → `world:playSound(id, pos, volume?, pitch?)` | Pass `vec(x, y, z)` as second argument                  |
 
 ### Internal
 
