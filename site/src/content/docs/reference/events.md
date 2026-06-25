@@ -27,7 +27,7 @@ mc.off(id)
 | `player_join`            | `(player)`                                       |      ❌      |
 | `player_respawn`         | `(player, alive)`                                |      ❌      |
 | `player_leave`           | `(player)`                                       |      ❌      |
-| `player_death`           | `(player, damageType)`                           |      ❌      |
+| `player_death`           | `(entity, damageType, amount)`                   |      ✅      |
 | `player_chat`            | `(player, message)`                              |      ✅      |
 | `player_block_break`     | `(player, pos, blockId)`                         |      ✅      |
 | `player_block_place`     | `(player, pos, blockId)`                         |      ✅      |
@@ -42,10 +42,10 @@ mc.off(id)
 | `entity_spawn`           | `(entity)`                                       |      ❌      |
 | `entity_despawn`         | `(entity)`                                       |      ❌      |
 | `entity_death`           | `(entity, damageType, amount)`                   |      ✅      |
-| `player_consume_item`     | `(player, item)`                              |      ✅      |
-| `player_pickup_item`      | `(player, itemStack, count)`                  |      ✅      |
-| `player_drop_item`        | `(player, itemStack, count)`                  |      ✅      |
-| `player_move`             | `(player, from, to)`                          |      ❌      |
+| `player_consume_item`    | `(player, item)`                                 |      ✅      |
+| `player_pickup_item`     | `(player, itemStack, count)`                     |      ✅      |
+| `player_drop_item`       | `(player, itemStack, count)`                     |      ✅      |
+| `player_move`            | `(player, from, to)`                             |      ❌      |
 | `tick`                   | `()`                                             |      ❌      |
 
 ## `mc.off(id)`
