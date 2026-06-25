@@ -5,29 +5,79 @@ description: Release history for PxIgnis.
 
 # Changelog
 
-## 0.15.0 — BossBar, `mc.execute`, world expansion, lambda fix
+## 0.16.0 — Items library, player_death rework, world expansion, boss bar
 
 ### Breaking
 
+- **`world:particle`**: the `data` field has been removed from the `opts` table. Particle-specific NBT fields (`color`,
+  `block`,
+  `scale`, `power`, etc.) now live directly in the same `opts` table alongside `count`, `spread`, and `speed`. Replace
+  `{ data = { color = {1,0,0}, scale = 1 } }` -> `{ color = {1,0,0}, scale = 1 }`.
+- **`player_death`**: now cancellable and merged with `entity_death` handling. Signature changed
+  from `(player, damageType)` to `(entity, damageType, amount)`. Fires from `ALLOW_DEATH` instead of
+  `AFTER_DEATH`.
 - **`world:broadcastInRange`**: arguments changed from `(text, x, y, z, range)` to `(text, pos, range)`
 
 ### New API
 
-| API                                                          | Description                                                                                                |
-|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
-| `mc.execute(cmd, opts?)`                                     | Executes a command with `{as=entity, at=pos}` options                                                      |
-| `mc.createBossBar(title, color?, style?)`                    | Creates a boss bar with `addPlayer`, `removePlayer`, `destroy` methods and `progress`/`visible` properties |
-| `mc.getMetatable("bossbar")`                                 | Returns the boss bar shared metatable                                                                      |
-| `world:getBlockState(pos)`                                   | Returns `{ id, properties }` table with typed property values                                              |
-| `world:setBlockState(pos, { id, properties })`               | Sets block with property overrides                                                                         |
-| `world:getBiome(pos)`                                        | Returns biome ID string                                                                                    |
-| `world:getBorder()`                                          | `.center`, `.size`, `.damage`, `.warningTime`, `.warningBlocks`, `.damageThreshold`                        |
-| `world:explode(pos, power, opts?)`                           | Creates explosion with `{fire, destruction}` options                                                       |
-| `world:strike(pos, opts?)`                                   | Spawns lightning bolt with `{effect}` option                                                               |
-| `world:getEntitiesBySelector(selector, opts?)`               | Entity selector queries — `@a`, `@e`, `@e[type=...,distance=..N]`                                          |
-| `player:sendTitle({title, subtitle, fadeIn, stay, fadeOut})` | Table-based title API                                                                                      |
+#### `mc.*` — commands & boss bar
 
-- [Bossbar API](https://ignis.pyxiion.ru/reference/bossbar-api)
+| API                                       | Description                                                                                                |
+|-------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| `mc.execute(cmd, opts?)`                  | Executes a command with `{as=entity, at=pos}` options                                                      |
+| `mc.createBossBar(title, color?, style?)` | Creates a boss bar with `addPlayer`, `removePlayer`, `destroy` methods and `progress`/`visible` properties |
+| `mc.getMetatable("bossbar")`              | Returns the boss bar shared metatable                                                                      |
+
+- [mc API](https://ignis.pyxiion.ru/reference/mc-api) · [Bossbar API](https://ignis.pyxiion.ru/reference/bossbar-api)
+
+#### `world:*` — block state, biome, explosions
+
+| API                                            | Description                                                                         |
+|------------------------------------------------|-------------------------------------------------------------------------------------|
+| `world:getBlockState(pos)`                     | Returns `{ id, properties }` table with typed property values                       |
+| `world:setBlockState(pos, { id, properties })` | Sets block with property overrides                                                  |
+| `world:getBiome(pos)`                          | Returns biome ID string                                                             |
+| `world:getBorder()`                            | `.center`, `.size`, `.damage`, `.warningTime`, `.warningBlocks`, `.damageThreshold` |
+| `world:explode(pos, power, opts?)`             | Creates explosion with `{fire, destruction}` options                                |
+| `world:strike(pos, opts?)`                     | Spawns lightning bolt with `{effect}` option                                        |
+| `world:getEntitiesBySelector(selector, opts?)` | Entity selector queries — `@a`, `@e`, `@e[type=...,distance=..N]`                   |
+
+- [World API](https://ignis.pyxiion.ru/reference/world-api)
+
+#### `player:*` — title
+
+| API                                                          | Description           |
+|--------------------------------------------------------------|-----------------------|
+| `player:sendTitle({title, subtitle, fadeIn, stay, fadeOut})` | Table-based title API |
+
+- [Player API](https://ignis.pyxiion.ru/reference/player-api)
+
+#### `core:items` library
+
+Define custom item templates with scripted callbacks. Templates bundle a base item ID with
+`custom_model_data`, display properties, and optional callback functions:
+
+```lua
+local items = require "core:items"
+
+local wand = items.define {
+    id = "stick", modelData = 1001,
+    name = "&5Magic Wand",
+    onUse = function(p, h, item, tpl) p:sendMessage("Poof!") end,
+    onTick = function(p, item, hand, tpl) p:sendActionBar("Wand ready") end,
+}
+```
+
+| Function                      | Description                                                                               |
+|-------------------------------|-------------------------------------------------------------------------------------------|
+| `items.define(opts)`          | Creates an item template; returns template with `:make()`, `:matches()`, `:has()` methods |
+| `items.is(item, template)`    | True if item matches by `id` + `modelData`                                                |
+| `items.find(item)`            | Returns matching template or nil                                                          |
+| `items.has(player, template)` | True if player has a matching item in inventory                                           |
+
+Callbacks: `onUse`, `onAttack`, `onConsume`, `onPickup`, `onInteractEntity` (cancellable),
+`onTick` (held), `onInventoryTick` (any slot).
+See [items library](/libraries/items).
 
 ### New Events
 
@@ -40,14 +90,23 @@ description: Release history for PxIgnis.
 
 ### Bugfixes
 
+- **`mc.players`**: Fixed stale wrapper after player death/respawn. The player wrapper cache was keyed by UUID and was
+  never invalidated on respawn, causing `mc.players` to return a wrapper pointing at the removed
+  `ServerPlayerEntity`.
+- **`player_pickup_item`**: Fixed injection point, now it fires at the correct `getStack()` call instead of `remove()`.
+  Renamed mixin from `PlayerEntityPickupMixin` to `ItemEntityPickup`. Properly cancellable.
+- **Vector metatable**: Fixed `__index` so vector arithmetic and methods resolve correctly. (xD)
 - **Lambda syntax**: Implicit return was removed — `\{ x -> expr }` must now be `\{ x -> return expr }`. This fixes
-  code generation issues.
+  code generation issues. And just because LuaJ doens't have a proper compiler with AST
 
 ### Internal
 
+- **`core:items`** — 184-line Lua builtin registration library with `onTick`/`onInventoryTick` per-tick
+  dispatch. Registers shared event listeners on `require`.
+- **`player_death`** — moved from `AFTER_DEATH` to `ALLOW_DEATH`, merged with `entity_death` for
+  cancellability.
 - **`world:particle`**: now uses a custom builder for all particle types. Modded particles no more supported until
-  Lua2Nbt
-  parser appears.
+  Lua2Nbt parser appears.
 - **WorldWrap**: `getBlockState`, `setBlockState`, `getBiome`, `getBorder`, `explode`, `strike`,
   `getEntitiesBySelector`.
 - **EntityWrap**: `readNbt`/`writeNbt` removed.
@@ -67,7 +126,7 @@ Just bug fixes & refactoring.
 
 - **MetaTableBuilder**: `inherit()` now takes a lazy `() -> LuaTable` instead of
   `BuiltMeta` so it updates dynamically (basically fixed metatables bug).
-- **EntityFactory**: New centralized `EntityFactory.wrap(entity)` that detects  the type & uses the best wrapper
+- **EntityFactory**: New centralized `EntityFactory.wrap(entity)` that detects the type & uses the best wrapper
 - **PlayerListWrapper**: Filters out removed players from the cached list (bugfix)
 - **MetaTableBuilder test suite**: Full coverage for inheritance, method
   fallthrough, lazy caching, setters, pairs merging, and multi-level chains.
