@@ -67,6 +67,8 @@ internal fun resolveOperand(v: LuaValue): Triple<Double, Double, Double> {
 
 internal fun initVecMeta(meta: LuaTable) {
     meta.apply {
+        set("__index", this)
+
         set("__add", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val (x1, y1, z1) = resolveOperand(args.arg(1))
