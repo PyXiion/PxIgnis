@@ -1,37 +1,38 @@
 # PxIgnis
 
-A Lua runtime for Fabric servers, with hot-reload. Edit scripts in `config/ignis/`,
-run `/ignis reload`, and changes apply instantly.
+![version](https://img.shields.io/badge/version-0.15.0-purple)
+![version](https://img.shields.io/badge/MC-1.21.10-green)
+![version](https://img.shields.io/badge/MC-1.21.11-green)
 
-Full documentation at **[ignis.pyxiion.ru](https://ignis.pyxiion.ru)**.
+Lua scripting for Minecraft Fabric servers. Custom commands, event hooks,
+persistent state, and the full MC APIs.
+
+> This project is developed with the assistance of AI. Humans were harmed
+> (and included) during development too.
+
+[Docs](https://ignis.pyxiion.ru)
 
 ---
 
 ## About
 
-PxIgnis is developed in tandem with a fully Vanilla custom Roguelike server. The API
-reflects what the project itself needed.
+PxIgnis is developed in tandem with a fully Vanilla custom Roguelike server.
+The API reflects what the project itself needed.
 
 ---
 
-## Key Features
+## What's inside
 
-* **Hot-reload Lua runtime** — `/ignis reload` re-runs scripts in milliseconds. Commands
-  are re-registered into the live Brigadier dispatcher without restarting the server.
-* **Command registration** — `register("cmd <name:type> [<name:type>]", handler, permission?)`.
-  Built-in argument types: `int`, `double`, `float`, `bool`, `text`, `word`, `player`,
-  `block_pos`, `choice=...`. Tab completion and permissions (`admin.cmd`) are part
-  of the API.
-* **Events, with cancellation** — 15+ hooks: `player_block_break`, `player_chat`,
-  `player_attack_entity`, `entity_hurt`, `entity_death`, and more. Returning `false`
-  cancels.
-* **Regions and scripted mob AI** — spatial areas with enter/exit/move/death
-  events, and API for custom mob AI.
-* **Coroutines, persistence, UI** — `mc.fetch` / `mc.sleep` for sequential async code,
-  `player.data` / `mc.data` / storage backends for persistent state, plus holograms,
-  sidebars, and the `chestgui` library for custom containers.
-
-And more, and more.
+| Area          | What you get                                                                           |
+|---------------|----------------------------------------------------------------------------------------|
+| **Commands**  | Simple command registration withot boilerplaye                                         |
+| **Events**    | Players, entities, blocks, items, server lifecycle                                     |
+| **Reload**    | `/ignis reload` re-executes all scripts; persistent state via `mc.data` / `player.data` |
+| **MC API**    | Particles, sounds, blocks, entities, NBT, structures, weather, world border, explosions |
+| **UI**        | Per-player sidebar, chest GUI lib, boss bars, holograms, titles                        |
+| **Async**     | `mc.fetch()` for HTTP, `mc.sleep()` for coroutine delays                               |
+| **Storage**   | Per-player and global tables                                                           |
+| **Dev tools** | LuaLS types for IntelliSense, metatable extension hooks                                |
 
 ---
 
@@ -45,7 +46,7 @@ local arena = world:createRegion(vec(-50, 64, -50), vec(50, 80, 50))
 arena:on("entity_enter", function(entity)
     if entity:isPlayer() then
         mc.broadcast(entity.name .. " entered the arena")
-        
+
         coroutine.wrap(function()
             local res = mc.fetch("https://api.example.com/arena/log")
             if not res.ok then
@@ -68,7 +69,7 @@ mc.registerBehaviour("zombie_chase", function(self, mob)
 end)
 
 mc.on("entity_spawn", function(entity)
-    if entity:isMob() and entity.type == "minecraft:zombie" then
+    if entity.isMob and entity.type == "minecraft:zombie" then
         entity:setAI("zombie_chase")
     end
 end)
@@ -80,20 +81,20 @@ end)
 register("pay <amount:int> <target:player>", function(ctx, amount, target)
     ctx.player.data.balance = (ctx.player.data.balance or 0) - amount
     target.data.balance     = (target.data.balance or 0) + amount
-    
+
     target:sendMessage("Received " .. amount .. " from " .. ctx.player.name)
 end, "pxrp.economy")
 ```
 
 ---
 
-## Installation & Requirements
+## Install
 
-1. Install Fabric Loader ≥0.19.2, Fabric API ≥0.141.4+1.21.11, and Fabric Language Kotlin ≥1.10.8.
-2. Place `pxignis-*.jar` into the `mods/` folder of your server.
-3. Start the server. `config/ignis/demo.lua` is created on first boot.
-4. Edit scripts under `config/ignis/`, then run `/ignis reload`.
+Minecraft 1.21.x · Fabric Loader ≥0.19.2 · Fabric API ≥0.141.4 · Fabric Language Kotlin ≥1.10.8
 
+1. Place `pxignis-*.jar` into the `mods/` folder.
+2. Start the server — `config/ignis/demo.lua` is created.
+3. Edit scripts under `config/ignis/`, then run `/ignis reload`.
 
 ## License
 
