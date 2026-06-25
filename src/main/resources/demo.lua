@@ -508,7 +508,7 @@ end
 --   - Spawned entities have full property access (health, type, uuid, tags, equipment)
 --   - entity.tags is a boolean proxy table backed by command tags
 --   - Setting equipment on spawned entities uses equipStack internally
---   - world:particle(id, pos, {data?, count?, spread?, speed?}) spawns particles (pos is vec or {x,y,z})
+--   - world:particle(id, pos, {count?, spread?, speed?, ...}) spawns particles; particle-type fields go directly in opts
 
 function spawnmobHandler(ctx, entityId)
     local player = ctx.player

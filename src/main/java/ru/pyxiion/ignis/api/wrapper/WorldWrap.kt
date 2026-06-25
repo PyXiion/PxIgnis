@@ -294,7 +294,7 @@ object WorldWrap {
                     deltaX = 0.0; deltaY = 0.0; deltaZ = 0.0
                 }
                 speed = opts.get("speed").optdouble(0.0)
-                data = opts.get("data").opttable(null)
+                data = opts
             } else {
                 count = 1; deltaX = 0.0; deltaY = 0.0; deltaZ = 0.0; speed = 0.0; data = null
             }

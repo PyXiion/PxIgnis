@@ -181,11 +181,10 @@ Optional `opts` table:
 | `count`  | `number` | `1`         | Number of particles                                                    |
 | `spread` | `table`  | `{0, 0, 0}` | Spread vector (also accepts `delta` as alias)                          |
 | `speed`  | `number` | `0`         | Particle speed                                                         |
-| `data`   | `table`  | —           | Particle-specific NBT fields (required for particles with data codecs) |
 
-The `data` table accepts per-particle fields — the following types are supported:
+Particle-specific fields are passed directly in the `opts` table. The following types support custom fields:
 
-| Particle id             | `data` fields                                                                     |
+| Particle id             | Fields                                                                             |
 |-------------------------|-----------------------------------------------------------------------------------|
 | `block`                 | `block` (string)                                                                  |
 | `block_marker`          | `block` (string)                                                                  |
@@ -216,7 +215,8 @@ world:particle("minecraft:heart", { x = 0, y = 65, z = 0 }, {
   speed = 0.1
 })
 world:particle("minecraft:dust", { x = 0, y = 65, z = 0 }, {
-  data = { color = { 1, 0, 0 }, scale = 1 },
+  color = { 1, 0, 0 },
+  scale = 1,
   count = 5,
 })
 ```

@@ -64,7 +64,19 @@
 ---@field count? integer
 ---@field spread? Vec|Vec3Like|number
 ---@field speed? number
----@field data? table<string, any> -- particle-type-specific payload
+---@field block? string    -- block particles: block, block_marker, falling_dust, dust_pillar, block_crumble
+---@field power? number   -- dragon_breath, effect, instant_effect (default 1.0)
+---@field color? table    -- dust, dust_color_transition, effect, instant_effect -> {r,g,b}; entity_effect, tinted_leaves, flash -> {a,r,g,b}
+---@field fromColor? table -- dust_color_transition -> {r,g,b}
+---@field toColor? table   -- dust_color_transition -> {r,g,b}
+---@field scale? number   -- dust, dust_color_transition (default 1.0)
+---@field roll? number    -- sculk_charge (default 0.0)
+---@field delay? integer  -- shriek (default 0)
+---@field target? Vec|Vec3Like -- trail -> vec
+---@field duration? integer -- trail (default 20)
+---@field from? Vec|Vec3Like -- vibration -> vec
+---@field arrivalInTicks? integer -- vibration (default 1)
+---@field item? string    -- item -> item id (count uses the top-level `count` field)
 
 ---@class BlockStateProps table<string, string>
 
