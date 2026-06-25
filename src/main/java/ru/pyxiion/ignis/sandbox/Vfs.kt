@@ -14,6 +14,7 @@ class Vfs(private val ignisDir: Path) {
         "format" to Module(loadResource("/format.lua"), "@format.lua"),
         "simple" to Module(loadResource("/simple.lua"), "@simple.lua"),
         "chestgui" to Module(loadResource("/chestgui.lua"), "@chestgui.lua"),
+        "items" to Module(loadResource("/items.lua"), "@items.lua"),
         "demo" to Module(loadResource("/demo.lua"), "@demo.lua"),
     )
 
