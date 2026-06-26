@@ -81,6 +81,48 @@ export default defineConfig({
       editLink: {
         baseUrl: "https://github.com/pyxiion/PxIgnis/edit/main/site/",
       },
+      head: [
+        {
+          tag: "script",
+          content: `(function(){
+  var p = new URLSearchParams(window.location.search);
+  var lang = p.get('lang');
+  if (!lang || (lang !== 'ru' && lang !== 'yru' && lang !== 'gru')) return;
+  p.delete('lang');
+  var qs = p.toString();
+  var cleanUrl = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+  var fullUrl = window.location.origin + cleanUrl;
+  var target = lang === 'gru'
+    ? 'https://translate.google.com/translate?sl=auto&tl=ru&u=' + encodeURIComponent(fullUrl)
+    : 'https://translate.yandex.ru/translate?url=' + encodeURIComponent(fullUrl) + '&lang=en-ru';
+  window.location.replace(target);
+})();`,
+        },
+        {
+          tag: "script",
+          content: `(function(){
+  function build(){
+    if (document.getElementById('pxrp-translate-fab')) return;
+    var url = window.location.href;
+    var ya = 'https://translate.yandex.ru/translate?url='+encodeURIComponent(url)+'&lang=en-ru';
+    var go = 'https://translate.google.com/translate?sl=auto&tl=ru&u='+encodeURIComponent(url);
+    var fab = document.createElement('div');
+    fab.id = 'pxrp-translate-fab';
+    fab.className = 'pxrp-translate-fab';
+    fab.innerHTML =
+      '<span class="pxrp-translate-fab__label">RU</span>'+
+      '<a href="'+ya+'" target="_blank" rel="noopener noreferrer" title="\\u041f\\u0435\\u0440\\u0435\\u0432\\u043e\\u0434 (\\u042f\\u043d\\u0434\\u0435\\u043a\\u0441)">\\u042f</a>'+
+      '<a href="'+go+'" target="_blank" rel="noopener noreferrer" title="\\u041f\\u0435\\u0440\\u0435\\u0432\\u043e\\u0434 (Google)">G</a>';
+    document.body.appendChild(fab);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', build);
+  } else {
+    build();
+  }
+})();`,
+        },
+      ],
     }),
   ],
 });

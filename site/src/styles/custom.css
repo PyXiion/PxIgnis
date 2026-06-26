@@ -209,6 +209,32 @@ body.landing-page {
 
 .header-nav a:hover { color: var(--px-white); }
 
+.header-translate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: 0.5rem;
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--px-gray-700);
+}
+
+.header-translate a {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--px-gray-300);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.header-translate a:hover {
+  color: var(--px-white);
+  border-color: var(--px-accent-border);
+  background: var(--px-accent-dim);
+}
+
 /* ----------------------------------------------------------------------- */
 /*  Hero                                                                   */
 /* ----------------------------------------------------------------------- */
@@ -805,4 +831,67 @@ body.landing-page {
   .section-pad { padding: 3.5rem 0; }
   .hero { padding: 6rem 1rem 3rem; min-height: 70vh; }
   .hero-actions { flex-direction: column; align-items: center; }
+}
+
+/* ----------------------------------------------------------------------- */
+/*  Translate FAB — bottom-right floating widget (docs pages)              */
+/* ----------------------------------------------------------------------- */
+.pxrp-translate-fab {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  background: rgba(18, 18, 23, 0.92);
+  border: 1px solid var(--px-accent-border);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.pxrp-translate-fab__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--px-gray-300);
+  padding: 0 0.25rem 0 0.5rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.pxrp-translate-fab a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 1.75rem;
+  padding: 0 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--px-white);
+  background: var(--px-accent-dim);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s;
+}
+
+.pxrp-translate-fab a:hover {
+  background: var(--px-accent);
+  border-color: var(--px-accent-hover);
+  color: var(--px-white);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 480px) {
+  .pxrp-translate-fab {
+    right: 0.75rem;
+    bottom: 0.75rem;
+    padding: 0.4rem 0.5rem;
+  }
+  .pxrp-translate-fab__label { display: none; }
 }

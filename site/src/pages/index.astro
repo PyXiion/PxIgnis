@@ -255,6 +255,21 @@ const highlighted = await Promise.all(
     <meta property="og:description" content="Server-side Lua scripting framework for Fabric. Async coroutines, custom mob AI, dynamic UI, hot reload." />
     <meta property="og:type" content="website" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script is:inline>
+      (function(){
+        var p = new URLSearchParams(window.location.search);
+        var lang = p.get('lang');
+        if (!lang || (lang !== 'ru' && lang !== 'yru' && lang !== 'gru')) return;
+        p.delete('lang');
+        var qs = p.toString();
+        var cleanUrl = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+        var fullUrl = window.location.origin + cleanUrl;
+        var target = lang === 'gru'
+          ? 'https://translate.google.com/translate?sl=auto&tl=ru&u=' + encodeURIComponent(fullUrl)
+          : 'https://translate.yandex.ru/translate?url=' + encodeURIComponent(fullUrl) + '&lang=en-ru';
+        window.location.replace(target);
+      })();
+    </script>
   </head>
   <body class="landing-page">
     <div class="particles" aria-hidden="true">
@@ -298,6 +313,24 @@ const highlighted = await Promise.all(
           <a href="https://github.com/pyxiion/PxIgnis">GitHub</a>
           <a href="https://modrinth.com/mod/pxignis">Modrinth</a>
           <a href="/guide/getting-started/">Lua API Reference</a>
+          <span class="header-translate">
+            <a
+              id="ru-translate-btn-yandex"
+              class="translate-link"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Перевод (Яндекс)"
+            >RU · Я</a>
+            <a
+              id="ru-translate-btn-google"
+              class="translate-link"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Перевод (Google)"
+            >RU · G</a>
+          </span>
         </nav>
       </div>
     </header>
@@ -585,6 +618,15 @@ const highlighted = await Promise.all(
             ticking = true;
           }
         });
+
+        // ── Translate buttons (Yandex + Google) ───────────────────────
+        const currentUrl = window.location.href;
+        const yandexLink = `https://translate.yandex.ru/translate?url=${encodeURIComponent(currentUrl)}&lang=en-ru`;
+        const googleLink = `https://translate.google.com/translate?sl=auto&tl=ru&u=${encodeURIComponent(currentUrl)}`;
+        const yandexBtn = document.getElementById("ru-translate-btn-yandex");
+        const googleBtn = document.getElementById("ru-translate-btn-google");
+        if (yandexBtn) yandexBtn.href = yandexLink;
+        if (googleBtn) googleBtn.href = googleLink;
       })();
     </script>
   </body>
