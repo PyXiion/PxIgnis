@@ -56,21 +56,15 @@ function items.define(opts)
         error("items.define: duplicate key '" .. key .. "'", 2)
     end
 
-    local template = setmetatable({
-        key = key,
-        id = normalizedId,
-        modelData = opts.modelData,
-        name = opts.name,
-        lore = opts.lore,
-        unbreakable = opts.unbreakable,
-        onUse = opts.onUse,
-        onAttack = opts.onAttack,
-        onConsume = opts.onConsume,
-        onPickup = opts.onPickup,
-        onInteractEntity = opts.onInteractEntity,
-        onTick = opts.onTick,
-        onInventoryTick = opts.onInventoryTick,
-    }, { __index = TemplateMethods })
+    local template = {}
+    for k, v in pairs(opts) do
+        template[k] = v
+    end
+
+    template.key = key
+    template.id = normalizedId
+
+    setmetatable(template, { __index = TemplateMethods })
 
     _templates[key] = template
     _templatesById[modelKey(normalizedId, opts.modelData)] = template
@@ -99,6 +93,9 @@ end
 
 function items.find(item)
     if not item then return nil end
+    if type(item) == "string" then
+        return _templates[item]
+    end
     local tpl = _templatesById[modelKey(item.id, item.custom_model_data)]
     if tpl then return tpl end
     return _templatesById[item.id .. "#_"]
