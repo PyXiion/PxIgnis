@@ -1,6 +1,6 @@
 # PxIgnis
 
-![version](https://img.shields.io/badge/version-0.16.0-purple)
+![version](https://img.shields.io/badge/version-0.16.1-purple)
 ![version](https://img.shields.io/badge/MC-1.21.10-green)
 ![version](https://img.shields.io/badge/MC-1.21.11-green)
 
@@ -9,7 +9,7 @@ Lua scripting for Minecraft Fabric servers.
 > This project is developed with the assistance of AI. Humans were harmed
 > (and included) during development too.
 
-[Full Docs](https://ignis.pyxiion.ru) · [Quick start](https://ignis.pyxiion.ru/guide/getting-started) · [Changelog](site/src/content/docs/changelog.md)
+[Full Docs](https://ignis.pyxiion.ru) · [Полная документация](https://ignis.pyxiion.ru/?lang=ru) · [Quick start](https://ignis.pyxiion.ru/guide/getting-started) · [Changelog](site/src/content/docs/changelog.md)
 
 ---
 

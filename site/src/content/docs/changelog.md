@@ -5,6 +5,31 @@ description: Release history for PxIgnis.
 
 # Changelog
 
+## 0.16.1 — Interop refactor, scheduler bounds, template fixes (2026-06-26)
+
+### Bugfixes
+
+- **Scheduler**: Added `MAX_TASKS_PER_TICK = 1024` cap to prevent server hang from runaway scheduled tasks.
+  `clear()` now also resets the task ID counter.
+- **StorageManager**: `globalData` is no more nullable.
+- **Reload error handling**: Wrapped `reloadResources` mixin in try/catch so a script crash on resource reload
+  doesn't break the server.
+- **items.lua**: Template now preserves all custom keys from `opts` instead of a whitelist. `items.find` now
+  accepts a string (template name) in addition to item tables.
+
+### Internal
+
+- **Lua interop refactor**: Replaced anonymous `object : VarArgFunction() { ... }` with typed bridge classes
+  helper functions (`luaFunction`, `luaFunctionNil`,
+  `luaVarFunction`). Added Kotlin<->Lua value conversion helpers: `.toLua()`, `.takeIfValid()`, `.asLuaString()`,
+  `.asJString()`, `.asTable()`, `.asFunction()`, `.asObject()`, `.orNil()`.
+- **EntityWrap**: Moved shared player cache and tick provider into companion properties, removing per-instance
+  coupling. All wrappers pass shared state through `WorldWrap.wrap(world, playerCache, tickProvider)`.
+- **Vector.toVec3d / toBlockPos**: Moved from root `Utils.kt` into `Vector.Companion`.
+- **AsyncLib**: Added URL validation in `mc.fetch`; replaced anonymous functions with bridge helpers.
+- **ScriptEnvironment / MetaTableBuilder / LuaMcApi / Utils.kt**: Import cleanup and bridge type migration.
+- **Docs**: Added Russian translation for the documentation site.
+
 ## 0.16.0 — Items library, player_death rework, world expansion, boss bar
 
 ### Breaking
