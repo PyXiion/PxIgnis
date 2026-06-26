@@ -9,6 +9,9 @@ import org.luaj.vm2.LuaValue
 import java.util.PriorityQueue
 
 class Scheduler(private val stateProvider: () -> LuaState) {
+    private companion object {
+        private const val MAX_TASKS_PER_TICK = 1024
+    }
     private var nextId = 0
     var currentTick = 0L
     private val tasks = PriorityQueue(compareBy<ScheduledTask> { it.fireAtTick })
@@ -18,10 +21,11 @@ class Scheduler(private val stateProvider: () -> LuaState) {
         currentTick++
 
         val state = stateProvider()
+        var processed = 0
 
-        // Limiting the cycle to avoid hanging the server
-        while (tasks.isNotEmpty() && tasks.peek().fireAtTick <= currentTick) {
+        while (tasks.isNotEmpty() && tasks.peek().fireAtTick <= currentTick && processed < MAX_TASKS_PER_TICK) {
             val task = tasks.poll()
+            processed++
 
             if (task.id in cancelledIds) {
                 cancelledIds.remove(task.id)
@@ -71,6 +75,7 @@ class Scheduler(private val stateProvider: () -> LuaState) {
     fun clear() {
         tasks.clear()
         cancelledIds.clear()
+        nextId = 0
     }
 }
 

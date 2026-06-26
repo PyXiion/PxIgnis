@@ -14,6 +14,13 @@ import java.util.concurrent.CompletableFuture;
 public class MinecraftServerMixin {
     @Inject(method = "reloadResources", at = @At("TAIL"))
     private void reloadRes(Collection<String> dataPacks, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
-        PxIgnis.instance.runtime.reload();
+        try {
+            PxIgnis.instance.runtime.reload();
+        } catch (Throwable t) {
+            PxIgnis.logger.error("PxIgnis script reload failed", t);
+            try {
+                PxIgnis.instance.runtime.getEventManager().fire("init");
+            } catch (Throwable ignored) {}
+        }
     }
 }

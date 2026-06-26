@@ -5,11 +5,11 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector
+import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.api.manager.Region
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.toLuaArray
-import ru.pyxiion.ignis.toVec3d
 import ru.pyxiion.ignis.unwrap
 
 object RegionWrap {
@@ -25,7 +25,7 @@ object RegionWrap {
     private val BUILT by lazy {
         metaTable<Region> {
             prop("id") { LuaValue.valueOf(id) }
-            prop("world") { WorldWrap.wrap(world) }
+            prop("world") { WorldWrap.wrap(world, EntityWrap.sharedPlayerCache, EntityWrap.sharedTickProvider) }
             prop("players") {
                 livePlayers().map(EntityFactory::wrap).toLuaArray()
             }

@@ -39,6 +39,7 @@ class PxIgnis : ModInitializer {
     companion object {
         const val MOD_ID = "pxignis"
 
+        @JvmField
         val logger: Logger = LoggerFactory.getLogger(MOD_ID)
         lateinit var instance: PxIgnis
         var storageManager: StorageManager? = null

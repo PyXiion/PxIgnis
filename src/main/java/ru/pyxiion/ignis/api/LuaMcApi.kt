@@ -1,6 +1,7 @@
 package ru.pyxiion.ignis.api
 
-import net.fabricmc.loader.api.FabricLoader
+import com.mojang.brigadier.exceptions.CommandSyntaxException
+import net.minecraft.entity.Entity
 import net.minecraft.inventory.SimpleInventory
 import net.minecraft.nbt.NbtIo
 import net.minecraft.nbt.NbtSizeTracker
@@ -16,42 +17,17 @@ import net.minecraft.text.Text
 import net.minecraft.util.Identifier
 import net.minecraft.util.math.Vec3d
 import net.minecraft.world.World
-import net.minecraft.entity.Entity
-import com.mojang.brigadier.exceptions.CommandSyntaxException
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
-import org.luaj.vm2.lib.VarArgFunction
-import ru.pyxiion.ignis.EventBus
-import ru.pyxiion.ignis.Scheduler
-import ru.pyxiion.ignis.api.AsyncLib
-import ru.pyxiion.ignis.api.manager.BossBarManager
-import ru.pyxiion.ignis.api.manager.HologramManager
-import ru.pyxiion.ignis.api.manager.LockableInventory
-import ru.pyxiion.ignis.api.manager.MobAIManager
-import ru.pyxiion.ignis.api.manager.RegionManager
+import org.luaj.vm2.*
+import ru.pyxiion.ignis.*
+import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
+import ru.pyxiion.ignis.api.manager.*
 import ru.pyxiion.ignis.api.util.ItemBuilder
 import ru.pyxiion.ignis.api.util.ItemStackCodec
-import ru.pyxiion.ignis.api.wrapper.BossBarWrapper
-import ru.pyxiion.ignis.api.wrapper.EntityFactory
-import ru.pyxiion.ignis.api.wrapper.InvWrap
-import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
-import ru.pyxiion.ignis.api.wrapper.PlayerListWrapper
-import ru.pyxiion.ignis.api.wrapper.RegionWrap
-import ru.pyxiion.ignis.api.wrapper.StructureWrap
-import ru.pyxiion.ignis.api.wrapper.WorldWrap
-import ru.pyxiion.ignis.asVarArgFunction
-import ru.pyxiion.ignis.luaTableOf
-import ru.pyxiion.ignis.unwrap
+import ru.pyxiion.ignis.api.wrapper.*
+import ru.pyxiion.ignis.api.wrappertoLuaValue.PlayerListWrapper
 import ru.pyxiion.ignis.storage.StorageManager
-import ru.pyxiion.ignis.toLuaArray
-import ru.pyxiion.ignis.toVec3d
-import ru.pyxiion.ignis.unwrapOrNull
 import java.nio.file.Path
-import java.util.HashSet
-import java.util.UUID
+import java.util.*
 
 class LuaMcApi(
     private val server: MinecraftServer,
@@ -61,6 +37,11 @@ class LuaMcApi(
 ) {
     val scheduler = Scheduler(stateProvider)
     private val playerCache = mutableMapOf<UUID, LuaValue>()
+
+    init {
+        EntityWrap.sharedPlayerCache = playerCache
+        EntityWrap.sharedTickProvider = { scheduler.currentTick }
+    }
 
     fun invalidatePlayer(uuid: UUID) {
         playerCache.remove(uuid)
@@ -199,6 +180,7 @@ class LuaMcApi(
                 sb.append(value.tojstring())
                 sb.append('"')
             }
+
             value.istable() -> {
                 val table = value.checktable()
                 val hash = System.identityHashCode(table)
@@ -260,6 +242,7 @@ class LuaMcApi(
                 sb.append("  ".repeat(depth))
                 sb.append('}')
             }
+
             value.isfunction() -> sb.append("function")
             value.isuserdata() -> sb.append("userdata")
             value.isthread() -> sb.append("thread")
@@ -271,7 +254,7 @@ class LuaMcApi(
         val uuid = UUID.fromString(args.arg(1).checkjstring())
         for (world in server.worlds) {
             world.getEntity(uuid)?.let {
-                    return EntityFactory.wrap(it)
+                return EntityFactory.wrap(it)
             }
         }
         return LuaValue.NIL
@@ -396,21 +379,6 @@ class LuaMcApi(
                     else -> throw LuaError("mc.serialise: неизвестный тип '$t'")
                 }
             },
-            "deserialise" to object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val type = args.arg(1).checkjstring()
-                    val data = args.arg(2).checkjstring()
-                    when (type) {
-                        "item" -> {
-                            val stack = ItemStackCodec.decode(data, server.registryManager)
-                            return if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
-                        }
-                        "inventory" -> {
-                            val inv = InvWrap.deserialise(data, server.registryManager)
-                            return InvWrap.wrap(inv)
-                        }
-                        else -> throw LuaError("mc.deserialise: неизвестный тип '$type'")
-                    }
             "deserialise" to luaFunction { type, data ->
                 val t = type.checkjstring()
                 val d = data.checkjstring()
