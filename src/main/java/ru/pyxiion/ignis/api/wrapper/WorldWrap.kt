@@ -36,6 +36,8 @@ import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.Vector.Companion.toBlockPos
+import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.api.manager.HologramManager
 import ru.pyxiion.ignis.api.manager.RegionManager
 import ru.pyxiion.ignis.api.resolveOperand
@@ -44,9 +46,8 @@ import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.unwrapOrNull
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.api.util.performRaycast
-import ru.pyxiion.ignis.toBlockPos
+import ru.pyxiion.ignis.api.wrappertoLuaValue.PlayerListWrapper
 import ru.pyxiion.ignis.toLuaArray
-import ru.pyxiion.ignis.toVec3d
 import ru.pyxiion.ignis.unwrap
 import java.util.*
 
@@ -93,13 +94,13 @@ object WorldWrap {
                 else setWeather(0, 0, isRaining, false)
             }
         )
-        prop("players") { w, self ->
+        propWithTable("players") { self ->
             val data = self.rawget("__pxrp_data").checkuserdata() as InstanceData
             PlayerListWrapper(
-                source = { w.players },
+                source = { players },
                 playerCache = data.playerCache,
                 tickProvider = data.tickProvider,
-            ).toLuaValue()
+            ).toLua()
         }
         prop("regions") {
             RegionManager.all(this).map(RegionWrap::wrap).toLuaArray()

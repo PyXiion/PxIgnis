@@ -15,9 +15,9 @@ import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector
+import ru.pyxiion.ignis.api.Vector.Companion.toBlockPos
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.mixins.StructureTemplateMixin
-import ru.pyxiion.ignis.toBlockPos
 import ru.pyxiion.ignis.unwrap
 
 object StructureWrap {
@@ -33,7 +33,7 @@ object StructureWrap {
     private val BUILT = metaTable<StructureTemplate> {
         prop("size") {
             val s = size
-            Vector(s.x.toDouble(), s.y.toDouble(), s.z.toDouble()).toLuaValue()
+            Vector.of(s.x.toDouble(), s.y.toDouble(), s.z.toDouble()).toLuaValue()
         }
 
         method("place") { args ->

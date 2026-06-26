@@ -2,9 +2,12 @@ package ru.pyxiion.ignis.api.util
 
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
+import org.luaj.vm2.LuaValue.varargsOf
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
-import java.util.LinkedHashSet
+import ru.pyxiion.ignis.asFunction
+import ru.pyxiion.ignis.luaFunction
+import ru.pyxiion.ignis.luaVarFunction
 
 inline fun <reified T : Any> metaTable(block: MetaTableBuilder<T>.() -> Unit): BuiltMeta =
     MetaTableBuilder<T>(T::class.java).apply(block).build()
@@ -42,7 +45,7 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
         entries[LuaValue.valueOf(name)] = SimpleEntry({ t, _ -> getter(t) }, null)
     }
 
-    fun prop(name: String, getter: (T, LuaTable) -> LuaValue) {
+    fun propWithTable(name: String, getter: T.(table: LuaTable) -> LuaValue) {
         entries[LuaValue.valueOf(name)] = SimpleEntry(getter, null)
     }
 
@@ -134,113 +137,106 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
             removeIf { !it.isstring() || it.tojstring().startsWith("__") }
         }.toList()
 
-        meta.set("__index", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
+        meta.set("__index", luaFunction { self, key ->
+            val s = self.checktable()
+            val obj = self.rawget("__pxrp_object").checkuserdata(type)
+
+            val entry = entries[key]
+            if (entry != null) return@luaFunction entry.get(obj as T, s)
+
+            val mt = self.getmetatable()
+            if (!mt.isnil()) {
+                val m = mt.get(key)
+                if (!m.isnil()) return@luaFunction m
+            }
+
+            val parent = parentIndex?.invoke()
+            if (parent != null) {
+                val direct = parent.get(key)
+                if (!direct.isnil()) return@luaFunction direct
+
+                parent.get("__index").asFunction()?.let {
+                    return@luaFunction it.invoke(varargsOf(s, key)) as LuaValue
+                }
+            }
+            return@luaFunction LuaValue.NIL
+        }
+        )
+
+        val hasSetters = entries.values.any { it.hasSetter }
+        if (hasSetters || parentNewIndex != null) {
+            meta.set("__newindex", luaVarFunction { args ->
                 val self = args.arg(1).checktable()
                 val key = args.arg(2)
+                val value = args.arg(3)
                 val obj = self.rawget("__pxrp_object").checkuserdata(type)
 
                 val entry = entries[key]
-                if (entry != null) return entry.get(obj as T, self)
+                if (entry != null && entry.hasSetter) {
+                    entry.set(obj as T, value, self)
+                    return@luaVarFunction LuaValue.NIL
+                }
 
                 val mt = self.getmetatable()
                 if (!mt.isnil()) {
                     val m = mt.get(key)
-                    if (!m.isnil()) return m
+                    if (m.isfunction()) {
+                        m.invoke(varargsOf(arrayOf(self, key, value)))
+                        return@luaVarFunction LuaValue.NIL
+                    }
                 }
 
-                val parent = parentIndex?.invoke()
+                val parent = parentNewIndex?.invoke()
                 if (parent != null) {
-                    val direct = parent.get(key)
-                    if (!direct.isnil()) return direct
-
-                    val pi = parent.get("__index")
-                    if (pi.isfunction()) return pi.invoke(varargsOf(self, key))
+                    val pn = parent.get("__newindex")
+                    if (pn.isfunction()) return@luaVarFunction pn.invoke(varargsOf(arrayOf(self, key, value)))
                 }
 
-                return NIL
+                return@luaVarFunction LuaValue.NIL
             }
-        })
-
-        val hasSetters = entries.values.any { it.hasSetter }
-        if (hasSetters || parentNewIndex != null) {
-            meta.set("__newindex", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1).checktable()
-                    val key = args.arg(2)
-                    val value = args.arg(3)
-                    val obj = self.rawget("__pxrp_object").checkuserdata(type)
-
-                    val entry = entries[key]
-                    if (entry != null && entry.hasSetter) {
-                        entry.set(obj as T, value, self)
-                        return NIL
-                    }
-
-                    val mt = self.getmetatable()
-                    if (!mt.isnil()) {
-                        val m = mt.get(key)
-                        if (m.isfunction()) {
-                            m.invoke(varargsOf(arrayOf(self, key, value)))
-                            return NIL
-                        }
-                    }
-
-                    val parent = parentNewIndex?.invoke()
-                    if (parent != null) {
-                        val pn = parent.get("__newindex")
-                        if (pn.isfunction()) return pn.invoke(varargsOf(arrayOf(self, key, value)))
-                    }
-
-                    return NIL
-                }
-            })
+            )
         }
 
-        meta.set("__pairs", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                val self = args.arg(1)
-                val parentMeta = parentIndex?.invoke()
+        meta.set("__pairs", luaVarFunction { args ->
+            val self = args.arg(1)
+            val parentMeta = parentIndex?.invoke()
 
-                val merged = linkedSetOf<LuaValue>().apply {
-                    addAll(keysList)
-                    if (parentMeta != null) {
-                        val pp = parentMeta.get("__pairs")
-                        if (pp.isfunction()) {
-                            val triple = pp.invoke(self)
-                            val iterFn = triple.arg(1)
-                            val state = triple.arg(2)
-                            var prevKey = triple.arg(3)
-                            while (true) {
-                                val nxt = iterFn.invoke(varargsOf(state, prevKey))
-                                val k = nxt.arg(1)
-                                if (k.isnil()) break
-                                if (k.isstring() && !k.tojstring().startsWith("__")) {
-                                    add(k)
-                                }
-                                prevKey = k
+            val merged = linkedSetOf<LuaValue>().apply {
+                addAll(keysList)
+                if (parentMeta != null) {
+                    val pp = parentMeta.get("__pairs")
+                    if (pp.isfunction()) {
+                        val triple = pp.invoke(self)
+                        val iterFn = triple.arg(1)
+                        val state = triple.arg(2)
+                        var prevKey = triple.arg(3)
+                        while (true) {
+                            val nxt = iterFn.invoke(varargsOf(state, prevKey))
+                            val k = nxt.arg(1)
+                            if (k.isnil()) break
+                            if (k.isstring() && !k.tojstring().startsWith("__")) {
+                                add(k)
                             }
+                            prevKey = k
                         }
                     }
-                }.toList()
-
-                val iterator = object : VarArgFunction() {
-                    private var index = 0
-                    override fun invoke(args: Varargs): Varargs {
-                        if (index >= merged.size) return NIL
-                        val key = merged[index]
-                        index++
-                        return varargsOf(key, self.get(key))
-                    }
                 }
-                return varargsOf(iterator, self, NIL)
+            }.toList()
+
+            val iterator = object : VarArgFunction() {
+                private var index = 0
+                override fun invoke(args: Varargs): Varargs {
+                    if (index >= merged.size) return NIL
+                    val key = merged[index]
+                    index++
+                    return varargsOf(key, self.get(key))
+                }
             }
+            return@luaVarFunction varargsOf(iterator, self, LuaValue.NIL)
         })
 
         for ((name, body) in methods) {
-            meta.rawset(name, object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs = body(args)
-            })
+            meta.rawset(name, luaVarFunction(body))
         }
 
         return BuiltMeta(meta, keysList)

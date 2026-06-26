@@ -6,10 +6,10 @@ import net.minecraft.server.command.ServerCommandSource
 import net.minecraft.text.Text
 import org.luaj.vm2.*
 import org.luaj.vm2.LuaValue.NIL
-import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import ru.pyxiion.ignis.luaTableOf
+import ru.pyxiion.ignis.luaVarFunction
 import ru.pyxiion.ignis.resumeOrThrow
 import ru.pyxiion.ignis.types.toLuaValue
 
@@ -17,9 +17,7 @@ class CommandRegistrar(
     private val commandManager: LuaCommandManager,
     private val stateProvider: () -> LuaState,
 ) {
-    val registerFunction: VarArgFunction = object : VarArgFunction() {
-        override fun invoke(args: Varargs): Varargs = register(args)
-    }
+    val registerFunction = luaVarFunction(::register)
 
     private fun register(args: Varargs): Varargs {
         require(args.narg() in 2..3) { "register(syntax, handler, permission = nil) requires 2..3 arguments" }

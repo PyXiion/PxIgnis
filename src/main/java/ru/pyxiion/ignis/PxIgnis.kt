@@ -186,7 +186,7 @@ class PxIgnis : ModInitializer {
         PlayerBlockBreakEvents.BEFORE.register { world, player, pos, state, _ ->
             if (storageManager != null && player is ServerPlayerEntity) {
                 val luaPlayer = PlayerWrap.wrap(player)
-                val posTable = Vector(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
+                val posTable = Vector.of(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
                 val blockId = LuaValue.valueOf(Registries.BLOCK.getId(state.block).toString())
                 val results = runtime.eventManager.fireWithResults("player_block_break", luaPlayer, posTable, blockId)
                 if (results.any { it.isboolean() && !it.toboolean() }) return@register false
@@ -200,7 +200,7 @@ class PxIgnis : ModInitializer {
                 if (stack.item is BlockItem) {
                     val luaPlayer = PlayerWrap.wrap(player)
                     val pos = hitResult.blockPos
-                    val posTable = Vector(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
+                    val posTable = Vector.of(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
                     val blockId = LuaValue.valueOf(Registries.BLOCK.getId((stack.item as BlockItem).block).toString())
                     val results =
                         runtime.eventManager.fireWithResults("player_block_place", luaPlayer, posTable, blockId)

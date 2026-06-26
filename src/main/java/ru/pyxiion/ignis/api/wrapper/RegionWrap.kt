@@ -71,8 +71,8 @@ object RegionWrap {
                 val region = self.unwrap<Region>()
                 with(region.bounds) {
                     luaTableOf(
-                        "A" to Vector(minX, minY, minZ).toLuaValue(),
-                        "B" to Vector(maxX, maxY, maxZ).toLuaValue(),
+                        "A" to Vector.of(minX, minY, minZ).toLuaValue(),
+                        "B" to Vector.of(maxX, maxY, maxZ).toLuaValue(),
                     )
                 }
             }

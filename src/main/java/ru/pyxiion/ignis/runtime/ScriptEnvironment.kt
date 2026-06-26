@@ -1,19 +1,23 @@
 package ru.pyxiion.ignis.runtime
 
 import net.fabricmc.loader.api.FabricLoader
+import org.luaj.vm2.LoadState
+import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
-import org.luaj.vm2.LoadState
 import org.luaj.vm2.compiler.LuaC
-import org.luaj.vm2.lib.*
+import org.luaj.vm2.lib.Bit32Lib
+import org.luaj.vm2.lib.CoroutineLib
+import org.luaj.vm2.lib.StringLib
+import org.luaj.vm2.lib.TableLib
 import org.luaj.vm2.lib.jse.JseBaseLib
 import org.luaj.vm2.lib.jse.JseMathLib
 import org.luaj.vm2.lib.jse.NovaLib
-import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.api.LuaMcApi
 import ru.pyxiion.ignis.api.vecTable
+import ru.pyxiion.ignis.asFunction
 import ru.pyxiion.ignis.commands.CommandRegistrar
+import ru.pyxiion.ignis.luaVarFunction
 import ru.pyxiion.ignis.sandbox.LuaPackage
 import ru.pyxiion.ignis.sandbox.Vfs
 
@@ -42,22 +46,30 @@ class ScriptEnvironment {
         globals.load(NovaLib())
 
 
-
         // Remove unsafe things from JseBaseLib()
         globals.set("collectgarbage", LuaValue.NIL)
         globals.set("loadfile", LuaValue.NIL)
         globals.set("dofile", LuaValue.NIL)
 
+        // Forbid loading bytecode
+        globals.set("load", globals.get("load").asFunction()?.let {
+            luaVarFunction { args ->
+                if (args.arg(3).optjstring("t").contains("b")) {
+                    throw LuaError("Loading bytecode is not allowed")
+                }
+                it.invoke(args)
+            }
+        })
+
         globals.set("register", commandRegistrar.registerFunction)
 
-        val vecConstructor = object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                require(args.narg() == 3) { "vec(x, y, z) require 3 args" }
-                val x = args.arg(1).checkdouble()
-                val y = args.arg(2).checkdouble()
-                val z = args.arg(3).checkdouble()
-                return vecTable(x, y, z)
-            }
+        val vecConstructor = luaVarFunction { args ->
+            require(args.narg() == 3) { "vec(x, y, z) require 3 args" }
+            val x = args.arg(1).checkdouble()
+            val y = args.arg(2).checkdouble()
+            val z = args.arg(3).checkdouble()
+
+            vecTable(x, y, z)
         }
         globals.set("vec", vecConstructor)
 

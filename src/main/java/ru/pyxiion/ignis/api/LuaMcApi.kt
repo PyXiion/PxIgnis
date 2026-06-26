@@ -325,33 +325,38 @@ class LuaMcApi(
         MetaTableRegistry.init()
 
         val mcMeta = LuaTable()
-        mcMeta.rawset("__index", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                val key = args.arg(2).checkjstring()
-                if (key == "onlineCount") {
-                    return LuaValue.valueOf(server.playerManager.currentPlayerCount.toDouble())
+        mcMeta.rawset("__index", luaFunction { _, key ->
+            val k = key.checkjstring()
+            when (k) {
+                "onlineCount" -> {
+                    server.playerManager.currentPlayerCount.toLua()
                 }
-                return LuaValue.NIL
+
+                "players" -> {
+                    PlayerListWrapper(
+                        source = { server.playerManager.playerList },
+                        playerCache = playerCache,
+                        tickProvider = { scheduler.currentTick },
+                    ).toLua()
+                }
+
+                else -> {
+                    LuaValue.NIL
+                }
             }
         })
 
-        MetaTableRegistry.ITEM.set("serialise", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                val self = args.arg(1).checktable()
-                val stack = ItemStackWrap.unwrap(self)
-                    ?: throw LuaError("item:serialise(): не ItemStack")
-                val json = ItemStackCodec.encode(stack, server.registryManager)
-                return LuaValue.valueOf(json)
-            }
+        MetaTableRegistry.ITEM.set("serialise", luaFunction { self ->
+            val stack = ItemStackWrap.unwrap(self)
+                ?: throw LuaError("item:serialise(): не ItemStack")
+            val json = ItemStackCodec.encode(stack, server.registryManager)
+            json.toLua()
         })
 
-        MetaTableRegistry.INVENTORY.set("serialise", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                val self = args.arg(1).checktable()
-                val inv = self.unwrap<SimpleInventory>()
-                val json = InvWrap.serialise(inv, server.registryManager)
-                return LuaValue.valueOf(json)
-            }
+        MetaTableRegistry.INVENTORY.set("serialise", luaFunction { self ->
+            val inv = self.unwrap<SimpleInventory>()
+            val json = InvWrap.serialise(inv, server.registryManager)
+            json.toLua()
         })
 
         val table = luaTableOf(
@@ -362,48 +367,33 @@ class LuaMcApi(
             "scheduleRepeating" to this::luaScheduleRepeating.asVarArgFunction(),
             "cancelTask" to this::luaCancelTask.asVarArgFunction(),
             "world" to this::luaGetWorld.asVarArgFunction(),
-            "players" to PlayerListWrapper(
-                source = { server.playerManager.playerList },
-                playerCache = playerCache,
-                tickProvider = { scheduler.currentTick },
-            ).toLuaValue(),
             "getEntity" to this::luaGetEntity.asVarArgFunction(),
             "getRegion" to this::luaGetRegion.asVarArgFunction(),
-            "holograms" to object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    return HologramManager.all().map { it.toLuaValue() }.toLuaArray()
-                }
+            "holograms" to luaFunctionZero { HologramManager.all().map { it.toLuaValue() }.toLuaArray() },
+            "getHologram" to luaFunction { a ->
+                val uuid = UUID.fromString(a.checkjstring())
+                HologramManager.get(uuid)?.toLuaValue().orNil()
             },
-            "getHologram" to object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val uuid = UUID.fromString(args.arg(1).checkjstring())
-                    return HologramManager.get(uuid)?.toLuaValue() ?: LuaValue.NIL
-                }
-            },
-            // onlineCount handled via __index on the metatable below
             "loadStructure" to this::luaLoadStructure.asVarArgFunction(),
             "loadStructureFile" to this::luaLoadStructureFile.asVarArgFunction(),
             "dump" to this::luaDump.asVarArgFunction(),
             "getMetatable" to this::luaGetMetatable.asVarArgFunction(),
-            "serialise" to object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val type = args.arg(1).checkjstring()
-                    when (type) {
-                        "item" -> {
-                            val obj = args.arg(2)
-                            val stack = ItemStackWrap.unwrap(obj)
-                                ?: throw LuaError("mc.serialise('item', ...): ожидается ItemStack")
-                            val json = ItemStackCodec.encode(stack, server.registryManager)
-                            return LuaValue.valueOf(json)
-                        }
-                        "inventory" -> {
-                            val obj = args.arg(2)
-                            val inv = obj.unwrap<SimpleInventory>()
-                            val json = InvWrap.serialise(inv, server.registryManager)
-                            return LuaValue.valueOf(json)
-                        }
-                        else -> throw LuaError("mc.serialise: неизвестный тип '$type'")
+            "serialise" to luaFunction { type, obj ->
+                when (val t = type.checkjstring()) {
+                    "item" -> {
+                        val stack = ItemStackWrap.unwrap(obj)
+                            ?: throw LuaError("mc.serialise('item', ...): ожидается ItemStack")
+                        val json = ItemStackCodec.encode(stack, server.registryManager)
+                        LuaValue.valueOf(json)
                     }
+
+                    "inventory" -> {
+                        val inv = obj.unwrap<SimpleInventory>()
+                        val json = InvWrap.serialise(inv, server.registryManager)
+                        LuaValue.valueOf(json)
+                    }
+
+                    else -> throw LuaError("mc.serialise: неизвестный тип '$t'")
                 }
             },
             "deserialise" to object : VarArgFunction() {
@@ -421,69 +411,54 @@ class LuaMcApi(
                         }
                         else -> throw LuaError("mc.deserialise: неизвестный тип '$type'")
                     }
+            "deserialise" to luaFunction { type, data ->
+                val t = type.checkjstring()
+                val d = data.checkjstring()
+                when (t) {
+                    "item" -> {
+                        val stack = ItemStackCodec.decode(d, server.registryManager)
+                        if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
+                    }
+
+                    "inventory" -> {
+                        val inv = InvWrap.deserialise(d, server.registryManager)
+                        InvWrap.wrap(inv)
+                    }
+
+                    else -> throw LuaError("mc.deserialise: неизвестный тип '$t'")
                 }
             },
-            "createInventory" to object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val size = args.arg(1).checkint()
-                    if (size < 9 || size > 54 || size % 9 != 0)
-                        throw LuaError("mc.createInventory: размер должен быть кратен 9 и от 9 до 54")
-                    return InvWrap.wrap(LockableInventory(size))
-                }
+            "createInventory" to luaFunction { size ->
+                val s = size.checkint()
+                if (s !in 9..54 || s % 9 != 0)
+                    throw LuaError("mc.createInventory: размер должен быть кратен 9 и от 9 до 54")
+                InvWrap.wrap(LockableInventory(s))
             },
 
-            "runtimeNamespace" to LuaValue.valueOf(
-                FabricLoader.getInstance().mappingResolver.currentRuntimeNamespace
-            ),
-
-            "mapped" to object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val mappingResolver = FabricLoader.getInstance().mappingResolver
-                    val mappingNamespace = mappingResolver.currentRuntimeNamespace
-
-                    return valueOf(mappingResolver.mapClassName("named", args.arg(1).checkjstring()))
-                }
+            "registerBehaviour" to luaFunction { id, fn ->
+                val i = id.checkjstring()
+                val f = fn.checkfunction()
+                MobAIManager.registerBehaviour(i, f)
+                LuaValue.NIL
             },
-
-            "registerBehaviour" to object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    require(args.narg() == 2) { "registerBehaviour(id, fn) requires 2 arguments" }
-                    val id = args.arg(1).checkjstring()
-                    val fn = args.arg(2).checkfunction()
-                    MobAIManager.registerBehaviour(id, fn)
-                    return LuaValue.NIL
-                }
-            },
-            "createBossBar" to object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val title = args.arg(1).checkjstring()
-                    val color = args.arg(2).optjstring("white")
-                    val style = args.arg(3).optjstring("progress")
-                    val wrapper = BossBarWrapper(title, color, style)
-                    BossBarManager.register(wrapper)
-                    return wrapper.toLuaValue()
-                }
+            "createBossBar" to luaFunction { title, color, style ->
+                val wrapper =
+                    BossBarWrapper(title.checkjstring(), color.optjstring("white"), style.optjstring("progress"))
+                BossBarManager.register(wrapper)
+                wrapper.toLuaValue()
             },
             "execute" to this::luaExecute.asVarArgFunction(),
         )
 
-        val onHandler: (Varargs) -> Varargs = { args: Varargs ->
-            require(args.narg() == 2) { "on(event, handler) requires 2 arguments" }
-            val eventName = args.checkjstring(1)
-            val handler = args.checkfunction(2)
-            val id = eventBus.on(eventName, handler)
-            LuaValue.valueOf(id)
-        }
-        table.set("on", onHandler.asVarArgFunction())
+        table.set("on", luaFunction { eventName, handler ->
+            eventBus.on(eventName.checkjstring(), handler.checkfunction()).toLua()
+        })
 
-        val offHandler: (Varargs) -> Varargs = { args: Varargs ->
-            require(args.narg() == 1) { "off(id) requires 1 argument" }
-            val id = args.checkint(1)
-            LuaValue.valueOf(eventBus.off(id))
-        }
-        table.set("off", offHandler.asVarArgFunction())
+        table.set("off", luaFunction { id ->
+            eventBus.off(id.checkint()).toLua()
+        })
 
-        val emitHandler: (Varargs) -> Varargs = { args ->
+        table.set("emit", luaVarFunction { args ->
             require(args.narg() >= 1) { "emit(event, ...) requires at least 1 argument" }
             val eventName = args.checkjstring(1)
             val eventArgs = if (args.narg() >= 2) {
@@ -491,14 +466,11 @@ class LuaMcApi(
             } else emptyArray<LuaValue>()
             eventBus.fire(eventName, *eventArgs)
             LuaValue.NIL
-        }
-        table.set("emit", emitHandler.asVarArgFunction())
+        })
 
-        table.set("createItem", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                val stack = ItemBuilder.fromLua(args)
-                return ItemStackWrap.wrap(stack)
-            }
+        table.set("createItem", luaVarFunction { args ->
+            val stack = ItemBuilder.fromLua(args)
+            ItemStackWrap.wrap(stack)
         })
 
         AsyncLib(server, stateProvider(), scheduler).install(table)

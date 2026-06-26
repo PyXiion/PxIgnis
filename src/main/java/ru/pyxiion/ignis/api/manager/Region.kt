@@ -202,8 +202,8 @@ object RegionManager {
                 region.fire("entity_leave", regionWrapperFor(entity))
                 if (isPlayer) region.fire("player_leave", regionWrapperFor(entity))
             } else if (isIn) {
-                val fromLua = Vector(from.x, from.y, from.z).toLuaValue()
-                val toLua = Vector(to.x, to.y, to.z).toLuaValue()
+                val fromLua = Vector.of(from.x, from.y, from.z).toLuaValue()
+                val toLua = Vector.of(to.x, to.y, to.z).toLuaValue()
                 val w = regionWrapperFor(entity)
                 region.fire("entity_move", w, fromLua, toLua)
                 if (isPlayer) region.fire("player_move", w, fromLua, toLua)

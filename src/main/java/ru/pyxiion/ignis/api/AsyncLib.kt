@@ -1,24 +1,9 @@
 package ru.pyxiion.ignis.api
 
-import com.google.gson.Gson
-import com.google.gson.JsonArray
-import com.google.gson.JsonElement
-import com.google.gson.JsonNull
-import com.google.gson.JsonObject
-import com.google.gson.JsonPrimitive
-import com.google.gson.JsonSyntaxException
+import com.google.gson.*
 import net.minecraft.server.MinecraftServer
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
-import org.luaj.vm2.lib.VarArgFunction
-import ru.pyxiion.ignis.PxIgnis
-import ru.pyxiion.ignis.Scheduler
-import ru.pyxiion.ignis.forEach
-import ru.pyxiion.ignis.resumeOrLog
-import ru.pyxiion.ignis.toLuaArray
+import org.luaj.vm2.*
+import ru.pyxiion.ignis.*
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -32,12 +17,8 @@ class AsyncLib(
 ) {
     fun install(mcTable: LuaTable) {
         responseMetaReset()
-        mcTable.set("fetch", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs = handleFetch(args)
-        })
-        mcTable.set("sleep", object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs = handleSleep(args)
-        })
+        mcTable.set("fetch", luaVarFunction(::handleFetch))
+        mcTable.set("sleep", luaVarFunction(::handleSleep))
     }
 
     private fun handleSleep(args: Varargs): Varargs {
@@ -45,11 +26,8 @@ class AsyncLib(
         require(ticks >= 0) { "sleep(ticks) requires non-negative ticks" }
 
         val co = luaState.currentThread
-        scheduler.schedule(ticks, object : VarArgFunction() {
-            override fun invoke(args: Varargs): Varargs {
-                co.resumeOrLog(LuaValue.NIL, "mc.sleep callback")
-                return LuaValue.NIL
-            }
+        scheduler.schedule(ticks, luaVarFunctionNil { _ ->
+            co.resumeOrLog(LuaValue.NIL, "mc.sleep callback")
         })
         luaState.yield(LuaValue.NIL)
         return LuaValue.NIL
@@ -105,8 +83,10 @@ class AsyncLib(
 
     private fun parseRequest(arg: LuaValue): RequestConfig {
         if (arg.isstring()) {
+            val url = arg.checkjstring()
+            validateUrl(url)
             return RequestConfig(
-                url = arg.checkjstring(),
+                url = url,
                 method = "GET",
                 headers = emptyMap(),
                 body = null,
@@ -116,6 +96,7 @@ class AsyncLib(
 
         val table = arg.checktable()
         val url = table.get("url").checkjstring()
+        validateUrl(url)
         val method = table.get("method").optjstring("GET")
 
         // All headers are lower cased
@@ -141,6 +122,7 @@ class AsyncLib(
                 }
                 luaToJsonString(jsonVal)
             }
+
             else -> null
         }
 
@@ -184,6 +166,14 @@ class AsyncLib(
     companion object {
         private const val DEFAULT_TIMEOUT = 10L
 
+        private fun validateUrl(url: String) {
+            try {
+                URI.create(url)
+            } catch (e: IllegalArgumentException) {
+                throw LuaError("fetch: invalid URL '$url': ${e.message}")
+            }
+        }
+
         private val httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(DEFAULT_TIMEOUT))
             .build()
@@ -201,40 +191,37 @@ class AsyncLib(
         }
 
         private fun metaInit(meta: LuaTable) {
-            meta.rawset("__index", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1).checktable()
-                    val key = args.arg(2).checkjstring()
-                    if (key == "json") {
-                        val cached = self.rawget("json")
-                        if (!cached.isnil()) return cached
-                        val body = self.rawget("__body")
-                        if (body.isnil()) return LuaValue.NIL
-                        val parsed = try {
-                            jsonStringToLua(body.checkjstring())
-                        } catch (e: JsonSyntaxException) {
-                            throw LuaError("HTTP response body is not valid JSON: ${e.message}")
-                        }
-                        self.rawset("json", parsed)
-                        return parsed
+            meta.rawset("__index", luaFunction { self, key ->
+                val s = self.checktable()
+                val k = key.checkjstring()
+                if (k == "json") {
+                    val cached = s.rawget("json")
+                    if (!cached.isnil()) return@luaFunction cached
+                    val body = s.rawget("__body")
+                    if (body.isnil()) return@luaFunction LuaValue.NIL
+                    val parsed = try {
+                        jsonStringToLua(body.checkjstring())
+                    } catch (e: JsonSyntaxException) {
+                        throw LuaError("HTTP response body is not valid JSON: ${e.message}")
                     }
-                    return LuaValue.NIL
+                    s.rawset("json", parsed)
+                    parsed
+                } else {
+                    LuaValue.NIL
                 }
             })
 
-            meta.rawset("__pairs", object : VarArgFunction() {
-                override fun invoke(args: Varargs): Varargs {
-                    val self = args.arg(1)
-                    val iterator = object : VarArgFunction() {
-                        var i = 0
-                        override fun invoke(args: Varargs): Varargs {
-                            if (i >= responseKeys.size) return LuaValue.NIL
-                            val key = responseKeys[i]; i++
-                            return LuaValue.varargsOf(LuaValue.valueOf(key), self.get(key))
-                        }
+            meta.rawset("__pairs", luaVarFunction { args ->
+                val self = args.arg(1)
+                var i = 0
+                val iterator = luaVarFunction { _: Varargs ->
+                    if (i >= responseKeys.size) LuaValue.NIL as Varargs
+                    else {
+                        val key = responseKeys[i]; i++
+                        LuaValue.varargsOf(LuaValue.valueOf(key), self.get(key))
                     }
-                    return LuaValue.varargsOf(iterator, self, LuaValue.NIL)
                 }
+                LuaValue.varargsOf(iterator, self, LuaValue.NIL)
             })
         }
 
@@ -255,9 +242,11 @@ class AsyncLib(
                         else -> LuaValue.NIL
                     }
                 }
+
                 element.isJsonArray -> {
                     element.asJsonArray.map(::jsonToLua).toLuaArray()
                 }
+
                 element.isJsonObject -> {
                     val obj = element.asJsonObject
                     val t = LuaTable()
@@ -266,6 +255,7 @@ class AsyncLib(
                     }
                     t
                 }
+
                 else -> LuaValue.NIL
             }
         }
@@ -288,17 +278,25 @@ class AsyncLib(
         }
 
         private fun tableToJson(table: LuaTable): JsonElement {
-            var hasStringKeys = false
+            var isSequence = true
+            val keys = mutableSetOf<Int>()
+            val len = table.length().toInt()
+
             table.forEach { k, v ->
-                if (!k.isint() || k.toint() < 1) {
-                    hasStringKeys = true
-                    return@forEach
+                if (k.isint() && k.toint() >= 1) {
+                    keys.add(k.toint())
+                } else {
+                    isSequence = false
                 }
             }
 
-            return if (!hasStringKeys && table.length() > 0) {
+            if (isSequence && len > 0) {
+                isSequence = keys.size == len && keys.all { it in 1..len }
+            }
+
+            return if (isSequence) {
                 val arr = JsonArray()
-                for (i in 1..table.length()) {
+                for (i in 1..len) {
                     arr.add(luaToJsonElement(table.get(i)))
                 }
                 arr

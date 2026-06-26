@@ -8,9 +8,9 @@ import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.api.manager.MobAIManager
 import ru.pyxiion.ignis.api.util.metaTable
-import ru.pyxiion.ignis.toVec3d
 import ru.pyxiion.ignis.unwrap
 import ru.pyxiion.ignis.unwrapOrNull
 import java.util.UUID

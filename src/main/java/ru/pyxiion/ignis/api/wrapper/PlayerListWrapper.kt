@@ -1,8 +1,9 @@
-package ru.pyxiion.ignis.api.wrapper
+package ru.pyxiion.ignis.api.wrappertoLuaValue
 
 import net.minecraft.server.network.ServerPlayerEntity
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
+import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import java.util.UUID
 
 class PlayerListWrapper(
@@ -13,7 +14,7 @@ class PlayerListWrapper(
     private var cachedTick: Long = -1
     private var cached: LuaTable? = null
 
-    fun toLuaValue(): LuaValue {
+    fun toLua(): LuaValue {
         val currentTick = tickProvider()
         val cached = this.cached
         if (cached != null && this.cachedTick == currentTick) return cached

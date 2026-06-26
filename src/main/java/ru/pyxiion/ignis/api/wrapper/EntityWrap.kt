@@ -7,13 +7,9 @@ import net.minecraft.entity.attribute.EntityAttributes
 import net.minecraft.entity.effect.StatusEffectInstance
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.item.ItemStack
-import net.minecraft.nbt.NbtCompound
 import net.minecraft.registry.Registries
 import net.minecraft.server.world.ServerWorld
-import net.minecraft.storage.NbtReadView
-import net.minecraft.storage.NbtWriteView
 import net.minecraft.text.Text
-import net.minecraft.util.ErrorReporter
 import net.minecraft.util.Identifier
 import net.minecraft.util.math.Vec3d
 import org.luaj.vm2.LuaError
@@ -23,13 +19,15 @@ import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector
+import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.api.util.performRaycast
-import ru.pyxiion.ignis.toVec3d
 import ru.pyxiion.ignis.unwrap
-import java.util.UUID
+import java.util.*
 
 object EntityWrap {
+    var sharedPlayerCache: MutableMap<UUID, LuaValue> = mutableMapOf()
+    var sharedTickProvider: () -> Long = { 0L }
 
     fun wrap(entity: Entity): LuaValue {
         val t = LuaTable()
@@ -68,7 +66,7 @@ object EntityWrap {
         prop("uuid") { LuaValue.valueOf(uuid.toString()) }
         prop("type") { LuaValue.valueOf(Registries.ENTITY_TYPE.getId(type).toString()) }
         prop("name") { LuaValue.valueOf(name.literalString ?: name.string) }
-        prop("displayName") { LuaValue.valueOf(displayName?.string ?: name.literalString!!) }
+        prop("displayName") { LuaValue.valueOf(displayName?.string ?: name.string) }
         prop(
             "customName",
             get = {
@@ -77,7 +75,7 @@ object EntityWrap {
             },
             set = { v -> customName = if (v.isnil()) null else Text.literal(v.tojstring()) }
         )
-        prop("world") { WorldWrap.wrap(entityWorld as ServerWorld) }
+        prop("world") { WorldWrap.wrap(entityWorld as ServerWorld, sharedPlayerCache, sharedTickProvider) }
 
         prop(
             "pos",
@@ -286,7 +284,7 @@ object EntityWrap {
             val e = self.unwrap<Entity>()
             val ticks = args.arg(2).checkint()
             e.fireTicks = ticks
-            e.setOnFire(true)
+            e.isOnFire = true
             LuaValue.NIL
         }
 

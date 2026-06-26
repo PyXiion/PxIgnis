@@ -92,7 +92,7 @@ object PlayerWrap {
                 }
             }
         )
-        prop("data") { _, self -> self.rawget("data") }
+        propWithTable("data") { self -> self.rawget("data") }
 
         prop(
             "head",

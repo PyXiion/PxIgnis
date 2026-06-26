@@ -69,16 +69,16 @@ end, "px.ignis.shop")
 
 ## What's inside
 
-| Area | What you get |
-|---|---|
-| **Commands** | Brigadier with tab completion, permissions, and types (`text`, `word`, `player`, `int`, `bool`, `block_pos`, `choice=...`) |
-| **Events** | 28 hooks (13 cancellable) — players, entities, blocks, items, server lifecycle |
-| **Reload** | `/ignis reload` re-executes all scripts; persistent state via `mc.data` / `player.data` |
-| **MC API** | Particles, sounds, blocks, entities, NBT, structures, weather, world border, explosions |
-| **UI** | Per-player sidebar, chest GUI lib, boss bars, holograms, titles |
-| **Async** | `mc.fetch()` for HTTP, `mc.sleep()` for coroutine delays |
-| **Storage** | Per-player and global JSON-backed key-value tables |
-| **Dev tools** | LuaLS types for IntelliSense, `mc.dump()`, metatable extension hooks |
+| Area          | What you get                                                                                                               |
+|---------------|----------------------------------------------------------------------------------------------------------------------------|
+| **Commands**  | Brigadier with tab completion, permissions, and types (`text`, `word`, `player`, `int`, `bool`, `block_pos`, `choice=...`) |
+| **Events**    | Players, entities, blocks, items, server lifecycle                                                                         |
+| **Reload**    | `/ignis reload` re-executes all scripts; persistent state via `mc.data` / `player.data`                                    |
+| **MC API**    | Particles, sounds, blocks, entities, NBT, structures, weather, world border, explosions                                    |
+| **UI**        | Per-player sidebar, chest GUI lib, boss bars, holograms, titles                                                            |
+| **Async**     | `mc.fetch()` for HTTP, `mc.sleep()` for coroutine delays                                                                   |
+| **Storage**   | Per-player and global JSON-backed key-value tables                                                                         |
+| **Dev tools** | LuaLS types for IntelliSense, `mc.dump()`, metatable extension hooks                                                       |
 
 ## Install
 
