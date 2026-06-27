@@ -179,7 +179,7 @@ public final class LuaState {
 
 	int javaCallDepth = 0;
 
-	volatile LuaThread currentThread;
+	private final ThreadLocal<LuaThread> currentThread = new ThreadLocal<>();
 	private final LuaThread mainThread;
 
 	public final LuaTable globals;
@@ -212,7 +212,8 @@ public final class LuaState {
 		globals = new LuaTable();
 		globals.set("_G", globals);
 		globals.set("_VERSION", Lua._VERSION);
-		mainThread = currentThread = new LuaThread(this);
+		mainThread = new LuaThread(this);
+		currentThread.set(mainThread);
 		setCurrent(this);
 	}
 
@@ -225,11 +226,12 @@ public final class LuaState {
 	}
 
 	public LuaThread getCurrentThread() {
-		return currentThread;
+		return currentThread.get();
 	}
 
 	void setCurrentThread(LuaThread thread) {
-		currentThread = thread;
+		if (thread == null) currentThread.remove();
+		else currentThread.set(thread);
 	}
 
 	public void interrupt() {
@@ -246,13 +248,14 @@ public final class LuaState {
 		switch (interruptHandler.interrupted()) {
 			case CONTINUE -> {}
 			case SUSPEND -> {
-			if (currentThread == null || currentThread.threadState.status != LuaThread.STATUS_RUNNING) {
+			LuaThread ct = getCurrentThread();
+			if (ct == null || ct.threadState.status != LuaThread.STATUS_RUNNING) {
 				throw new IllegalStateException("Cannot suspend non-running coroutine");
 			}
-			if (currentThread.isMainThread())
+			if (ct.isMainThread())
 				throw new LuaError("cannot yield main thread");
-			currentThread.threadState.yieldIsInterrupt = true;
-			currentThread.threadState.lua_yield_sync(LuaValue.NONE);
+			ct.threadState.yieldIsInterrupt = true;
+			ct.threadState.lua_yield_sync(LuaValue.NONE);
 			}
 		}
 	}
@@ -274,14 +277,16 @@ public final class LuaState {
 	}
 
 	public void enterSyncCompiled() {
-		if (currentThread != null && !currentThread.isMainThread()) {
-			currentThread.threadState.syncCompiledDepth++;
+		LuaThread ct = getCurrentThread();
+		if (ct != null && !ct.isMainThread()) {
+			ct.threadState.syncCompiledDepth++;
 		}
 	}
 
 	public void leaveSyncCompiled() {
-		if (currentThread != null && !currentThread.isMainThread()) {
-			currentThread.threadState.syncCompiledDepth--;
+		LuaThread ct = getCurrentThread();
+		if (ct != null && !ct.isMainThread()) {
+			ct.threadState.syncCompiledDepth--;
 		}
 	}
 
@@ -358,9 +363,10 @@ public final class LuaState {
 	}
 
 	public Varargs yield(Varargs args) {
-		if (currentThread == null || currentThread.isMainThread())
+		LuaThread ct = getCurrentThread();
+		if (ct == null || ct.isMainThread())
 			throw new LuaError("cannot yield main thread");
-		return currentThread.threadState.lua_yield_sync(args);
+		return ct.threadState.lua_yield_sync(args);
 	}
 
 	public static Builder builder() {

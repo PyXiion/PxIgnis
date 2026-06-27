@@ -294,9 +294,9 @@ public class LuaThread extends LuaValue {
 		public Varargs lua_resume(LuaThread new_thread, Varargs args) {
 			getLock().lock();
 			try {
-				LuaThread previous_thread = state.currentThread;
+				LuaThread previous_thread = state.getCurrentThread();
 				try {
-					state.currentThread = new_thread;
+					state.setCurrentThread(new_thread);
 					this.args = args;
 					if (this.status == STATUS_INITIAL) {
 						this.status = STATUS_RUNNING;
@@ -308,11 +308,12 @@ public class LuaThread extends LuaValue {
 					} else {
 						getCondition().signal();
 					}
-					if (previous_thread != null)
+					if (previous_thread != null && previous_thread != new_thread
+						&& previous_thread.threadState.status == STATUS_RUNNING)
 						previous_thread.threadState.status = STATUS_NORMAL;
 					this.status = STATUS_RUNNING;
 					getCondition().await();
-					return (this.error != null? 
+					return (this.error != null?
 						LuaValue.varargsOf(LuaValue.FALSE, LuaValue.valueOf(this.error)):
 						LuaValue.varargsOf(LuaValue.TRUE, this.result));
 				} catch (InterruptedException ie) {
@@ -321,9 +322,7 @@ public class LuaThread extends LuaValue {
 					this.args = LuaValue.NONE;
 					this.result = LuaValue.NONE;
 					this.error = null;
-					state.currentThread = previous_thread;
-					if (previous_thread != null)
-						state.currentThread = previous_thread;
+					state.setCurrentThread(previous_thread);
 				}
 			} finally {
 				getLock().unlock();
@@ -369,10 +368,11 @@ public class LuaThread extends LuaValue {
 		}
 
 		public Varargs lua_resume_sync(LuaThread new_thread, Varargs args) {
-			LuaThread previous_thread = state.currentThread;
+			LuaThread previous_thread = state.getCurrentThread();
 			try {
-				state.currentThread = new_thread;
-				if (previous_thread != null)
+				state.setCurrentThread(new_thread);
+				if (previous_thread != null && previous_thread != new_thread
+					&& previous_thread.threadState.status == STATUS_RUNNING)
 					previous_thread.threadState.status = STATUS_NORMAL;
 				this.status = STATUS_RUNNING;
 
@@ -433,9 +433,7 @@ public class LuaThread extends LuaValue {
 					state.javaCallDepth = savedJavaCallDepth;
 				}
 			} finally {
-				state.currentThread = previous_thread;
-				if (previous_thread != null)
-					state.currentThread = previous_thread;
+				state.setCurrentThread(previous_thread);
 				this.args = LuaValue.NONE;
 				this.result = LuaValue.NONE;
 				this.error = null;

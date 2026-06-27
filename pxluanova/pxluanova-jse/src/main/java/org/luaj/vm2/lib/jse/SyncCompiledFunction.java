@@ -1,5 +1,6 @@
 package org.luaj.vm2.lib.jse;
 
+import org.luaj.vm2.LuaError;
 import org.luaj.vm2.LuaFunction;
 import org.luaj.vm2.LuaState;
 import org.luaj.vm2.LuaValue;
@@ -17,6 +18,9 @@ class SyncCompiledFunction extends VarArgFunction {
 	}
 
 	public Varargs invoke(Varargs args) {
+		if (state == null) {
+			throw new LuaError("nova.sync must be called on the main server thread,");
+		}
 		LuaState currentState = LuaState.current();
 		if (currentState == state) {
 			state.enterSyncCompiled();
@@ -30,6 +34,9 @@ class SyncCompiledFunction extends VarArgFunction {
 	}
 
 	public LuaValue call() {
+		if (state == null) {
+			throw new LuaError("nova.sync must be called on the main server thread,");
+		}
 		LuaState currentState = LuaState.current();
 		if (currentState == state) {
 			state.enterSyncCompiled();
@@ -43,6 +50,9 @@ class SyncCompiledFunction extends VarArgFunction {
 	}
 
 	public LuaValue call(LuaValue a) {
+		if (state == null) {
+			throw new LuaError("nova.sync must be called on the main server thread,");
+		}
 		LuaState currentState = LuaState.current();
 		if (currentState == state) {
 			state.enterSyncCompiled();
@@ -56,6 +66,9 @@ class SyncCompiledFunction extends VarArgFunction {
 	}
 
 	public LuaValue call(LuaValue a, LuaValue b) {
+		if (state == null) {
+			throw new LuaError("nova.sync must be called on the main server thread,");
+		}
 		LuaState currentState = LuaState.current();
 		if (currentState == state) {
 			state.enterSyncCompiled();
@@ -69,6 +82,9 @@ class SyncCompiledFunction extends VarArgFunction {
 	}
 
 	public LuaValue call(LuaValue a, LuaValue b, LuaValue c) {
+		if (state == null) {
+			throw new LuaError("nova.sync must be called on the main server thread,");
+		}
 		LuaState currentState = LuaState.current();
 		if (currentState == state) {
 			state.enterSyncCompiled();

@@ -21,7 +21,8 @@ class FrameInterpreter {
 						int cc = (ci >> 14) & 0x1ff;
 						Varargs ra = s.resumeArgs;
 						if (cc > 0) {
-							ra.copyto(frame.stack, ca, cc - 1);
+							// FIXME: idk it should be cc - 1 or just cc
+							ra.copyto(frame.stack, ca, cc);
 							frame.v = LuaValue.NONE;
 						} else {
 							frame.top = ca + ra.narg();
@@ -367,6 +368,15 @@ class FrameInterpreter {
 					frame.top - frame.v.narg() - (a + 1), frame.v);
 			{
 				LuaValue tfunc = stack[a];
+				if (tfunc == s.yieldSentinel) {
+					if (state != null && state.isInJavaCall())
+						throw new LuaError("attempt to yield across a C-call boundary");
+					s.result = tcArgs;
+					s.status = LuaThread.STATUS_SUSPENDED;
+					s.yieldRequested = true;
+					frame.pc--;
+					return false;
+				}
 				if (tfunc instanceof LuaClosure lc) {
 					LuaValue[] newStack = new LuaValue[lc.p.maxstacksize];
 					System.arraycopy(LuaValue.NILS, 0, newStack, 0, lc.p.maxstacksize);
@@ -392,6 +402,10 @@ class FrameInterpreter {
 					return true;
 				}
 				Varargs tcResult = tfunc.invoke(tcArgs);
+				if (s.yieldRequested && !s.yieldIsInterrupt) {
+					frame.pc--;
+					return false;
+				}
 				if (tcResult.isTailcall()) {
 					TailcallVarargs tv = (TailcallVarargs) tcResult;
 					tcResult = tv.eval();
