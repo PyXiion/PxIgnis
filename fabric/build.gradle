@@ -1,0 +1,73 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
+    id 'com.gradleup.shadow'
+}
+
+architectury {
+    platformSetupLoomIde()
+    fabric()
+}
+
+configurations {
+    common {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentFabric.extendsFrom common
+
+    shadowBundle {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+}
+
+loom {
+    runtimeOnlyLog4j = true
+}
+
+def buildTarget = rootProject.findProperty('targetVersion') ?: '1.21.11'
+def permApiVersion = buildTarget == '1.21.10' ? '0.5.0' : '0.6.1'
+
+dependencies {
+    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+    modImplementation "net.fabricmc:fabric-language-kotlin:1.13.11+kotlin.2.3.21"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
+    modImplementation("me.lucko:fabric-permissions-api:${permApiVersion}")
+    implementation "com.pxluanova:pxluanova-core:3.1.0"
+    implementation "com.pxluanova:pxluanova-jse:3.1.0"
+
+    common(project(path: ':common', configuration: 'namedElements')) { transitive = false }
+    shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
+
+    shadowBundle("com.pxluanova:pxluanova-core:3.1.0") { transitive = false }
+    shadowBundle("com.pxluanova:pxluanova-jse:3.1.0") { transitive = false }
+    shadowBundle("me.lucko:fabric-permissions-api:${permApiVersion}") { transitive = false }
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'minecraft_version', rootProject.minecraft_version
+    inputs.property 'loader_version', rootProject.fabric_loader_version
+
+    filesMatching('fabric.mod.json') {
+        expand version: inputs.properties.version,
+                minecraft_version: inputs.properties.minecraft_version,
+                loader_version: inputs.properties.loader_version
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.shadowBundle]
+    archiveClassifier = 'dev-shadow'
+    relocate 'org.luaj', 'ru.pyxiion.luanova'
+    relocate 'me.lucko.fabric.api.permissions', 'ru.pyxiion.lib.fabric.api.permissions'
+}
+
+remapJar {
+    inputFile.set shadowJar.archiveFile
+    archiveBaseName.set "PxIgnis"
+    archiveClassifier.set null
+    archiveVersion.set "${project.version}-fabric-${buildTarget}"
+}

@@ -1,17 +1,15 @@
 pluginManagement {
     repositories {
-        maven {
-            name = 'Fabric'
-            url = 'https://maven.fabricmc.net/'
-        }
+        maven { url = 'https://maven.fabricmc.net/' }
+        maven { url = 'https://maven.architectury.dev/' }
+        maven { url = 'https://files.minecraftforge.net/maven/' }
         gradlePluginPortal()
     }
-    plugins {
-        id 'org.jetbrains.kotlin.jvm' version '2.3.21'
-    }
-}
-plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
 }
 
+rootProject.name = 'pxrp'
+
+include 'common'
+include 'fabric'
+include 'neoforge'
 includeBuild 'pxluanova'

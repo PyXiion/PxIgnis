@@ -1,0 +1,29 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "LGPL-3.0"
+
+[[mods]]
+modId = "pxignis"
+version = "${version}"
+displayName = "PxIgnis"
+logoFile = "assets/pxrp/icon.png"
+credits = "Pyxiion"
+authors = "Pyxiion"
+description = '''
+Lua scripting API for Minecraft server
+'''
+
+[[dependencies.pxignis]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.21,1.22)"
+ordering = "NONE"
+side = "SERVER"
+
+[[dependencies.pxignis]]
+modId = "neoforge"
+mandatory = true
+versionRange = "[21,)"
+
+[[mixins]]
+config = "pxignis.mixins.json"
