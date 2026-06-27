@@ -1,0 +1,30 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
+}
+
+architectury {
+    common rootProject.enabled_platforms.split(',')
+}
+
+loom {
+    accessWidenerPath = file('src/main/resources/pxignis.classtweaker')
+}
+
+dependencies {
+    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+    implementation "com.pxluanova:pxluanova-core:3.1.0"
+    implementation "com.pxluanova:pxluanova-jse:3.1.0"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:${kotlin_version}"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+def buildTarget = rootProject.findProperty('targetVersion') ?: '1.21.11'
+sourceSets.main.kotlin.srcDirs = ["src/version-${buildTarget}/kotlin", "src/main/kotlin", "src/main/java"]

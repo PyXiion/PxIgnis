@@ -1,0 +1,14 @@
+classTweaker v1 official
+
+accessible method net/minecraft/world/entity/Display$TextDisplay getText ()Lnet/minecraft/network/chat/Component;
+accessible method net/minecraft/world/entity/Display$TextDisplay setText (Lnet/minecraft/network/chat/Component;)V
+accessible method net/minecraft/world/entity/Display$TextDisplay getLineWidth ()I
+accessible method net/minecraft/world/entity/Display$TextDisplay setLineWidth (I)V
+accessible method net/minecraft/world/entity/Display$TextDisplay getBackgroundColor ()I
+accessible method net/minecraft/world/entity/Display$TextDisplay setBackgroundColor (I)V
+accessible method net/minecraft/world/entity/Display$TextDisplay getTextOpacity ()B
+accessible method net/minecraft/world/entity/Display$TextDisplay setTextOpacity (B)V
+accessible method net/minecraft/world/entity/Display$TextDisplay getFlags ()B
+accessible method net/minecraft/world/entity/Display$TextDisplay setFlags (B)V
+accessible method net/minecraft/world/entity/Display getBillboardConstraints ()Lnet/minecraft/world/entity/Display$BillboardConstraints;
+accessible method net/minecraft/world/entity/Display setBillboardConstraints (Lnet/minecraft/world/entity/Display$BillboardConstraints;)V
