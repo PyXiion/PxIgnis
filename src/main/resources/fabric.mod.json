@@ -27,6 +27,12 @@
         "adapter": "kotlin",
         "value": "ru.pyxiion.ignis.PxIgnis"
       }
+    ],
+    "client": [
+      {
+        "adapter": "kotlin",
+        "value": "ru.pyxiion.ignis.client.PxIgnisClient"
+      }
     ]
   },
   "depends": {
