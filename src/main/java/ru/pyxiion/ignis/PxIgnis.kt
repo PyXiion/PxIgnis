@@ -11,7 +11,9 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.event.player.*
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.item.BlockItem
 import net.minecraft.registry.Registries
@@ -32,6 +34,11 @@ import ru.pyxiion.ignis.api.manager.SidebarManager
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
+import ru.pyxiion.ignis.network.RegionCapWarningPayload
+import ru.pyxiion.ignis.network.RegionInterestPayload
+import ru.pyxiion.ignis.network.RegionRemovePayload
+import ru.pyxiion.ignis.network.RegionSyncPayload
+import ru.pyxiion.ignis.network.RegionUpsertPayload
 import ru.pyxiion.ignis.storage.JsonBackend
 import ru.pyxiion.ignis.storage.StorageManager
 
@@ -50,6 +57,22 @@ class PxIgnis : ModInitializer {
 
     override fun onInitialize() {
         instance = this
+
+        PayloadTypeRegistry.playS2C().register(RegionSyncPayload.ID, RegionSyncPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(RegionUpsertPayload.ID, RegionUpsertPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(RegionRemovePayload.ID, RegionRemovePayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(RegionCapWarningPayload.ID, RegionCapWarningPayload.CODEC)
+        PayloadTypeRegistry.playC2S().register(RegionInterestPayload.ID, RegionInterestPayload.CODEC)
+
+        ServerPlayNetworking.registerGlobalReceiver(RegionInterestPayload.ID) { payload, ctx ->
+            val player = ctx.player()
+            if (!Compat.isAdmin(player)) {
+                logger.debug("rejected region-interest from non-admin {}", player.name.string)
+                return@registerGlobalReceiver
+            }
+            RegionManager.setOptedIn(player.uuid, payload.enabled)
+        }
+
         ServerLifecycleEvents.SERVER_STARTED.register(fun(server) {
             try {
                 val storagePath = FabricLoader.getInstance().configDir.resolve("ignis/storage")
@@ -84,6 +107,10 @@ class PxIgnis : ModInitializer {
             storageManager?.close()
         })
 
+        ServerLifecycleEvents.SERVER_STOPPED.register(fun(server) {
+            RegionManager.closeAll(server)
+        })
+
         ServerTickEvents.END_SERVER_TICK.register(fun(server) {
             if (::runtime.isInitialized) {
                 runtime.scheduler.tick()
@@ -93,6 +120,7 @@ class PxIgnis : ModInitializer {
                     em.tick()
                 }
                 RegionManager.tick()
+                RegionManager.tickClientSync(server)
             }
         })
 
@@ -144,6 +172,7 @@ class PxIgnis : ModInitializer {
             storageManager?.removePlayerData(handler.player.uuid.toString())
             SidebarManager.removeForPlayer(handler.player)
             MobAIManager.mobWrappers.remove(handler.player.uuid)
+            RegionManager.onPlayerLeft(handler.player.uuid)
         })
 
         ServerLivingEntityEvents.ALLOW_DEATH.register { entity, source, amount ->
