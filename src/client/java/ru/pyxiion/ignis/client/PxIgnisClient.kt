@@ -36,10 +36,10 @@ class PxIgnisClient : ClientModInitializer {
             )
         }
 
-        WorldRenderEvents.BEFORE_DEBUG_RENDER.register { _ ->
+        WorldRenderEvents.BEFORE_DEBUG_RENDER.register { ctx ->
             if (!ClientRegionRegistry.enabled) return@register
             runCatching {
-                ClientCompat.drawWireframeBoxes(ClientRegionRegistry.values())
+                ClientCompat.drawWireframeBoxes(ctx, ClientRegionRegistry.values())
             }.onFailure { logger.warn("region wireframe render failed: ${it.message}") }
         }
 

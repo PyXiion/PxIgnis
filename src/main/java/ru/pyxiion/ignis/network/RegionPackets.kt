@@ -36,13 +36,10 @@ private val regionEntryCodec: PacketCodec<PacketByteBuf, RegionEntry> = PacketCo
     ::RegionEntry
 )
 
-internal val REGIONS_ID: CustomPayload.Id<out CustomPayload> =
-    CustomPayload.Id<CustomPayload>(Identifier.of("pxignis", "regions"))
-
 data class RegionSyncPayload(val entries: List<RegionEntry>) : CustomPayload {
     companion object {
         val ID: CustomPayload.Id<RegionSyncPayload> =
-            CustomPayload.Id(Identifier.of("pxignis", "regions"))
+            CustomPayload.Id(Identifier.of("pxignis", "regions_sync"))
         val CODEC: PacketCodec<PacketByteBuf, RegionSyncPayload> =
             regionEntryCodec.collect(PacketCodecs.toList()).xmap(
                 ::RegionSyncPayload,
@@ -56,7 +53,7 @@ data class RegionSyncPayload(val entries: List<RegionEntry>) : CustomPayload {
 data class RegionUpsertPayload(val id: Int, val region: Box) : CustomPayload {
     companion object {
         val ID: CustomPayload.Id<RegionUpsertPayload> =
-            CustomPayload.Id(Identifier.of("pxignis", "regions"))
+            CustomPayload.Id(Identifier.of("pxignis", "regions_upsert"))
         val CODEC: PacketCodec<PacketByteBuf, RegionUpsertPayload> =
             PacketCodec.tuple(
                 PacketCodecs.INTEGER, RegionUpsertPayload::id,
@@ -71,7 +68,7 @@ data class RegionUpsertPayload(val id: Int, val region: Box) : CustomPayload {
 data class RegionRemovePayload(val id: Int) : CustomPayload {
     companion object {
         val ID: CustomPayload.Id<RegionRemovePayload> =
-            CustomPayload.Id(Identifier.of("pxignis", "regions"))
+            CustomPayload.Id(Identifier.of("pxignis", "regions_remove"))
         val CODEC: PacketCodec<PacketByteBuf, RegionRemovePayload> =
             PacketCodec.tuple(
                 PacketCodecs.INTEGER, RegionRemovePayload::id,
@@ -85,7 +82,7 @@ data class RegionRemovePayload(val id: Int) : CustomPayload {
 data class RegionCapWarningPayload(val cap: Int) : CustomPayload {
     companion object {
         val ID: CustomPayload.Id<RegionCapWarningPayload> =
-            CustomPayload.Id(Identifier.of("pxignis", "regions"))
+            CustomPayload.Id(Identifier.of("pxignis", "regions_cap_warning"))
         val CODEC: PacketCodec<PacketByteBuf, RegionCapWarningPayload> =
             PacketCodec.tuple(
                 PacketCodecs.INTEGER, RegionCapWarningPayload::cap,
@@ -99,7 +96,7 @@ data class RegionCapWarningPayload(val cap: Int) : CustomPayload {
 data class RegionInterestPayload(val enabled: Boolean) : CustomPayload {
     companion object {
         val ID: CustomPayload.Id<RegionInterestPayload> =
-            CustomPayload.Id(Identifier.of("pxignis", "regions"))
+            CustomPayload.Id(Identifier.of("pxignis", "regions_interest"))
         val CODEC: PacketCodec<PacketByteBuf, RegionInterestPayload> =
             PacketCodec.tuple(
                 PacketCodecs.BOOLEAN, RegionInterestPayload::enabled,
