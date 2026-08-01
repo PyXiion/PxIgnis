@@ -3,7 +3,6 @@ package ru.pyxiion.ignis
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -28,9 +27,8 @@ class AsyncLibTest {
         val executor = Executors.newSingleThreadExecutor()
         val latch = CountDownLatch(1)
         val scheduler = Scheduler { state }
-        val mc = LuaTable()
-        AsyncLib(executor, state, scheduler).install(mc)
-        state.globals.set("mc", mc)
+        val asyncLib = AsyncLib(executor, state, scheduler)
+        state.globals.set("async", asyncLib.buildModule())
         state.globals.set("block", luaFunctionNil { _ ->
             try {
                 latch.await()
@@ -43,9 +41,6 @@ class AsyncLibTest {
         return Env(state, executor, latch)
     }
 
-    // Runs a script in a coroutine. If the coroutine yields (async task pending),
-    // releases the latch and waits for the executor to resume it. Returns the
-    // `_result` global the script set before completing.
     private fun runScript(env: Env, script: String): LuaValue {
         val func = env.state.load(script, "test").checkfunction()
         val co = LuaThread(env.state, func)
@@ -75,30 +70,20 @@ class AsyncLibTest {
         }
     }
 
-    private fun LuaTable.pair(): Pair<Boolean, LuaValue> = get(1).toboolean() to get(2)
+    // ── Task: done ─────────────────────────────────────────────────
 
     @Test
-    fun `task done is false while pending and true when complete`() {
+    fun `task done is false while pending`() {
         val env = newEnv()
         try {
             val pending = runScript(
                 env,
                 """
-                local t = mc.task(function() block() return 42 end)
+                local t = async.task(function() block() return 42 end)
                 _result = { t.done }
                 """.trimIndent()
             ).checktable()
             assertFalse(pending.get(1).toboolean())
-
-            val done = runScript(
-                env,
-                """
-                local t = mc.task(function() return 42 end)
-                while not t.done do end
-                _result = { t.done }
-                """.trimIndent()
-            ).checktable()
-            assertTrue(done.get(1).toboolean())
         } finally {
             env.executor.shutdown()
             env.latch.countDown()
@@ -106,64 +91,24 @@ class AsyncLibTest {
     }
 
     @Test
-    fun `pwait sync returns ok and result`() {
-        val result = newEnvAndRun(
+    fun `task done is true when complete`() {
+        val done = newEnvAndRun(
             """
-            local t = mc.task(function() return 42 end)
+            local t = async.task(function() return 42 end)
             while not t.done do end
-            local ok, r = t:pwait()
-            _result = { ok, r }
+            _result = { t.done }
             """.trimIndent()
         )
-        assertTrue(result.get(1).toboolean())
-        assertEquals(42, result.get(2).toint())
+        assertTrue(done.get(1).toboolean())
     }
 
-    @Test
-    fun `pwait async yields and returns ok and result`() {
-        val result = newEnvAndRun(
-            """
-            local t = mc.task(function() block() return 42 end)
-            local ok, r = t:pwait()
-            _result = { ok, r }
-            """.trimIndent()
-        )
-        assertTrue(result.get(1).toboolean())
-        assertEquals(42, result.get(2).toint())
-    }
+    // ── Task: wait ─────────────────────────────────────────────────
 
     @Test
-    fun `pwait sync returns false and error message`() {
+    fun `task wait sync returns raw result`() {
         val result = newEnvAndRun(
             """
-            local t = mc.task(function() error("boom") end)
-            while not t.done do end
-            local ok, r = t:pwait()
-            _result = { ok, r }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
-    }
-
-    @Test
-    fun `pwait async returns false and error message`() {
-        val result = newEnvAndRun(
-            """
-            local t = mc.task(function() block() error("boom") end)
-            local ok, r = t:pwait()
-            _result = { ok, r }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
-    }
-
-    @Test
-    fun `wait sync returns raw result`() {
-        val result = newEnvAndRun(
-            """
-            local t = mc.task(function() return 42 end)
+            local t = async.task(function() return 42 end)
             while not t.done do end
             local r = t:wait()
             _result = { r }
@@ -173,10 +118,10 @@ class AsyncLibTest {
     }
 
     @Test
-    fun `wait async yields and returns raw result`() {
+    fun `task wait async yields and returns raw result`() {
         val result = newEnvAndRun(
             """
-            local t = mc.task(function() block() return 42 end)
+            local t = async.task(function() block() return 42 end)
             local r = t:wait()
             _result = { r }
             """.trimIndent()
@@ -185,10 +130,10 @@ class AsyncLibTest {
     }
 
     @Test
-    fun `wait sync throws on task error`() {
+    fun `task wait sync throws on error`() {
         val result = newEnvAndRun(
             """
-            local t = mc.task(function() error("boom") end)
+            local t = async.task(function() error("boom") end)
             while not t.done do end
             local ok, err = pcall(function() return t:wait() end)
             _result = { ok, err }
@@ -199,10 +144,10 @@ class AsyncLibTest {
     }
 
     @Test
-    fun `wait async throws on task error`() {
+    fun `task wait async throws on error`() {
         val result = newEnvAndRun(
             """
-            local t = mc.task(function() block() error("boom") end)
+            local t = async.task(function() block() error("boom") end)
             local ok, err = pcall(function() return t:wait() end)
             _result = { ok, err }
             """.trimIndent()
@@ -210,12 +155,70 @@ class AsyncLibTest {
         assertFalse(result.get(1).toboolean())
         assertTrue(result.get(2).tojstring().contains("boom"))
     }
+
+    // ── Task: try ──────────────────────────────────────────────────
+
+    @Test
+    fun `task try sync returns ok and result`() {
+        val result = newEnvAndRun(
+            """
+            local t = async.task(function() return 42 end)
+            while not t.done do end
+            local ok, r = t:try()
+            _result = { ok, r }
+            """.trimIndent()
+        )
+        assertTrue(result.get(1).toboolean())
+        assertEquals(42, result.get(2).toint())
+    }
+
+    @Test
+    fun `task try async yields and returns ok and result`() {
+        val result = newEnvAndRun(
+            """
+            local t = async.task(function() block() return 42 end)
+            local ok, r = t:try()
+            _result = { ok, r }
+            """.trimIndent()
+        )
+        assertTrue(result.get(1).toboolean())
+        assertEquals(42, result.get(2).toint())
+    }
+
+    @Test
+    fun `task try sync returns false and error message`() {
+        val result = newEnvAndRun(
+            """
+            local t = async.task(function() error("boom") end)
+            while not t.done do end
+            local ok, r = t:try()
+            _result = { ok, r }
+            """.trimIndent()
+        )
+        assertFalse(result.get(1).toboolean())
+        assertTrue(result.get(2).tojstring().contains("boom"))
+    }
+
+    @Test
+    fun `task try async returns false and error message`() {
+        val result = newEnvAndRun(
+            """
+            local t = async.task(function() block() error("boom") end)
+            local ok, r = t:try()
+            _result = { ok, r }
+            """.trimIndent()
+        )
+        assertFalse(result.get(1).toboolean())
+        assertTrue(result.get(2).tojstring().contains("boom"))
+    }
+
+    // ── Task: rejects ──────────────────────────────────────────────
 
     @Test
     fun `task rejects non-function argument`() {
         val result = newEnvAndRun(
             """
-            local ok, err = pcall(mc.task, 42)
+            local ok, err = pcall(async.task, 42)
             _result = { ok, err }
             """.trimIndent()
         )
@@ -224,10 +227,10 @@ class AsyncLibTest {
     }
 
     @Test
-    fun `task pwait rejects non-task self`() {
+    fun `task wait rejects non-task self`() {
         val result = newEnvAndRun(
             """
-            local ok, err = pcall(function() return ("nope"):pwait() end)
+            local ok, err = pcall(function() return ("nope"):wait() end)
             _result = { ok, err }
             """.trimIndent()
         )
@@ -235,44 +238,129 @@ class AsyncLibTest {
     }
 
     @Test
-    fun `prun yields and returns ok and result`() {
+    fun `task try rejects non-task self`() {
         val result = newEnvAndRun(
             """
-            local ok, r = mc.prun(function() block() return 7 end)
-            _result = { ok, r }
+            local ok, err = pcall(function() return ("nope"):try() end)
+            _result = { ok, err }
+            """.trimIndent()
+        )
+        assertFalse(result.get(1).toboolean())
+    }
+
+    // ── Promise ────────────────────────────────────────────────────
+
+    @Test
+    fun `promise resolve and wait`() {
+        val result = newEnvAndRun(
+            """
+            local p = async.promise()
+            p:resolve(42)
+            local r = p:wait()
+            _result = { r }
+            """.trimIndent()
+        )
+        assertEquals(42, result.get(1).toint())
+    }
+
+    @Test
+    fun `promise error and try`() {
+        val result = newEnvAndRun(
+            """
+            local p = async.promise()
+            p:error("boom")
+            local ok, msg = p:try()
+            _result = { ok, msg }
+            """.trimIndent()
+        )
+        assertFalse(result.get(1).toboolean())
+        assertTrue(result.get(2).tojstring().contains("boom"))
+    }
+
+    @Test
+    fun `promise resolve returns true`() {
+        val result = newEnvAndRun(
+            """
+            local p = async.promise()
+            local ok = p:resolve(42)
+            _result = { ok }
             """.trimIndent()
         )
         assertTrue(result.get(1).toboolean())
-        assertEquals(7, result.get(2).toint())
     }
 
     @Test
-    fun `run sync returns raw result`() {
+    fun `promise double resolve returns false`() {
         val result = newEnvAndRun(
             """
-            local r = mc.run(function() return 42 end)
-            _result = { r }
+            local p = async.promise()
+            p:resolve(42)
+            local ok = p:resolve(99)
+            _result = { ok }
             """.trimIndent()
         )
-        assertEquals(42, result.get(1).toint())
+        assertFalse(result.get(1).toboolean())
     }
 
     @Test
-    fun `run async yields and returns raw result`() {
+    fun `promise state transitions`() {
         val result = newEnvAndRun(
             """
-            local r = mc.run(function() block() return 42 end)
-            _result = { r }
+            local p = async.promise()
+            local s1 = p.state
+            p:resolve(42)
+            local s2 = p.state
+            _result = { s1, s2 }
             """.trimIndent()
         )
-        assertEquals(42, result.get(1).toint())
+        assertEquals("pending", result.get(1).tojstring())
+        assertEquals("resolved", result.get(2).tojstring())
     }
 
     @Test
-    fun `run sync throws on error`() {
+    fun `promise done property`() {
         val result = newEnvAndRun(
             """
-            local ok, err = pcall(function() return mc.run(function() error("boom") end) end)
+            local p = async.promise()
+            local d1 = p.done
+            p:resolve(42)
+            local d2 = p.done
+            _result = { d1, d2 }
+            """.trimIndent()
+        )
+        assertFalse(result.get(1).toboolean())
+        assertTrue(result.get(2).toboolean())
+    }
+
+    // ── all / allSettled ───────────────────────────────────────────
+
+    @Test
+    fun `all returns results for all tasks`() {
+        val result = newEnvAndRun(
+            """
+            local t1 = async.task(function() return 1 end)
+            local t2 = async.task(function() return 2 end)
+            while not t1.done do end
+            while not t2.done do end
+            local results = async.all(t1, t2)
+            _result = { results[1].ok, results[1].value, results[2].ok, results[2].value }
+            """.trimIndent()
+        )
+        assertTrue(result.get(1).toboolean())
+        assertEquals(1, result.get(2).toint())
+        assertTrue(result.get(3).toboolean())
+        assertEquals(2, result.get(4).toint())
+    }
+
+    @Test
+    fun `all rejects when any task fails`() {
+        val result = newEnvAndRun(
+            """
+            local t1 = async.task(function() return 1 end)
+            local t2 = async.task(function() error("boom") end)
+            while not t1.done do end
+            while not t2.done do end
+            local ok, err = pcall(function() return async.all(t1, t2) end)
             _result = { ok, err }
             """.trimIndent()
         )
@@ -281,14 +369,32 @@ class AsyncLibTest {
     }
 
     @Test
-    fun `run async throws on error`() {
+    fun `allSettled returns results for all tasks`() {
         val result = newEnvAndRun(
             """
-            local ok, err = pcall(function() return mc.run(function() block() error("boom") end) end)
-            _result = { ok, err }
+            local t1 = async.task(function() return 1 end)
+            local t2 = async.task(function() error("boom") end)
+            while not t1.done do end
+            while not t2.done do end
+            local results = async.allSettled(t1, t2)
+            _result = { results[1].ok, results[1].value, results[2].ok, results[2].error }
             """.trimIndent()
         )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
+        assertTrue(result.get(1).toboolean())
+        assertEquals(1, result.get(2).toint())
+        assertFalse(result.get(3).toboolean())
+        assertTrue(result.get(4).tojstring().contains("boom"))
+    }
+
+    @Test
+    fun `all with empty input returns empty table`() {
+        val result = newEnvAndRun(
+            """
+            local results = async.all()
+            _result = { results }
+            """.trimIndent()
+        )
+        assertTrue(result.get(1).istable())
+        assertEquals(0, result.get(1).checktable().length().toInt())
     }
 }

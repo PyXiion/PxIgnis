@@ -7,6 +7,51 @@ description: Release history for PxIgnis.
 
 ## Unreleased — Async coroutines
 
+### Breaking
+
+- **`mc.task`, `mc.run`, `mc.prun`, `mc.sleep`, `mc.fetch`** removed from `mc` table. Use `require "async"` instead.
+
+### New API
+
+#### `require "async"` — coroutine-based async module
+
+| API                          | Description                                                                                 |
+|------------------------------|---------------------------------------------------------------------------------------------|
+| `async.task(fn, ...)`        | Runs `fn(...)` as a background coroutine; returns a task (awaitable)                       |
+| `async.promise()`            | Creates a manually-settleable promise                                                       |
+| `task:wait()`                | Yields until done; returns the raw result, throws `LuaError` on task error                  |
+| `task:try()`                 | Yields until done; returns `true, result...` or `false, error` (pcall-like)                 |
+| `task.done`                  | `true` once the task/promise has settled                                                    |
+| `task.state`                 | `"pending"`, `"resolved"`, or `"rejected"`                                                  |
+| `promise:resolve(...)`       | Settles the promise with a value; returns `true` if it was the first settlement             |
+| `promise:error(msg)`         | Rejects the promise; returns `true` if it was the first settlement                          |
+| `async.all(t1, t2, ...)`     | Waits for all tasks; throws the first error after all settle                                |
+| `async.allSettled(t1, ...)`  | Waits for all tasks; never throws, returns `{ ok, value/error }` for each                   |
+| `async.sleep(ticks)`         | Yields the coroutine for N ticks (20 = 1s)                                                  |
+| `async.fetch(url)`           | HTTP request, yields the coroutine; returns response table                                  |
+| `async.fetch {...}`          | Full request with `{ url, method, headers, body, json, timeout }` options                   |
+
+Tasks run as proper Lua coroutines — they can call `async.sleep`, `async.fetch`, and `task:wait()` internally.
+
+```lua
+local async = require "async"
+
+-- Parallel fetches
+local t1 = async.task(function() return async.fetch("https://api.example.com/a") end)
+local t2 = async.task(function() return async.fetch("https://api.example.com/b") end)
+local r1, r2 = t1:wait(), t2:wait()
+
+-- Error handling
+local t = async.task(function() error("boom") end)
+local ok, err = t:try()
+if not ok then print("failed:", err) end
+
+-- Promises
+local p = async.promise()
+async.schedule(20, function() p:resolve("done") end)
+print(p:wait())
+```
+
 ### Internal
 
 - **Async suspend bridge**: `luaSuspendFunction` / `luaSuspendFunctionNil` let Lua coroutines call Kotlin `suspend`

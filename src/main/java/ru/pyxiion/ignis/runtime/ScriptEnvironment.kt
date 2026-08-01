@@ -77,6 +77,9 @@ class ScriptEnvironment {
         _state = state
         globals.set("mc", api.toTable())
 
+        val asyncModule = api.asyncLib.buildModule()
+        globals.get("package").checktable().get("loaded").checktable().set("async", asyncModule)
+
         return state
     }
 }

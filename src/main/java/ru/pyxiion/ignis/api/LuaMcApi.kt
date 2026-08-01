@@ -39,6 +39,7 @@ class LuaMcApi(
     private val modScope: CoroutineScope,
 ) {
     val scheduler = Scheduler(stateProvider)
+    val asyncLib = AsyncLib(Executor { r -> server.execute(r) }, stateProvider(), scheduler)
     private val playerCache = mutableMapOf<UUID, LuaValue>()
 
     fun suspendFunction(block: suspend (Varargs) -> Varargs): LuaFunction =
@@ -452,8 +453,6 @@ class LuaMcApi(
             val stack = ItemBuilder.fromLua(args)
             ItemStackWrap.wrap(stack)
         })
-
-        AsyncLib(Executor { r -> server.execute(r) }, stateProvider(), scheduler).install(table)
 
         table.setmetatable(mcMeta)
         return table
