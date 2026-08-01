@@ -1,6 +1,7 @@
 package ru.pyxiion.ignis.api
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException
+import kotlinx.coroutines.CoroutineScope
 import net.minecraft.entity.Entity
 import net.minecraft.inventory.SimpleInventory
 import net.minecraft.nbt.NbtIo
@@ -28,19 +29,54 @@ import ru.pyxiion.ignis.api.wrappertoLuaValue.PlayerListWrapper
 import ru.pyxiion.ignis.storage.StorageManager
 import java.nio.file.Path
 import java.util.*
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class LuaMcApi(
     private val server: MinecraftServer,
     private val storage: StorageManager,
     private val stateProvider: () -> LuaState,
     private val eventBus: EventBus,
+    private val modScope: CoroutineScope,
 ) {
     val scheduler = Scheduler(stateProvider)
+
+    private val asyncExecutors = AsyncExecutorRegistry()
+    private val asyncThreadPool: ExecutorService = Executors.newFixedThreadPool(
+        Runtime.getRuntime().availableProcessors().coerceIn(2, 8),
+        Thread.ofPlatform().name("PxIgnis-async-", 0).factory()
+    )
+
+    init {
+        asyncExecutors.register(
+            AsyncExecutor(
+                name = "main",
+                dispatch = { runnable -> server.execute(runnable) },
+            )
+        )
+        asyncExecutors.register(
+            AsyncExecutor(
+                name = "threadpool",
+                dispatch = { runnable -> asyncThreadPool.execute(runnable) },
+                shutdown = { asyncThreadPool.shutdown() },
+            )
+        )
+    }
+
+    val asyncLib = AsyncLib(asyncExecutors, stateProvider(), scheduler)
+
+    fun shutdownAsync() {
+        asyncExecutors.shutdown()
+    }
     private val playerCache = mutableMapOf<UUID, LuaValue>()
+
+    fun suspendFunction(block: suspend (Varargs) -> Varargs): LuaFunction =
+        luaSuspendFunction(modScope, block)
 
     init {
         EntityWrap.sharedPlayerCache = playerCache
         EntityWrap.sharedTickProvider = { scheduler.currentTick }
+        RegionManager.sharedStateProvider = stateProvider
     }
 
     fun invalidatePlayer(uuid: UUID) {
@@ -307,6 +343,13 @@ class LuaMcApi(
     fun toTable(): LuaTable {
         MetaTableRegistry.init()
 
+        val state = stateProvider()
+        val mainExecutor = asyncExecutors.resolve("main")
+        state.getMainThread().executionContext = mainExecutor
+        state.getMainThread().resumeHandler = LuaThread.ResumeHandler { thread: LuaThread, args: Varargs ->
+            mainExecutor.dispatch { thread.resumeOrLog(args, "async callback") }
+        }
+
         val mcMeta = LuaTable()
         mcMeta.rawset("__index", luaFunction { _, key ->
             val k = key.checkjstring()
@@ -440,8 +483,6 @@ class LuaMcApi(
             val stack = ItemBuilder.fromLua(args)
             ItemStackWrap.wrap(stack)
         })
-
-        AsyncLib(server, stateProvider(), scheduler).install(table)
 
         table.setmetatable(mcMeta)
         return table

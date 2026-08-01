@@ -37,9 +37,14 @@ base {
 loom {
     accessWidenerPath = file("src/main/resources/pxignis.accesswidener")
 
+    splitEnvironmentSourceSets()
+
     mods {
         "pxignis" {
             sourceSet sourceSets.main
+        }
+        "pxignis" {
+            sourceSet sourceSets.client
         }
     }
 
@@ -83,7 +88,8 @@ test {
 
 shadowJar {
     configurations = [project.configurations.shadow]
-    minimize()
+    from sourceSets.main.output
+    from sourceSets.client.output
 
     relocate 'org.luaj', 'ru.pyxiion.luanova'
     relocate 'me.lucko.fabric.api.permissions', 'ru.pyxiion.lib.fabric.api.permissions'
@@ -97,8 +103,14 @@ remapJar {
     archiveClassifier.set null
 }
 
-// Version-specific source overrides (src/version-${buildTarget}/kotlin takes priority)
-sourceSets.main.kotlin.srcDirs = ["src/version-${buildTarget}/kotlin", "src/main/java"]
+sourceSets {
+    main {
+        kotlin.srcDirs = ["src/version-${buildTarget}/kotlin", "src/main/java"]
+    }
+    client {
+        kotlin.srcDirs = ["src/version-${buildTarget}/client-kotlin", "src/client/java"]
+    }
+}
 
 processResources {
     inputs.property "version", project.version

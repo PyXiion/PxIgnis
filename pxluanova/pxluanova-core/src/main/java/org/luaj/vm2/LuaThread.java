@@ -86,6 +86,13 @@ public class LuaThread extends LuaValue {
 		Thread newThread(Runnable target, String name);
 	}
 
+	/** Callback used to resume a coroutine after an asynchronous operation completes.
+	 * The runtime sets this on the main thread; child coroutines inherit it. */
+	@FunctionalInterface
+	public interface ResumeHandler {
+		void resume(LuaThread thread, Varargs args);
+	}
+
 	public static final ThreadFactory VIRTUAL_THREAD_FACTORY =
 		(target, name) -> Thread.ofVirtual().name(name).unstarted(target);
 
@@ -126,6 +133,15 @@ public class LuaThread extends LuaValue {
 	/** Error message handler for this thread, if any.  */
 	public LuaValue errorfunc;
 
+	/** Callback used to resume this coroutine after an asynchronous operation
+	 * completes. Inherited from the parent (or main) thread at construction time. */
+	public volatile ResumeHandler resumeHandler;
+
+	/** Generic execution context for this thread. Opaque to the core runtime;
+	 * the host application may store any object here (e.g. an executor).
+	 * Inherited from the parent (or main) thread at construction time. */
+	public volatile Object executionContext;
+
 	Throwable lastError = null;
 
 	/** Whether this thread runs synchronously on the calling thread.
@@ -150,7 +166,29 @@ public class LuaThread extends LuaValue {
 		threadState = new State(state, this, func);
 		this.state = state;
 		this.isSync = true; // may support async in future
+		this.resumeHandler = resolveResumeHandler(state);
+		this.executionContext = resolveExecutionContext(state);
 		inheritHook();
+	}
+
+	private ResumeHandler resolveResumeHandler(LuaState state) {
+		LuaThread parent = state.getCurrentThread();
+		if (parent != null && parent.resumeHandler != null)
+			return parent.resumeHandler;
+		LuaThread main = state.getMainThread();
+		if (main != null && main.resumeHandler != null)
+			return main.resumeHandler;
+		return null;
+	}
+
+	private Object resolveExecutionContext(LuaState state) {
+		LuaThread parent = state.getCurrentThread();
+		if (parent != null && parent.executionContext != null)
+			return parent.executionContext;
+		LuaThread main = state.getMainThread();
+		if (main != null && main.executionContext != null)
+			return main.executionContext;
+		return null;
 	}
 
 	private void inheritHook() {
@@ -232,14 +270,18 @@ public class LuaThread extends LuaValue {
 			return condition;
 		}
 		Varargs args = LuaValue.NONE;
-		Varargs result = LuaValue.NONE;
+		public Varargs result = LuaValue.NONE;
 		String error = null;
 
 		Deque<LuaFrame> frameStack = new ArrayDeque<>();
 		LuaValue yieldSentinel;
 		Varargs resumeArgs = LuaValue.NONE;
-		boolean yieldRequested;
-		boolean yieldIsInterrupt;
+		public boolean yieldRequested;
+		public boolean yieldIsInterrupt;
+
+		public boolean isYieldPending() {
+			return yieldRequested && !yieldIsInterrupt;
+		}
 
 		/** Depth of sync-compiled (nova.sync) calls on this thread.
 		 *  Non-zero means yielding is prohibited. */
@@ -294,9 +336,9 @@ public class LuaThread extends LuaValue {
 		public Varargs lua_resume(LuaThread new_thread, Varargs args) {
 			getLock().lock();
 			try {
-				LuaThread previous_thread = state.currentThread;
+				LuaThread previous_thread = state.getCurrentThread();
 				try {
-					state.currentThread = new_thread;
+					state.setCurrentThread(new_thread);
 					this.args = args;
 					if (this.status == STATUS_INITIAL) {
 						this.status = STATUS_RUNNING;
@@ -308,11 +350,12 @@ public class LuaThread extends LuaValue {
 					} else {
 						getCondition().signal();
 					}
-					if (previous_thread != null)
+					if (previous_thread != null && previous_thread != new_thread
+						&& previous_thread.threadState.status == STATUS_RUNNING)
 						previous_thread.threadState.status = STATUS_NORMAL;
 					this.status = STATUS_RUNNING;
 					getCondition().await();
-					return (this.error != null? 
+					return (this.error != null?
 						LuaValue.varargsOf(LuaValue.FALSE, LuaValue.valueOf(this.error)):
 						LuaValue.varargsOf(LuaValue.TRUE, this.result));
 				} catch (InterruptedException ie) {
@@ -321,9 +364,7 @@ public class LuaThread extends LuaValue {
 					this.args = LuaValue.NONE;
 					this.result = LuaValue.NONE;
 					this.error = null;
-					state.currentThread = previous_thread;
-					if (previous_thread != null)
-						state.currentThread = previous_thread;
+					state.setCurrentThread(previous_thread);
 				}
 			} finally {
 				getLock().unlock();
@@ -369,10 +410,13 @@ public class LuaThread extends LuaValue {
 		}
 
 		public Varargs lua_resume_sync(LuaThread new_thread, Varargs args) {
-			LuaThread previous_thread = state.currentThread;
+			LuaState previousState = LuaState.current();
+			LuaThread previous_thread = state.getCurrentThread();
 			try {
-				state.currentThread = new_thread;
-				if (previous_thread != null)
+				LuaState.setCurrent(state);
+				state.setCurrentThread(new_thread);
+				if (previous_thread != null && previous_thread != new_thread
+					&& previous_thread.threadState.status == STATUS_RUNNING)
 					previous_thread.threadState.status = STATUS_NORMAL;
 				this.status = STATUS_RUNNING;
 
@@ -433,9 +477,8 @@ public class LuaThread extends LuaValue {
 					state.javaCallDepth = savedJavaCallDepth;
 				}
 			} finally {
-				state.currentThread = previous_thread;
-				if (previous_thread != null)
-					state.currentThread = previous_thread;
+				state.setCurrentThread(previous_thread);
+				LuaState.setCurrent(previousState);
 				this.args = LuaValue.NONE;
 				this.result = LuaValue.NONE;
 				this.error = null;

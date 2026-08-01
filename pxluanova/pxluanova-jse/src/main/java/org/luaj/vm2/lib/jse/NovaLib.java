@@ -27,6 +27,9 @@ public class NovaLib extends TwoArgFunction {
 				throw new LuaError("nova.sync: expected function (LuaClosure), got " + arg.typename());
 			}
 			LuaState state = LuaState.current();
+			if (state == null) {
+				throw new LuaError("nova.sync must be called on the main server thread,");
+			}
 			LuaFunction compiled = compiler.compile(closure);
 			return new SyncCompiledFunction(state, compiled);
 		}

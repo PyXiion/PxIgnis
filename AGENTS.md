@@ -24,14 +24,10 @@ commit and tag.
 Two MC versions (`-PtargetVersion=1.21.10` / `1.21.11`); version-specific code lives in `src/version-*/kotlin/`.
 CI: `.github/workflows/build.yml` — both versions on push/PR to `main`; auto-publishes to Modrinth on tag push.
 
-## Testing quirks
+## Testing quirks → see `agent_docs/testing.md`
 
-`src/test/kotlin/ru/pyxiion/ignis/` — JUnit 5 via `kotlin-test-junit5`. Pure logic, no MC runtime.
-
-- `BrigadierTreeTest` reflects `CommandNode.children` field directly — `getChildren()` returns `Collection`, not `Map`.
-  Use `childrenField.get(node) as Map<*, *>`.
-- `MetaTableRegistryTest` must NOT call `MetaTableRegistry.init()` — that triggers MC bootstrap and crashes. Tests read
-  pre-existing metatables directly.
+JUnit 5 via `kotlin-test-junit5`. Pure logic, no MC runtime. Two tests have quirks: `BrigadierTreeTest` (reflection on
+`CommandNode.children`) and `MetaTableRegistryTest` (must NOT call `init()`).
 
 ## Conventions & gotchas
 
@@ -46,24 +42,26 @@ CI: `.github/workflows/build.yml` — both versions on push/PR to `main`; auto-p
 - Per-instance wrapper state (e.g. `WorldWrap`'s `InstanceData` with `playerCache` + `tickProvider`) lives on
   `__pxrp_data` userdata, not on Kotlin `companion object` fields. The shared `BUILT` metatable template on
   `companion object` IS the right place for shared/constant data — it must survive reload.
-- `mc.sleep(ticks)` / `mc.fetch(url)` coroutine-yielding async is NOT available in event handlers; use `mc.schedule(0, fn)`.
+- EventBus runs `LuaClosure` handlers through a `LuaThread` (`EventBus.kt` `invokeCallback`), so coroutine-yielding
+  async (`mc.sleep`/`mc.fetch`) and suspend functions work inside event handlers — they did not before.
+- `luaSuspendFunction(scope, block)` / `luaSuspendFunctionNil` (`Utils.kt`) return Lua functions that yield and resume
+  the coroutine when the suspend block completes. Requirements: must be called inside a coroutine (not main thread) and
+  the thread must have a `LuaThread.resumeHandler`. The main thread handler is set in `LuaMcApi.init`. `future.handle`
+  must be registered BEFORE `scope.launch` (fast-completion race). Design rationale: `docs/async-suspend-bridge.md`.
+- `EventBus` requires a `stateProvider: () -> LuaState?` for `LuaClosure` handlers; without it they throw. Regions use
+  `RegionManager.sharedStateProvider` (set in `LuaMcApi.init`).
 
 ## Lua environment → see `agent_docs/lua.md`
 
 Loaded libs, `package.path`, globals, lambda syntax, scheduler tick, built-in `require` libs (`format`, `simple`,
 `chestgui`).
 
-## API surface (site reference)
+## Design docs → see `docs/`
 
-When writing scripts, prefer linking to docs over source code.
-When updating the API, always ask user if he wants to update the documentation (site) & lua-types (<project>/lua-types/*.lua).
+Changelog (`site/src/content/docs/changelog.md`) says WHAT changed; `docs/` (e.g. `async-suspend-bridge.md`) documents
+WHY — design decisions, tradeoffs, deferred work. Point there before re-deriving rationale.
 
-| Topic                     | File                                                                                             |
-|---------------------------|--------------------------------------------------------------------------------------------------|
-| All events (mc.on)        | [`PxIgnis.kt`](src/main/java/ru/pyxiion/ignis/PxIgnis.kt) (also `/reference/events` in site docs) |
-| mc.\* API                 | [`LuaMcApi.kt`](src/main/java/ru/pyxiion/ignis/api/LuaMcApi.kt)                                  |
-| register() syntax + types | [`CommandSyntax.kt`](src/main/java/ru/pyxiion/ignis/commands/CommandSyntax.kt)                   |
-| **Full docs**             | **ignis.pyxiion.ru**                                                 |
+## API surface → see `agent_docs/api.md`
 
-`register("syntax", function(ctx))` does NOT have `ctx.args`. It uses positional args.
-For `register("cmd <arg1:word> <arg2:player>", handler)` handler is `(ctx, arg1, arg2)`.
+Topics: all events (`mc.on`), `mc.*` API, `register()` syntax + types. `register("syntax", function(ctx))` does NOT
+have `ctx.args` — it uses positional args.

@@ -256,4 +256,68 @@ public class SyncCoroutineTest extends TestCase {
 		assertTrue(result.arg1().toboolean());
 		assertEquals(10, result.arg(2).toint());
 	}
+
+	public void testPcallYieldPropagates() {
+		LuaValue func = state.load(
+			"local ok, val = pcall(function() coroutine.yield('from-yield') end)\n" +
+			"return ok, val", "test").checkfunction();
+		LuaThread co = new LuaThread(state, func);
+		Varargs first = co.resume(LuaValue.NONE);
+		assertTrue(first.arg1().toboolean());
+		assertEquals("from-yield", first.arg(2).tojstring());
+		assertEquals("suspended", co.getStatus());
+		Varargs second = co.resume(LuaValue.NONE);
+		assertTrue(second.arg1().toboolean());
+		assertTrue(second.arg(2).toboolean());
+		assertEquals("from-yield", second.arg(3).tojstring());
+		assertEquals("dead", co.getStatus());
+	}
+
+	public void testPcallYieldMultipleValues() {
+		LuaValue func = state.load(
+			"local ok, a, b, c = pcall(function() coroutine.yield(1, 2, 3) end)\n" +
+			"return ok, a, b, c", "test").checkfunction();
+		LuaThread co = new LuaThread(state, func);
+		Varargs first = co.resume(LuaValue.NONE);
+		assertTrue(first.arg1().toboolean());
+		assertEquals(1, first.arg(2).toint());
+		assertEquals(2, first.arg(3).toint());
+		assertEquals(3, first.arg(4).toint());
+		assertEquals("suspended", co.getStatus());
+		Varargs second = co.resume(LuaValue.NONE);
+		assertTrue(second.arg1().toboolean());
+		assertTrue(second.arg(2).toboolean());
+		assertEquals(1, second.arg(3).toint());
+		assertEquals(2, second.arg(4).toint());
+		assertEquals(3, second.arg(5).toint());
+		assertEquals("dead", co.getStatus());
+	}
+
+	public void testXpcallYieldPropagates() {
+		LuaValue func = state.load(
+			"local ok, val = xpcall(function() coroutine.yield('xpcall-yield') end, function(e) return e end)\n" +
+			"return ok, val", "test").checkfunction();
+		LuaThread co = new LuaThread(state, func);
+		Varargs first = co.resume(LuaValue.NONE);
+		assertTrue(first.arg1().toboolean());
+		assertEquals("xpcall-yield", first.arg(2).tojstring());
+		assertEquals("suspended", co.getStatus());
+		Varargs second = co.resume(LuaValue.NONE);
+		assertTrue(second.arg1().toboolean());
+		assertTrue(second.arg(2).toboolean());
+		assertEquals("xpcall-yield", second.arg(3).tojstring());
+		assertEquals("dead", co.getStatus());
+	}
+
+	public void testPcallErrorNotMaskedAsYield() {
+		LuaValue func = state.load(
+			"local ok, err = pcall(error, 'boom')\n" +
+			"if not ok then return 'caught: ' .. err end\n" +
+			"return 'unreachable'", "test").checkfunction();
+		LuaThread co = new LuaThread(state, func);
+		Varargs result = co.resume(LuaValue.NONE);
+		assertTrue(result.arg1().toboolean());
+		assertEquals("caught: boom", result.arg(2).tojstring());
+		assertEquals("dead", co.getStatus());
+	}
 }

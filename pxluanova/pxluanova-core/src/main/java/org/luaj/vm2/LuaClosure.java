@@ -546,6 +546,10 @@ public class LuaClosure extends LuaFunction {
 			return;
 		}
 		final LuaThread r = state.getCurrentThread();
+		if (r == null) {
+			err.traceback = err.getMessage();
+			return;
+		}
 		if (r.errorfunc == null) {
 			err.traceback = state.debuglib != null ? err.getMessage() + "\n" + state.debuglib.traceback(level) : err.getMessage();
 			return;

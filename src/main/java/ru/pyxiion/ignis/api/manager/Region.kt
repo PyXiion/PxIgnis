@@ -1,25 +1,44 @@
 package ru.pyxiion.ignis.api.manager
 
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.entity.Entity
+import net.minecraft.server.MinecraftServer
 import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.Box
 import net.minecraft.util.math.ChunkPos
 import net.minecraft.util.math.Vec3d
 import org.luaj.vm2.LuaFunction
+import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.EventBus
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.Vector
+import ru.pyxiion.ignis.network.RegionCapWarningPayload
+import ru.pyxiion.ignis.network.RegionEntry
+import ru.pyxiion.ignis.network.RegionInterestPayload
+import ru.pyxiion.ignis.network.RegionRemovePayload
+import ru.pyxiion.ignis.network.RegionSyncPayload
+import ru.pyxiion.ignis.network.RegionUpsertPayload
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+const val REGION_INTEREST_RADIUS_CHUNKS: Int = 4
+const val MAX_REGIONS_PER_PLAYER: Int = 256
+
+data class RegionDiff(
+    val additions: List<RegionEntry>,
+    val removals: List<Int>,
+    val capped: Boolean
+)
 
 class Region internal constructor(
     val id: Int,
     val world: ServerWorld,
     @Volatile var bounds: Box,
 ) {
-    internal val bus = EventBus(" region #$id", PxIgnis.logger)
+    internal val bus = EventBus(" region #$id", PxIgnis.logger) { RegionManager.sharedStateProvider() }
     private val contained = mutableSetOf<UUID>()
 
     fun contains(pos: Vec3d): Boolean = bounds.contains(pos)
@@ -120,6 +139,8 @@ object RegionManager {
     private val tickSubscribers = mutableSetOf<Region>()
     private var nextId = 0
 
+    var sharedStateProvider: () -> LuaState? = { null }
+
     internal fun create(world: ServerWorld, bounds: Box): Region {
         val region = Region(nextId++, world, bounds)
         regionsByWorld.getOrPut(world) { mutableListOf() }.add(region)
@@ -167,6 +188,114 @@ object RegionManager {
             } catch (_: Throwable) { }
             r.tick()
         }
+    }
+
+    private val optInPlayers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+    private val lastSnapshots: MutableMap<UUID, Map<Int, Box>> = ConcurrentHashMap()
+    private val warnedPlayers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+
+    fun isOptedIn(uuid: UUID): Boolean = uuid in optInPlayers
+
+    fun setOptedIn(uuid: UUID, enabled: Boolean) {
+        if (enabled) {
+            optInPlayers.add(uuid)
+            lastSnapshots[uuid] = emptyMap()
+            warnedPlayers.remove(uuid)
+        } else {
+            optInPlayers.remove(uuid)
+            lastSnapshots.remove(uuid)
+            warnedPlayers.remove(uuid)
+        }
+    }
+
+    fun onPlayerLeft(uuid: UUID) {
+        optInPlayers.remove(uuid)
+        lastSnapshots.remove(uuid)
+        warnedPlayers.remove(uuid)
+    }
+
+    fun tickClientSync(server: MinecraftServer) {
+        if (optInPlayers.isEmpty()) return
+        for (player in server.playerManager.playerList) {
+            val uuid = player.uuid
+            if (uuid !in optInPlayers) continue
+            if (!ServerPlayNetworking.canSend(player, RegionInterestPayload.ID)) continue
+
+            val current = computeVisibleRegions(player)
+            val prev = lastSnapshots[uuid] ?: emptyMap()
+            val diff = diffRegionSnapshots(prev, current, MAX_REGIONS_PER_PLAYER)
+
+            for (entry in diff.additions) {
+                ServerPlayNetworking.send(player, RegionUpsertPayload(entry.id, entry.box))
+            }
+            for (id in diff.removals) {
+                ServerPlayNetworking.send(player, RegionRemovePayload(id))
+            }
+            if (diff.capped && warnedPlayers.add(uuid)) {
+                ServerPlayNetworking.send(player, RegionCapWarningPayload(MAX_REGIONS_PER_PLAYER))
+            }
+            lastSnapshots[uuid] = current
+        }
+    }
+
+    fun closeAll(server: MinecraftServer) {
+        val uuids = optInPlayers.toList()
+        optInPlayers.clear()
+        lastSnapshots.clear()
+        warnedPlayers.clear()
+        for (uuid in uuids) {
+            val player = server.playerManager.getPlayer(uuid) ?: continue
+            ServerPlayNetworking.send(player, RegionSyncPayload(emptyList()))
+        }
+    }
+
+    private fun computeVisibleRegions(player: ServerPlayerEntity): Map<Int, Box> {
+        val world = player.entityWorld as? ServerWorld ?: return emptyMap()
+        val chunkMap = regionsByChunk[world] ?: return emptyMap()
+        val pc = ChunkPos(player.chunkPos.x, player.chunkPos.z)
+        val r = REGION_INTEREST_RADIUS_CHUNKS
+        val out = LinkedHashMap<Int, Box>()
+        for (cx in (pc.x - r)..(pc.x + r)) {
+            for (cz in (pc.z - r)..(pc.z + r)) {
+                val list = chunkMap[ChunkPos(cx, cz)] ?: continue
+                for (region in list) {
+                    if (out.size >= MAX_REGIONS_PER_PLAYER && region.id !in out) continue
+                    if (region.bounds.intersects(chunkBox(cx, cz))) {
+                        out[region.id] = region.bounds
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    private fun chunkBox(cx: Int, cz: Int): Box {
+        val minX = (cx shl 4).toDouble()
+        val minZ = (cz shl 4).toDouble()
+        return Box(minX, Double.NEGATIVE_INFINITY, minZ, minX + 16.0, Double.POSITIVE_INFINITY, minZ + 16.0)
+    }
+
+    fun diffRegionSnapshots(
+        prev: Map<Int, Box>,
+        next: Map<Int, Box>,
+        cap: Int
+    ): RegionDiff {
+        val additions = mutableListOf<RegionEntry>()
+        val removals = mutableListOf<Int>()
+
+        for ((id, box) in next) {
+            val old = prev[id]
+            if (old == null || old != box) {
+                additions.add(RegionEntry(id, box))
+            }
+        }
+        for (id in prev.keys) {
+            if (id !in next.keys) removals.add(id)
+        }
+
+        val capped = next.size > cap
+        val limited = if (capped) additions.take(cap) else additions
+        return RegionDiff(limited, removals, capped)
     }
 
     internal fun registerTickSubscriber(region: Region) {

@@ -3,7 +3,108 @@ title: Changelog
 description: Release history for PxIgnis.
 ---
 
-# Changelog
+## Unreleased — Async coroutines, region debug overlay
+
+### Breaking
+
+- **`mc.task`, `mc.run`, `mc.prun`, `mc.sleep`, `mc.fetch`** removed from the `mc` table. Use `require "async"` instead.
+- **`async.task` / `async.run` now require an explicit executor** — `"main"` or `"threadpool"`.
+
+### New API
+
+#### `require "async"` — coroutine-based async module
+
+Load with `local async = require "async"`. Every task picks where its Lua code runs:
+
+| Executor       | Intended use                                                       |
+|----------------|---------------------------------------------------------------------|
+| `"main"`       | Minecraft server thread — safe for players, worlds, entities, etc. |
+| `"threadpool"` | Bounded worker pool — expensive pure-Lua computation only          |
+
+`"main"` runs on the server thread and must stay short. `"threadpool"` runs off-thread and must not touch Minecraft
+objects or shared globals. I/O (`async.sleep`, `async.fetch`) is already non-blocking and needs no thread pool.
+
+| API                                 | Description                                                                          |
+|-------------------------------------|--------------------------------------------------------------------------------------|
+| `async.task(executor, fn, ...)`     | Runs `fn(...)` on an executor; returns a task (awaitable)                            |
+| `async.run(executor, fn, ...)`      | Runs `fn(...)` and waits; returns raw values, throws on error                        |
+| `async.promise()`                   | Creates a manually-settleable promise                                                |
+| `task:wait()`                       | Yields until done; returns the raw result values, throws `LuaError` on task error    |
+| `task:try()`                        | Yields until done; returns `true, result...` or `false, error` (pcall-like)          |
+| `task.done`                         | `true` once the task/promise has settled                                             |
+| `task.state`                        | `"pending"`, `"resolved"`, or `"rejected"`                                           |
+| `promise:resolve(...)`              | Settles the promise with a value; returns `true` if it was the first settlement      |
+| `promise:error(msg)`                | Rejects the promise; returns `true` if it was the first settlement                   |
+| `async.all(t1, t2, ...)`            | Waits for all tasks; throws the first error after all settle                         |
+| `async.allSettled(t1, ...)`         | Waits for all tasks; never throws; returns `{ ok, value/error }` per input           |
+| `async.sleep(ticks)`                | Yields the coroutine for N ticks (20 = 1s)                                           |
+| `async.fetch(url)`                  | HTTP request, yields the coroutine; returns response table                           |
+| `async.fetch {...}`                 | Full request with `{ url, method, headers, body, json, timeout }` options            |
+| `async.mutex()`                     | Coroutine-safe mutex; `mutex:with(fn, ...)` runs with exclusive ownership            |
+
+Tasks run as proper Lua coroutines — they can call `async.sleep`, `async.fetch`, and `task:wait()` internally.
+
+```lua
+local async = require "async"
+
+-- Parallel computation on the worker pool
+local left = async.task("threadpool", function() return generate_chunk(1) end)
+local right = async.task("threadpool", function() return generate_chunk(2) end)
+local results = async.all(left, right)
+
+-- Back on the server thread
+async.run("main", function()
+    apply_chunk(results[1].value)
+    apply_chunk(results[2].value)
+end)
+
+-- Waiting for I/O is already non-blocking
+local response = async.fetch("https://api.example.com/data")
+print(response.ok and response.text or response.error)
+
+-- Error handling
+local ok, err = async.task("threadpool", function() error("boom") end):try()
+if not ok then print("failed:", err) end
+
+-- Promises
+local p = async.promise()
+mc.schedule(20, function() p:resolve("done") end)
+print(p:wait())
+
+-- Mutex
+local mutex = async.mutex()
+mutex:with(function() return update_shared_cache() end)
+```
+
+#### Region debug overlay
+
+- **Server-side region sync**: opted-in players receive the regions in their 4-chunk interest radius as incremental
+  diffs (`/ignis debug regions`, ops only). Bounds changes re-sync as upserts; a one-time warning fires at the
+  256-region cap.
+- **Client-side registry** (`src/client`): thread-safe region box store toggled by the command. Wireframe rendering
+  stays a documented no-op until the renderer API is available in the mod's Fabric/Yarn set.
+
+### Internal
+
+- **Async suspend bridge**: `luaSuspendFunction` / `luaSuspendFunctionNil` let Lua coroutines call Kotlin `suspend`
+  blocks without blocking the server thread. The coroutine yields, the block runs on a `CoroutineScope`, and the result
+  resumes the coroutine via a per-thread `LuaThread.ResumeHandler` — set on the main thread and inherited by child
+  coroutines, dispatching resumes back to the server. Calls from outside a coroutine or without a resume handler raise
+  a clear `LuaError` instead of hanging. See `docs/async-suspend-bridge.md`.
+- **`lua_resume_sync`**: now sets and restores `LuaState.current()` so thread-local state lookups work on the server
+  thread like they do in async coroutines.
+- **EventBus**: Lua closure handlers now run through a `LuaThread` instead of being invoked directly, so `async.sleep`,
+  `async.fetch`, and suspend functions work inside event callbacks like they do in scheduled tasks and commands.
+- **Executor registry + thread pool**: `AsyncExecutorRegistry` with bounded `PxIgnis-async-*` worker pools, shut down
+  on server stop. `LuaThread.executionContext` propagates the owning executor to child coroutines.
+- **Serialized resumption**: a per-coroutine resume gate guarantees one `thread.resume()` at a time, so asynchronous
+  completions never interleave with a coroutine that is already running.
+- **Scheduler**: now thread-safe (lock-protected queue, volatile tick counter) for cross-thread task scheduling.
+- **modScope**: `IgnisRuntime` owns a mod-lifetime `CoroutineScope` (`SupervisorJob`, cancelled on server stop).
+  `LuaMcApi.suspendFunction` wraps it for convenience. `RegionManager` gained a shared state provider so region events
+  resolve the Lua state like the root event bus does.
+- **Build**: split client source set (`loom.splitEnvironmentSourceSets`); each region payload now has a unique
+  `CustomPayload.Id` (they previously shared one identifier and collided at registration).
 
 ## 0.16.1 — Interop refactor, scheduler bounds, template fixes (2026-06-26)
 

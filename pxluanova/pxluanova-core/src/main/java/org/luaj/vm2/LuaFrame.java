@@ -13,4 +13,8 @@ class LuaFrame {
 	int callerA;
 	int callerB;
 	int callerC;
+
+	LuaValue storedFunc;
+	Varargs storedCallArgs;
+	Object storedContinuation;
 }

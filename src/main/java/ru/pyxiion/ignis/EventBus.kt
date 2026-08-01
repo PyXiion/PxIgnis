@@ -1,7 +1,10 @@
 package ru.pyxiion.ignis
 
+import org.luaj.vm2.LuaClosure
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaFunction
+import org.luaj.vm2.LuaState
+import org.luaj.vm2.LuaThread
 import org.luaj.vm2.LuaValue
 import org.slf4j.Logger
 
@@ -15,6 +18,7 @@ class EventHandler(
 class EventBus(
     private val context: String,
     private val logger: Logger,
+    private val stateProvider: () -> LuaState? = { null },
 ) {
     private val handlers = mutableMapOf<String, MutableList<EventHandler>>()
     private val byId = mutableMapOf<Int, Pair<String, EventHandler>>()
@@ -48,7 +52,7 @@ class EventBus(
                 entry.throttleRemaining = entry.throttle
             }
             try {
-                entry.callback.invoke(LuaValue.varargsOf(args))
+                invokeCallback(entry.callback, args, event)
             } catch (e: LuaError) {
                 logger.warn("Ошибка в Lua-обработчике события '$event'$context: ${e.message}")
             } catch (e: Throwable) {
@@ -62,7 +66,7 @@ class EventBus(
         val list = handlers[event] ?: return results
         list.forEach { entry ->
             try {
-                results.add(entry.callback.invoke(LuaValue.varargsOf(args)).arg(1))
+                results.add(invokeCallback(entry.callback, args, event).arg1())
             } catch (e: LuaError) {
                 logger.warn("Ошибка в Lua-обработчике события '$event'$context: ${e.message}")
             } catch (e: Throwable) {
@@ -70,6 +74,18 @@ class EventBus(
             }
         }
         return results
+    }
+
+    private fun invokeCallback(cb: LuaFunction, args: Array<out LuaValue>, event: String): LuaValue {
+        return when (cb) {
+            is LuaClosure -> {
+                val state = stateProvider()
+                    ?: throw LuaError("Lua state is not available")
+                val r = LuaThread(state, cb).resumeOrLog(LuaValue.varargsOf(args), "Событие '$event'$context")
+                if (r.arg1().toboolean()) r.subargs(2).arg1() else r.arg(2)
+            }
+            else -> cb.invoke(LuaValue.varargsOf(args)).arg1()
+        }
     }
 
     fun tick() {

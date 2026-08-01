@@ -24,6 +24,7 @@ import ru.pyxiion.ignis.sandbox.Vfs
 class ScriptEnvironment {
     private var _state: LuaState? = null
     val luaState: LuaState get() = _state!!
+    val luaStateOrNull: LuaState? get() = _state
 
     fun rebuild(api: LuaMcApi, commandRegistrar: CommandRegistrar): LuaState {
         val state = LuaState()
@@ -75,6 +76,9 @@ class ScriptEnvironment {
 
         _state = state
         globals.set("mc", api.toTable())
+
+        val asyncModule = api.asyncLib.buildModule()
+        globals.get("package").checktable().get("loaded").checktable().set("async", asyncModule)
 
         return state
     }
