@@ -70,6 +70,7 @@ export default defineConfig({
             { label: "Basic Commands", slug: "examples/basic-commands" },
             { label: "Events", slug: "examples/events" },
             { label: "Persistence", slug: "examples/persistence" },
+            { label: "Whitelist", slug: "examples/whitelist" },
           ],
         },
         {
