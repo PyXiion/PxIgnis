@@ -9,6 +9,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 
 class AsyncLib(
     private val server: MinecraftServer,
@@ -19,6 +20,93 @@ class AsyncLib(
         responseMetaReset()
         mcTable.set("fetch", luaVarFunction(::handleFetch))
         mcTable.set("sleep", luaVarFunction(::handleSleep))
+        mcTable.set("task", luaVarFunction(::handleTask))
+        mcTable.set("prun", luaVarFunction(::handlePRun))
+    }
+
+    private val TASK_METATABLE by lazy {
+        luaTableOf(
+            "pwait" to luaVarFunction(::handleTaskPwait)
+        )
+            .also {
+                it.set("__index", luaFunction { s, key ->
+                    val task = s.asObject<CompletableFuture<Varargs>>()
+                        ?: throw LuaError("mc.task:__index($key) expected Task, got: $s")
+
+                    when (key.optjstring(null)) {
+                        "done" -> task.isDone.toLua()
+                        else -> it.get(key)
+                    }
+                })
+            }
+    }
+
+    // mc.task(function) -> task
+    private fun handleTask(args: Varargs): Varargs {
+        val f = args.arg(1).asFunction() ?: throw LuaError("mc.task, expected function, got ${args.arg(1).typename()}")
+        val args = args.subargs(2)
+
+        val future = CompletableFuture.supplyAsync {
+            LuaState.setCurrent(luaState)
+            try {
+                f.invoke(args)
+            } finally {
+                LuaState.setCurrent(null)
+            }
+        }
+
+        return LuaValue.userdataOf(future, TASK_METATABLE)
+    }
+
+    // It's pwait - like pcall, because right now PxLuaNova doesn't support
+    // LuaThread.resumeWithError(e). Even if it supported it we wouldn't be able
+    // to catch it, because pcall doesn't work inside coroutines right now.
+    // I'll make it work, I swear (one day definitely)
+
+    // mc.task:pwait() -> yields -> ok, result
+    private fun handleTaskPwait(args: Varargs): Varargs {
+        val future = args.arg(1).asObject<CompletableFuture<Varargs>>()
+            ?: throw LuaError("mc.task:pwait, self expected Task, got ${args.arg(1).typename()}")
+
+        var isExecutionSynchronous = true
+        var syncResult: Varargs? = null
+
+        val coro = luaState.currentThread ?: throw LuaError("task:pwait must be run inside a coroutine")
+
+        future.handle { result, error ->
+            val luaResult = if (error != null) {
+                val realCause =
+                    if (error is java.util.concurrent.CompletionException || error is java.util.concurrent.ExecutionException) {
+                        error.cause ?: error
+                    } else {
+                        error
+                    }
+                LuaValue.varargsOf(LuaValue.FALSE, LuaValue.valueOf(realCause.toString()))
+            } else {
+                LuaValue.varargsOf(LuaValue.TRUE, result)
+            }
+
+            if (isExecutionSynchronous) {
+                syncResult = luaResult
+            } else {
+                server.run {
+                    coro.resumeOrLog(luaResult, "mc.task:pwait callback")
+                }
+            }
+        }
+
+        isExecutionSynchronous = false
+
+        if (syncResult != null) {
+            return syncResult
+        }
+
+        return luaState.yield(LuaValue.NONE)
+    }
+
+    // mc.run(function()) -> yields -> ok, result
+    private fun handlePRun(args: Varargs): Varargs {
+        return handleTaskPwait(handleTask(args))
     }
 
     private fun handleSleep(args: Varargs): Varargs {
