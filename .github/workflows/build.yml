@@ -79,7 +79,7 @@ jobs:
           generate_release_notes: true
 
       - name: Publish 1.21.11 to Modrinth
-        uses: Kir-Antipov/mc-publish@v3.3.0
+        uses: Kir-Antipov/mc-publish@v3.3.1
         with:
           modrinth-id: SYYlZZEi
           modrinth-token: ${{ secrets.MODRINTH }}
@@ -87,13 +87,13 @@ jobs:
           game-versions: 1.21.11
           loaders: fabric
           version-type: release
-          modrinth-unfeature-mode: subset
+          modrinth-unfeature-mode: none
           dependencies: |
             fabric-api
             fabric-language-kotlin
 
       - name: Publish 1.21.10 to Modrinth
-        uses: Kir-Antipov/mc-publish@v3.3.0
+        uses: Kir-Antipov/mc-publish@v3.3.1
         with:
           modrinth-id: SYYlZZEi
           modrinth-token: ${{ secrets.MODRINTH }}
@@ -101,7 +101,7 @@ jobs:
           game-versions: 1.21.10
           loaders: fabric
           version-type: release
-          modrinth-unfeature-mode: subset
+          modrinth-unfeature-mode: none
           dependencies: |
             fabric-api
             fabric-language-kotlin

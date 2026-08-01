@@ -5,12 +5,16 @@ description: Release history for PxIgnis.
 
 ## Unreleased
 
+## 0.17.1 — CI and bootstrap fixes (2026-08-01)
+
 ### Bugfixes
 
 - **Bootstrap crash on 1.21.10/1.21.11**: PxIgnis no longer shadows its own copy of `commons-lang3` (pulled in
   transitively by BCEL for LuaJC bytecode generation). The embedded 3.14.0 lacked the `Mutable.get()` method that
   Minecraft 1.21.11's `Spline` codec expects, throwing `NoSuchMethodError` during registry bootstrap. The mod now uses
   Minecraft's bundled `commons-lang3` instead (3.17.0 on 1.21.10, 3.19.0 on 1.21.11).
+- **Modrinth release publishing**: Updated the publishing action to Node 24 and disabled optional version unfeaturing,
+  avoiding a post-upload authentication failure while preserving artifact uploads.
 
 ## 0.17.0 — Async coroutines, region debug overlay (2026-08-01)
 
