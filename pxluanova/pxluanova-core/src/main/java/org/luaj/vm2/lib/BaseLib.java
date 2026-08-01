@@ -37,6 +37,7 @@ import org.luaj.vm2.LuaTable;
 import org.luaj.vm2.LuaThread;
 import org.luaj.vm2.LuaValue;
 import org.luaj.vm2.Varargs;
+import org.luaj.vm2.YieldContinuationException;
 
 /**
  * Subclass of {@link LibFunction} which implements the lua basic library functions.
@@ -221,13 +222,43 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	}
 		
 	// "pcall", // (f, arg1, ...) -> status, result1, ...
-	final class pcall extends VarArgFunction {
-		public Varargs invoke(Varargs args) {
+	final class pcall extends LuaContinuableFunction<Object> {
+		public Varargs invoke(Varargs args, Object continuation) {
+			if (continuation != null) {
+				if (continuation instanceof YieldContinuationException inner) {
+					// Re-invoke the inner continuable function with its continuation
+					Varargs innerResult;
+					if (state != null && state.debuglib != null)
+						state.debuglib.onCall(this);
+					try {
+						@SuppressWarnings("unchecked")
+						LuaContinuableFunction<Object> innerFunc =
+							(LuaContinuableFunction<Object>) inner.func;
+						innerResult = innerFunc.invoke(inner.callArgs, inner.continuation);
+					} catch ( LuaError le ) {
+						final LuaValue m = le.getMessageObject();
+						return varargsOf(FALSE, m!=null? m: NIL);
+					} catch ( Exception e ) {
+						final String m = e.getMessage();
+						return varargsOf(FALSE, valueOf(m!=null? m: e.toString()));
+					} finally {
+						if (state != null && state.debuglib != null)
+							state.debuglib.onReturn();
+					}
+					return varargsOf(TRUE, innerResult);
+				}
+				return varargsOf(TRUE, (Varargs) continuation);
+			}
 			LuaValue func = args.checkvalue(1);
 			if (state != null && state.debuglib != null)
 				state.debuglib.onCall(this);
+			Varargs result;
 			try {
-				return varargsOf(TRUE, func.invoke(args.subargs(2)));
+				result = func.invoke(args.subargs(2));
+			} catch ( YieldContinuationException yce ) {
+				// Inner continuable function yielded — re-throw as our own yield
+				// so we get re-invoked on resume, then re-invoke the inner.
+				throw new YieldContinuationException(this, args, yce);
 			} catch ( LuaError le ) {
 				final LuaValue m = le.getMessageObject();
 				return varargsOf(FALSE, m!=null? m: NIL);
@@ -238,6 +269,16 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 				if (state != null && state.debuglib != null)
 					state.debuglib.onReturn();
 			}
+			LuaThread ct = state.getCurrentThread();
+			if (ct != null && !ct.isMainThread()
+				&& ct.threadState.isYieldPending()) {
+				Varargs yielded = ct.threadState.result != null
+					? ct.threadState.result : NONE;
+				// Clear the yield state so it doesn't trigger again
+				ct.threadState.yieldRequested = false;
+				throw new YieldContinuationException(this, args, yielded);
+			}
+			return varargsOf(TRUE, result);
 		}
 	}
 
@@ -369,16 +410,50 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	}
 
 	// "xpcall", // (f, err) -> result1, ...
-	final class xpcall extends VarArgFunction {
-		public Varargs invoke(Varargs args) {
+	final class xpcall extends LuaContinuableFunction<Object> {
+		public Varargs invoke(Varargs args, Object continuation) {
+			if (continuation != null) {
+				if (continuation instanceof YieldContinuationException inner) {
+					final LuaThread t = state.getCurrentThread();
+					final LuaValue preverror = t.errorfunc;
+					t.errorfunc = args.checkvalue(2);
+					try {
+						if (state.debuglib != null)
+							state.debuglib.onCall(this);
+						Varargs innerResult;
+						try {
+							@SuppressWarnings("unchecked")
+							LuaContinuableFunction<Object> innerFunc =
+								(LuaContinuableFunction<Object>) inner.func;
+							innerResult = innerFunc.invoke(inner.callArgs, inner.continuation);
+						} catch ( LuaError le ) {
+							final LuaValue m = le.getMessageObject();
+							return varargsOf(FALSE, m!=null? m: NIL);
+						} catch ( Exception e ) {
+							final String m = e.getMessage();
+							return varargsOf(FALSE, valueOf(m!=null? m: e.toString()));
+						} finally {
+							if (state.debuglib != null)
+								state.debuglib.onReturn();
+						}
+						return varargsOf(TRUE, innerResult);
+					} finally {
+						t.errorfunc = preverror;
+					}
+				}
+				return varargsOf(TRUE, (Varargs) continuation);
+			}
 			final LuaThread t = state.getCurrentThread();
 			final LuaValue preverror = t.errorfunc;
 			t.errorfunc = args.checkvalue(2);
 			try {
 				if (state.debuglib != null)
 					state.debuglib.onCall(this);
+				Varargs result;
 				try {
-					return varargsOf(TRUE, args.arg1().invoke(args.subargs(3)));
+					result = args.arg1().invoke(args.subargs(3));
+				} catch ( YieldContinuationException yce ) {
+					throw new YieldContinuationException(this, args, yce);
 				} catch ( LuaError le ) {
 					final LuaValue m = le.getMessageObject();
 					return varargsOf(FALSE, m!=null? m: NIL);
@@ -389,6 +464,14 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 					if (state.debuglib != null)
 						state.debuglib.onReturn();
 				}
+			if (t != null && !t.isMainThread()
+				&& t.threadState.isYieldPending()) {
+				Varargs yielded = t.threadState.result != null
+					? t.threadState.result : NONE;
+				t.threadState.yieldRequested = false;
+				throw new YieldContinuationException(this, args, yielded);
+			}
+			return varargsOf(TRUE, result);
 			} finally {
 				t.errorfunc = preverror;
 			}

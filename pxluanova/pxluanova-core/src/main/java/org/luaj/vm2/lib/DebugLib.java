@@ -401,21 +401,24 @@ public class DebugLib extends TwoArgFunction {
 	}
 
 	public void onCall(LuaFunction f) {
-		LuaThread.State s = state.getCurrentThread().threadState;
+		LuaThread.State s = currentState();
+		if (s == null) return;
 		if (s.inhook) return;
 		callstack().onCall(f);
 		if (s.hookcall) callHook(s, CALL, NIL);
 	}
 
 	public void onCall(LuaClosure c, Varargs varargs, LuaValue[] stack) {
-		LuaThread.State s = state.getCurrentThread().threadState;
+		LuaThread.State s = currentState();
+		if (s == null) return;
 		if (s.inhook) return;
 		callstack().onCall(c, varargs, stack);
 		if (s.hookcall) callHook(s, CALL, NIL);
 	}
 
 	public void onInstruction(int pc, Varargs v, int top) {
-		LuaThread.State s = state.getCurrentThread().threadState;
+		LuaThread.State s = currentState();
+		if (s == null) return;
 		if (s.inhook) return;
 		callstack().onInstruction(pc, v, top);
 		if (s.hookfunc == null) return;
@@ -432,10 +435,16 @@ public class DebugLib extends TwoArgFunction {
 	}
 
 	public void onReturn() {
-		LuaThread.State s = state.getCurrentThread().threadState;
+		LuaThread.State s = currentState();
+		if (s == null) return;
 		if (s.inhook) return;
 		callstack().onReturn();
 		if (s.hookrtrn) callHook(s, RETURN, NIL);
+	}
+
+	private LuaThread.State currentState() {
+		LuaThread ct = state.getCurrentThread();
+		return ct != null ? ct.threadState : null;
 	}
 
 	public String traceback(int level) {

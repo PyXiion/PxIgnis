@@ -20,7 +20,7 @@ public final class LuaState {
 		return current.get();
 	}
 
-	static void setCurrent(LuaState state) {
+	public static void setCurrent(LuaState state) {
 		if (state == null) current.remove();
 		else current.set(state);
 	}

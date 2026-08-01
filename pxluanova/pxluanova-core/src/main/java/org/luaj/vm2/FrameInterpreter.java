@@ -2,6 +2,8 @@ package org.luaj.vm2;
 
 import java.util.Deque;
 
+import org.luaj.vm2.lib.LuaContinuableFunction;
+
 class FrameInterpreter {
 
 	static Varargs run(LuaThread.State s) {
@@ -16,20 +18,55 @@ class FrameInterpreter {
 					} else {
 						s.yieldRequested = false;
 						LuaFrame frame = frames.peek();
-						int ci = frame.closure.p.code[frame.pc];
-						int ca = (ci >> 6) & 0xff;
-						int cc = (ci >> 14) & 0x1ff;
-						Varargs ra = s.resumeArgs;
-						if (cc > 0) {
-							// FIXME: idk it should be cc - 1 or just cc
-							ra.copyto(frame.stack, ca, cc);
-							frame.v = LuaValue.NONE;
+						if (frame.storedFunc != null) {
+							LuaValue func = frame.storedFunc;
+							Varargs origArgs = frame.storedCallArgs;
+							Object cont = frame.storedContinuation;
+							frame.storedFunc = null;
+							frame.storedCallArgs = null;
+							frame.storedContinuation = null;
+							@SuppressWarnings("unchecked")
+							LuaContinuableFunction<Object> lcf = (LuaContinuableFunction<Object>) func;
+							Varargs ret;
+							try {
+								ret = lcf.invoke(origArgs, cont);
+							} catch (YieldContinuationException yce) {
+								frame.storedFunc = yce.func;
+								frame.storedCallArgs = yce.callArgs;
+								frame.storedContinuation = yce.continuation;
+								s.yieldRequested = true;
+								s.status = LuaThread.STATUS_SUSPENDED;
+								s.result = yce.continuation instanceof Varargs v ? v : LuaValue.NONE;
+								return s.result;
+							}
+							int ci = frame.closure.p.code[frame.pc];
+							int a = (ci >> 6) & 0xff;
+							int c = (ci >> 14) & 0x1ff;
+							if (c > 0) {
+								ret.copyto(frame.stack, a, c - 1);
+								frame.v = LuaValue.NONE;
+							} else {
+								frame.top = a + ret.narg();
+								frame.v = ret.dealias();
+							}
+							frame.pc++;
+							s.resumeArgs = LuaValue.NONE;
 						} else {
-							frame.top = ca + ra.narg();
-							frame.v = ra.dealias();
+							int ci = frame.closure.p.code[frame.pc];
+							int ca = (ci >> 6) & 0xff;
+							int cc = (ci >> 14) & 0x1ff;
+							Varargs ra = s.resumeArgs;
+							if (cc > 0) {
+								// FIXME: idk it should be cc - 1 or just cc
+								ra.copyto(frame.stack, ca, cc);
+								frame.v = LuaValue.NONE;
+							} else {
+								frame.top = ca + ra.narg();
+								frame.v = ra.dealias();
+							}
+							frame.pc++;
+							s.resumeArgs = LuaValue.NONE;
 						}
-						frame.pc++;
-						s.resumeArgs = LuaValue.NONE;
 					}
 				}
 
@@ -304,8 +341,6 @@ class FrameInterpreter {
 			{
 				LuaValue func = stack[a];
 				if (func == s.yieldSentinel) {
-					if (state != null && state.isInJavaCall())
-						throw new LuaError("attempt to yield across a C-call boundary");
 					s.result = callArgs;
 					s.status = LuaThread.STATUS_SUSPENDED;
 					s.yieldRequested = true;
@@ -339,7 +374,19 @@ class FrameInterpreter {
 				}
 				if (state != null) state.enteringJavaCall();
 				try {
-					Varargs ret = func.invoke(callArgs);
+					Varargs ret;
+					try {
+						ret = func.invoke(callArgs);
+} catch (YieldContinuationException yce) {
+					frame.storedFunc = yce.func;
+					frame.storedCallArgs = yce.callArgs;
+					frame.storedContinuation = yce.continuation;
+					s.yieldRequested = true;
+					s.status = LuaThread.STATUS_SUSPENDED;
+					s.result = yce.continuation instanceof Varargs v ? v : LuaValue.NONE;
+					frame.pc--;
+					return false;
+				}
 					if (s.yieldRequested && !s.yieldIsInterrupt) {
 						frame.pc--;
 						return false;
@@ -369,8 +416,6 @@ class FrameInterpreter {
 			{
 				LuaValue tfunc = stack[a];
 				if (tfunc == s.yieldSentinel) {
-					if (state != null && state.isInJavaCall())
-						throw new LuaError("attempt to yield across a C-call boundary");
 					s.result = tcArgs;
 					s.status = LuaThread.STATUS_SUSPENDED;
 					s.yieldRequested = true;
@@ -401,7 +446,19 @@ class FrameInterpreter {
 						state.debuglib.onCall(lc, newVarargs, newStack);
 					return true;
 				}
-				Varargs tcResult = tfunc.invoke(tcArgs);
+				Varargs tcResult;
+				try {
+					tcResult = tfunc.invoke(tcArgs);
+				} catch (YieldContinuationException yce) {
+					frame.storedFunc = yce.func;
+					frame.storedCallArgs = yce.callArgs;
+					frame.storedContinuation = yce.continuation;
+					s.yieldRequested = true;
+					s.status = LuaThread.STATUS_SUSPENDED;
+					s.result = yce.continuation instanceof Varargs v ? v : LuaValue.NONE;
+					frame.pc--;
+					return false;
+				}
 				if (s.yieldRequested && !s.yieldIsInterrupt) {
 					frame.pc--;
 					return false;
