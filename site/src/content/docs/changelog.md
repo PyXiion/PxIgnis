@@ -3,7 +3,7 @@ title: Changelog
 description: Release history for PxIgnis.
 ---
 
-## Unreleased — Async coroutines, region debug overlay
+## 0.17.0 — Async coroutines, region debug overlay (2026-08-01)
 
 ### Breaking
 
