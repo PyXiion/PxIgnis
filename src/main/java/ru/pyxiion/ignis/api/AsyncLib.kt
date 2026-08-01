@@ -1,18 +1,22 @@
 package ru.pyxiion.ignis.api
 
 import com.google.gson.*
-import net.minecraft.server.MinecraftServer
 import org.luaj.vm2.*
+import org.luaj.vm2.lib.LuaContinuableFunction
 import ru.pyxiion.ignis.*
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executor
 
 class AsyncLib(
-    private val server: MinecraftServer,
+    private val executor: Executor,
     private val luaState: LuaState,
     private val scheduler: Scheduler
 ) {
@@ -21,12 +25,14 @@ class AsyncLib(
         mcTable.set("fetch", luaVarFunction(::handleFetch))
         mcTable.set("sleep", luaVarFunction(::handleSleep))
         mcTable.set("task", luaVarFunction(::handleTask))
+        mcTable.set("run", luaVarFunction(::handleRun))
         mcTable.set("prun", luaVarFunction(::handlePRun))
     }
 
     private val TASK_METATABLE by lazy {
         luaTableOf(
-            "pwait" to luaVarFunction(::handleTaskPwait)
+            "pwait" to luaVarFunction(::handleTaskPwait),
+            "wait" to handleTaskWait()
         )
             .also {
                 it.set("__index", luaFunction { s, key ->
@@ -58,11 +64,6 @@ class AsyncLib(
         return LuaValue.userdataOf(future, TASK_METATABLE)
     }
 
-    // It's pwait - like pcall, because right now PxLuaNova doesn't support
-    // LuaThread.resumeWithError(e). Even if it supported it we wouldn't be able
-    // to catch it, because pcall doesn't work inside coroutines right now.
-    // I'll make it work, I swear (one day definitely)
-
     // mc.task:pwait() -> yields -> ok, result
     private fun handleTaskPwait(args: Varargs): Varargs {
         val future = args.arg(1).asObject<CompletableFuture<Varargs>>()
@@ -89,9 +90,7 @@ class AsyncLib(
             if (isExecutionSynchronous) {
                 syncResult = luaResult
             } else {
-                server.run {
-                    coro.resumeOrLog(luaResult, "mc.task:pwait callback")
-                }
+                executor.execute { coro.resumeOrLog(luaResult, "mc.task:pwait callback") }
             }
         }
 
@@ -104,7 +103,57 @@ class AsyncLib(
         return luaState.yield(LuaValue.NONE)
     }
 
-    // mc.run(function()) -> yields -> ok, result
+    // mc.task:wait() -> yields -> result (throws LuaError on task error)
+    private fun handleTaskWait(): LuaFunction = object : LuaContinuableFunction<CompletableFuture<Varargs>>() {
+        override fun invoke(args: Varargs, continuation: CompletableFuture<Varargs>?): Varargs {
+            if (continuation != null) {
+                // Resumed after the task future completed — surface its result or error.
+                return waitResult(continuation)
+            }
+
+            val future = args.arg(1).asObject<CompletableFuture<Varargs>>()
+                ?: throw LuaError("mc.task:wait, self expected Task, got ${args.arg(1).typename()}")
+
+            if (future.isDone) {
+                return waitResult(future)
+            }
+
+            val coro = luaState.currentThread ?: throw LuaError("task:wait must be run inside a coroutine")
+            future.handle { _, _ ->
+                executor.execute { coro.resumeOrLog(LuaValue.NONE, "mc.task:wait callback") }
+                null
+            }
+            throw YieldContinuationException(this, args, future)
+        }
+    }
+
+    private fun waitResult(future: CompletableFuture<Varargs>): Varargs {
+        return try {
+            future.get() ?: LuaValue.NONE
+        } catch (e: ExecutionException) {
+            val cause = unwrapError(e)
+            throw (cause as? LuaError) ?: LuaError(cause)
+        } catch (e: CancellationException) {
+            throw LuaError("task cancelled")
+        } catch (e: InterruptedException) {
+            throw LuaError("task interrupted")
+        }
+    }
+
+    private fun unwrapError(e: Throwable): Throwable {
+        var cause = e
+        while (cause is CompletionException || cause is ExecutionException) {
+            cause = cause.cause ?: break
+        }
+        return cause
+    }
+
+    // mc.run(function) -> yields -> result (throws LuaError on error)
+    private fun handleRun(args: Varargs): Varargs {
+        return handleTaskWait().invoke(handleTask(args))
+    }
+
+    // mc.prun(function) -> yields -> ok, result
     private fun handlePRun(args: Varargs): Varargs {
         return handleTaskPwait(handleTask(args))
     }
@@ -149,11 +198,11 @@ class AsyncLib(
 
         httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
             .thenAccept { response ->
-                server.execute { co.resumeOrLog(buildResponse(response), "mc.fetch callback") }
+                executor.execute { co.resumeOrLog(buildResponse(response), "mc.fetch callback") }
                 null
             }
             .exceptionally { error ->
-                server.execute { co.resumeOrLog(buildError(error), "mc.fetch callback") }
+                executor.execute { co.resumeOrLog(buildError(error), "mc.fetch callback") }
                 null
             }
 

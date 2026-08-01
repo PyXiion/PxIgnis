@@ -29,6 +29,7 @@ import ru.pyxiion.ignis.api.wrappertoLuaValue.PlayerListWrapper
 import ru.pyxiion.ignis.storage.StorageManager
 import java.nio.file.Path
 import java.util.*
+import java.util.concurrent.Executor
 
 class LuaMcApi(
     private val server: MinecraftServer,
@@ -452,7 +453,7 @@ class LuaMcApi(
             ItemStackWrap.wrap(stack)
         })
 
-        AsyncLib(server, stateProvider(), scheduler).install(table)
+        AsyncLib(Executor { r -> server.execute(r) }, stateProvider(), scheduler).install(table)
 
         table.setmetatable(mcMeta)
         return table
