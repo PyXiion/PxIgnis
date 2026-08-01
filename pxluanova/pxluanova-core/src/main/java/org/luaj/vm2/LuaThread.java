@@ -137,6 +137,11 @@ public class LuaThread extends LuaValue {
 	 * completes. Inherited from the parent (or main) thread at construction time. */
 	public volatile ResumeHandler resumeHandler;
 
+	/** Generic execution context for this thread. Opaque to the core runtime;
+	 * the host application may store any object here (e.g. an executor).
+	 * Inherited from the parent (or main) thread at construction time. */
+	public volatile Object executionContext;
+
 	Throwable lastError = null;
 
 	/** Whether this thread runs synchronously on the calling thread.
@@ -162,6 +167,7 @@ public class LuaThread extends LuaValue {
 		this.state = state;
 		this.isSync = true; // may support async in future
 		this.resumeHandler = resolveResumeHandler(state);
+		this.executionContext = resolveExecutionContext(state);
 		inheritHook();
 	}
 
@@ -172,6 +178,16 @@ public class LuaThread extends LuaValue {
 		LuaThread main = state.getMainThread();
 		if (main != null && main.resumeHandler != null)
 			return main.resumeHandler;
+		return null;
+	}
+
+	private Object resolveExecutionContext(LuaState state) {
+		LuaThread parent = state.getCurrentThread();
+		if (parent != null && parent.executionContext != null)
+			return parent.executionContext;
+		LuaThread main = state.getMainThread();
+		if (main != null && main.executionContext != null)
+			return main.executionContext;
 		return null;
 	}
 

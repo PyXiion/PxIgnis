@@ -3,8 +3,6 @@ title: Changelog
 description: Release history for PxIgnis.
 ---
 
-# Changelog
-
 ## Unreleased — Async coroutines
 
 ### Breaking

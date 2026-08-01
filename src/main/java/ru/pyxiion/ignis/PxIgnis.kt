@@ -109,6 +109,10 @@ class PxIgnis : ModInitializer {
                 }
             } catch (_: UninitializedPropertyAccessException) {
             }
+            try {
+                runtime.api.shutdownAsync()
+            } catch (_: UninitializedPropertyAccessException) {
+            }
             storageManager?.close()
         })
 

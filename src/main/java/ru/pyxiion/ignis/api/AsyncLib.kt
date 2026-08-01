@@ -10,17 +10,116 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 class AsyncLib(
-    private val executor: Executor,
+    private val executors: AsyncExecutorRegistry,
     private val luaState: LuaState,
-    private val scheduler: Scheduler
+    private val scheduler: Scheduler,
 ) {
+
+    // ── Executor resolution ──────────────────────────────────────────
+
+    private fun requireExecutor(value: LuaValue): AsyncExecutor {
+        val name = value.checkjstring()
+            ?: throw LuaError("async: expected executor name (string), got ${value.typename()}")
+        return executors.resolve(name)
+    }
+
+    // ── Serialized resumer ────────────────────────────────────────────
+    // Serializes all resume requests for one LuaThread through a single
+    // selected executor. Only one thread.resume() runs at a time; requests
+    // that arrive while a resume is in flight are queued and dispatched
+    // after the current resume returns. Requests for dead coroutines drop.
+    // If the resume callback throws or the executor rejects the dispatch,
+    // the owner is notified once through onFailure and queued resumes drop.
+
+    internal class SerializedResumer(
+        private val thread: LuaThread,
+        private val executor: AsyncExecutor,
+        private val resume: (Varargs) -> Unit,
+        private val onFailure: (Throwable) -> Unit,
+    ) {
+        private val lock = ReentrantLock()
+        private var running = false
+        private var failed = false
+        private val pending = ArrayDeque<Varargs>()
+
+        /** Submit a resume request. Dispatches immediately if idle, queues otherwise. */
+        fun requestResume(args: Varargs) {
+            var runNow = false
+            lock.withLock {
+                if (failed || thread.status == "dead") return
+                if (running) {
+                    pending.addLast(args)
+                    return
+                }
+                running = true
+                runNow = true
+            }
+            if (runNow) dispatch(args)
+        }
+
+        private fun dispatch(args: Varargs) {
+            try {
+                executor.dispatch { runResume(args) }
+            } catch (e: Throwable) {
+                fail(e)
+            }
+        }
+
+        private fun runResume(args: Varargs) {
+            var error: Throwable? = null
+            try {
+                resume(args)
+            } catch (e: Throwable) {
+                error = e
+            }
+            var next: Varargs? = null
+            lock.withLock {
+                if (error != null) {
+                    failed = true
+                    pending.clear()
+                    running = false
+                } else if (thread.status == "dead") {
+                    pending.clear()
+                    running = false
+                } else if (pending.isNotEmpty()) {
+                    next = pending.removeFirst()
+                } else {
+                    running = false
+                }
+            }
+            if (error != null) {
+                notifyFailure(error)
+                return
+            }
+            if (next != null) dispatch(next)
+        }
+
+        private fun fail(e: Throwable) {
+            var notify: Throwable? = null
+            lock.withLock {
+                if (!failed) {
+                    failed = true
+                    pending.clear()
+                    running = false
+                    notify = e
+                }
+            }
+            if (notify != null) notifyFailure(notify)
+        }
+
+        private fun notifyFailure(e: Throwable) {
+            try {
+                onFailure(e)
+            } catch (_: Throwable) {
+                // The failure handler must not re-enter or break the resumer.
+            }
+        }
+    }
 
     // ── Awaitable ──────────────────────────────────────────────────────
 
@@ -148,7 +247,7 @@ class AsyncLib(
                     ?: throw LuaError("wait: must be called inside a coroutine")
 
                 awaitable.await { _, _, _ ->
-                    executor.execute { coro.resumeOrLog(LuaValue.NONE, "async.wait callback") }
+                    resumeThread(coro, LuaValue.NONE, "async.wait callback")
                 }
                 throw YieldContinuationException(this, args, awaitable)
             }
@@ -187,66 +286,113 @@ class AsyncLib(
                     ?: throw LuaError("try: must be called inside a coroutine")
 
                 awaitable.await { state, _, error ->
-                    executor.execute {
-                        val result = if (state == Awaitable.STATE_RESOLVED) {
-                            LuaValue.varargsOf(LuaValue.TRUE, awaitable.getOrNull() ?: LuaValue.NONE)
-                        } else {
-                            LuaValue.varargsOf(
-                                LuaValue.FALSE,
-                                LuaValue.valueOf(error?.message ?: "unknown error")
-                            )
-                        }
-                        coro.resumeOrLog(result, "async.try callback")
+                    val result = if (state == Awaitable.STATE_RESOLVED) {
+                        LuaValue.varargsOf(LuaValue.TRUE, awaitable.getOrNull() ?: LuaValue.NONE)
+                    } else {
+                        LuaValue.varargsOf(
+                            LuaValue.FALSE,
+                            LuaValue.valueOf(error?.message ?: "unknown error")
+                        )
                     }
+                    resumeThread(coro, result, "async.try callback")
                 }
                 throw YieldContinuationException(this, args, awaitable)
             }
         }
     }
 
+    // ── Task execution helpers ────────────────────────────────────────
+
+    private fun resumeTask(thread: LuaThread, args: Varargs, awaitable: Awaitable) {
+        val previous = LuaState.current()
+        LuaState.setCurrent(luaState)
+        try {
+            val result = thread.resume(args)
+            if (thread.status == "dead") {
+                if (result.arg1().toboolean()) {
+                    awaitable.resolve(result.subargs(2))
+                } else {
+                    awaitable.reject(LuaError(result.arg(2).optjstring("task error")))
+                }
+            }
+        } catch (e: Throwable) {
+            awaitable.reject(e)
+        } finally {
+            LuaState.setCurrent(previous)
+        }
+    }
+
+    private fun createTaskInternal(executor: AsyncExecutor, f: LuaFunction, taskArgs: Varargs): Awaitable {
+        val awaitable = Awaitable()
+        val thread = LuaThread(luaState, f)
+        thread.executionContext = executor
+
+        val resumer = SerializedResumer(
+            thread,
+            executor,
+            resume = { args -> resumeTask(thread, args, awaitable) },
+            onFailure = { e -> awaitable.reject(e) },
+        )
+        thread.resumeHandler = LuaThread.ResumeHandler { _, value ->
+            resumer.requestResume(value)
+        }
+
+        resumer.requestResume(taskArgs)
+        return awaitable
+    }
+
     // ── Task ───────────────────────────────────────────────────────────
 
     private fun handleTask(args: Varargs): Varargs {
-        val f = args.arg(1).asFunction()
-            ?: throw LuaError("async.task: expected function, got ${args.arg(1).typename()}")
-        val taskArgs = args.subargs(2)
-        val awaitable = Awaitable()
+        val executor = requireExecutor(args.arg(1))
+        val f = args.arg(2).asFunction()
+            ?: throw LuaError("async.task: expected function, got ${args.arg(2).typename()}")
+        val taskArgs = args.subargs(3)
 
-        executor.execute {
-            LuaState.setCurrent(luaState)
-            try {
-                val thread = LuaThread(luaState, f)
+        val awaitable = createTaskInternal(executor, f, taskArgs)
+        return wrapObject(awaitable, "task")
+    }
 
-                thread.resumeHandler = LuaThread.ResumeHandler { t, value ->
-                    val result = t.resume(value)
-                    if (t.status == "dead") {
-                        if (result.arg1().toboolean()) {
-                            awaitable.resolve(result.subargs(2))
-                        } else {
-                            awaitable.reject(
-                                LuaError(result.arg(2).optjstring("task error"))
-                            )
-                        }
-                    }
-                    result
-                }
+    // ── async.run ──────────────────────────────────────────────────────
 
-                val result = thread.resume(taskArgs)
-                if (thread.status == "dead") {
-                    if (result.arg1().toboolean()) {
-                        awaitable.resolve(result.subargs(2))
-                    } else {
-                        awaitable.reject(LuaError(result.arg(2).optjstring("task error")))
-                    }
-                }
-            } catch (e: Throwable) {
-                awaitable.reject(e)
-            } finally {
-                LuaState.setCurrent(null)
+    private fun handleRun(args: Varargs): Varargs {
+        val executor = requireExecutor(args.arg(1))
+        val f = args.arg(2).asFunction()
+            ?: throw LuaError("async.run: expected function, got ${args.arg(2).typename()}")
+        val taskArgs = args.subargs(3)
+
+        val awaitable = createTaskInternal(executor, f, taskArgs)
+
+        if (awaitable.isDone) {
+            return if (awaitable.state == Awaitable.STATE_RESOLVED) {
+                awaitable.get()
+            } else {
+                throw awaitable.error ?: LuaError("async.run: task failed")
             }
         }
 
-        return wrapObject(awaitable, "task")
+        val coro = luaState.currentThread
+            ?: throw LuaError("async.run: must be called inside a coroutine")
+
+        awaitable.await { _, _, _ ->
+            resumeThread(coro, LuaValue.NONE, "async.run callback")
+        }
+        throw YieldContinuationException(runContinuable, args, awaitable)
+    }
+
+    private val runContinuable: LuaFunction by lazy {
+        object : LuaContinuableFunction<Awaitable>() {
+            override fun invoke(args: Varargs, continuation: Awaitable?): Varargs {
+                if (continuation != null) {
+                    if (continuation.state == Awaitable.STATE_RESOLVED) {
+                        return continuation.get()
+                    } else {
+                        throw continuation.error ?: LuaError("async.run: task failed")
+                    }
+                }
+                return handleRun(args)
+            }
+        }
     }
 
     // ── Promise ────────────────────────────────────────────────────────
@@ -312,7 +458,7 @@ class AsyncLib(
         }
 
         allFuture.thenRun {
-            executor.execute { coro.resumeOrLog(LuaValue.NONE, "async.all callback") }
+            resumeThread(coro, LuaValue.NONE, "async.all callback")
         }
         throw YieldContinuationException(this@AsyncLib.allContinuable, args, allFuture)
     }
@@ -368,7 +514,7 @@ class AsyncLib(
         }
 
         allFuture.thenRun {
-            executor.execute { coro.resumeOrLog(LuaValue.NONE, "async.allSettled callback") }
+            resumeThread(coro, LuaValue.NONE, "async.allSettled callback")
         }
         throw YieldContinuationException(this@AsyncLib.allSettledContinuable, args, allFuture)
     }
@@ -444,15 +590,201 @@ class AsyncLib(
         return LuaValue.NIL
     }
 
-    // ── Resume helper (goes through handler if present) ─────────────────
+    // ── Mutex ──────────────────────────────────────────────────────────
 
-    private fun resumeThread(thread: LuaThread, args: Varargs, context: String) {
-        val handler = thread.resumeHandler
-        if (handler != null) {
-            handler.resume(thread, args)
-        } else {
-            thread.resumeOrLog(args, context)
+    private class MutexOperation(
+        val parentThread: LuaThread,
+        val executor: AsyncExecutor,
+        val function: LuaFunction,
+        val args: Varargs,
+    ) {
+        var continuation: MutexContinuation? = null
+    }
+
+    private class MutexContinuation(
+        val mutex: MutexState,
+        val op: MutexOperation,
+        var result: Varargs = LuaValue.NONE,
+        var error: Throwable? = null,
+    ) {
+        private val _finished = java.util.concurrent.atomic.AtomicBoolean(false)
+        val isFinished: Boolean get() = _finished.get()
+        fun tryFinish(): Boolean = _finished.compareAndSet(false, true)
+    }
+
+    private class MutexState {
+        private val lock = ReentrantLock()
+        private var _owner: MutexOperation? = null
+        private val _waiters = ArrayDeque<MutexOperation>()
+
+        fun tryAcquire(op: MutexOperation): Boolean {
+            lock.withLock {
+                if (_owner == null) {
+                    _owner = op
+                    return true
+                }
+                _waiters.addLast(op)
+                return false
+            }
         }
+
+        fun releaseAndResumeNext(completedOp: MutexOperation, onAcquire: (MutexOperation) -> Unit) {
+            val nextOp: MutexOperation?
+            lock.withLock {
+                if (_owner !== completedOp) return
+                _owner = null
+                nextOp = if (_waiters.isNotEmpty()) {
+                    val next = _waiters.removeFirst()
+                    _owner = next
+                    next
+                } else {
+                    null
+                }
+            }
+            if (nextOp != null) {
+                onAcquire(nextOp)
+            }
+        }
+    }
+
+    private class MutexObject(
+        val state: MutexState,
+    )
+
+    private val MUTEX_METATABLE by lazy {
+        luaTableOf().also { mt ->
+            mt.set("__index", luaFunction { self, key ->
+                val obj = self.asObject<MutexObject>()
+                    ?: throw LuaError("expected mutex, got ${self.typename()}")
+                when (key.optjstring(null)) {
+                    "with" -> mutexWithFn
+                    else -> mt.get(key)
+                }
+            })
+        }
+    }
+
+    private fun wrapMutex(state: MutexState): LuaValue {
+        return LuaValue.userdataOf(MutexObject(state), MUTEX_METATABLE)
+    }
+
+    private fun handleMutex(@Suppress("UNUSED_PARAMETER") args: Varargs): Varargs {
+        return wrapMutex(MutexState())
+    }
+
+    private fun releaseMutex(mutex: MutexState, completedOp: MutexOperation) {
+        mutex.releaseAndResumeNext(completedOp) { nextOp ->
+            try {
+                nextOp.executor.dispatch {
+                    runMutexCallback(nextOp, mutex)
+                }
+            } catch (e: Throwable) {
+                // The executor rejected the promotion; fail the promoted waiter
+                // so its parent is resumed with an error instead of hanging.
+                val continuation = nextOp.continuation
+                    ?: return@releaseAndResumeNext
+                finishMutexOperation(continuation, LuaValue.NONE, e)
+            }
+        }
+    }
+
+    private fun finishMutexOperation(continuation: MutexContinuation, result: Varargs, error: Throwable?) {
+        if (!continuation.tryFinish()) return
+        continuation.result = result
+        continuation.error = error
+        releaseMutex(continuation.mutex, continuation.op)
+        resumeThread(continuation.op.parentThread, LuaValue.NONE, "mutex callback completion")
+    }
+
+    private fun resumeMutexChild(childThread: LuaThread, args: Varargs, continuation: MutexContinuation) {
+        val previous = LuaState.current()
+        LuaState.setCurrent(luaState)
+        try {
+            val result = childThread.resume(args)
+            if (childThread.status == "dead") {
+                if (result.arg1().toboolean()) {
+                    finishMutexOperation(continuation, result.subargs(2), null)
+                } else {
+                    finishMutexOperation(
+                        continuation,
+                        LuaValue.NONE,
+                        LuaError(result.arg(2).optjstring("mutex callback error"))
+                    )
+                }
+            }
+        } finally {
+            LuaState.setCurrent(previous)
+        }
+    }
+
+    private fun runMutexCallback(op: MutexOperation, mutex: MutexState): Varargs? {
+        val continuation = op.continuation
+            ?: error("mutex operation has no continuation")
+
+        val childThread = LuaThread(luaState, op.function)
+        childThread.executionContext = op.executor
+
+        val resumer = SerializedResumer(
+            childThread,
+            op.executor,
+            resume = { args -> resumeMutexChild(childThread, args, continuation) },
+            onFailure = { e -> finishMutexOperation(continuation, LuaValue.NONE, e) },
+        )
+        childThread.resumeHandler = LuaThread.ResumeHandler { _, value ->
+            resumer.requestResume(value)
+        }
+
+        resumer.requestResume(op.args)
+        return null
+    }
+
+    private fun handleMutexWith(args: Varargs): Varargs {
+        val mutexObj = args.arg(1).asObject<MutexObject>()
+            ?: throw LuaError("mutex:with: expected mutex, got ${args.arg(1).typename()}")
+        val mutex = mutexObj.state
+        val fn = args.arg(2).asFunction()
+            ?: throw LuaError("mutex:with: expected function, got ${args.arg(2).typename()}")
+        val fnArgs = args.subargs(3)
+
+        val coro = luaState.currentThread
+            ?: throw LuaError("mutex:with: must be called inside a coroutine")
+        val executor = coro.executionContext as? AsyncExecutor
+            ?: throw LuaError("mutex:with: no executor context")
+
+        val op = MutexOperation(coro, executor, fn, fnArgs)
+        val continuation = MutexContinuation(mutex, op)
+        op.continuation = continuation
+
+        if (mutex.tryAcquire(op)) {
+            runMutexCallback(op, mutex)
+        }
+        throw YieldContinuationException(mutexWithContinuable, args, continuation)
+    }
+
+    private val mutexWithFn: LuaFunction by lazy { luaVarFunction(::handleMutexWith) }
+
+    private val mutexWithContinuable: LuaFunction by lazy {
+        object : LuaContinuableFunction<MutexContinuation>() {
+            override fun invoke(args: Varargs, continuation: MutexContinuation?): Varargs {
+                if (continuation != null) {
+                    if (continuation.error != null) {
+                        throw continuation.error!!
+                    }
+                    return continuation.result
+                }
+                return handleMutexWith(args)
+            }
+        }
+    }
+
+    // ── Resume helper (always goes through the serialized handler) ──────
+
+    internal fun resumeThread(thread: LuaThread, args: Varargs, context: String) {
+        val handler = thread.resumeHandler
+            ?: throw LuaError(
+                "$context: coroutine has no resume handler; async operations require an async-capable coroutine"
+            )
+        handler.resume(thread, args)
     }
 
     // ── Module table ───────────────────────────────────────────────────
@@ -461,6 +793,7 @@ class AsyncLib(
         responseMetaReset()
         val module = LuaTable()
         module.set("task", luaVarFunction(::handleTask))
+        module.set("run", runContinuable)
         module.set("promise", luaVarFunction(::handlePromise))
         module.set("resolve", luaVarFunction(::handleResolve))
         module.set("error", luaVarFunction(::handleError))
@@ -468,6 +801,7 @@ class AsyncLib(
         module.set("allSettled", allSettledContinuable)
         module.set("sleep", luaVarFunction(::handleSleep))
         module.set("fetch", luaVarFunction(::handleFetch))
+        module.set("mutex", luaVarFunction(::handleMutex))
         return module
     }
 

@@ -7,31 +7,43 @@ import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaThread
 import org.luaj.vm2.LuaValue
 import java.util.PriorityQueue
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 class Scheduler(private val stateProvider: () -> LuaState) {
     private companion object {
         private const val MAX_TASKS_PER_TICK = 1024
     }
+    private val lock = ReentrantLock()
     private var nextId = 0
+    @Volatile
     var currentTick = 0L
     private val tasks = PriorityQueue(compareBy<ScheduledTask> { it.fireAtTick })
     private val cancelledIds = HashSet<Int>()
 
     fun tick() {
-        currentTick++
+        val due = ArrayList<ScheduledTask>()
+        lock.withLock {
+            currentTick++
+            var processed = 0
+            while (tasks.isNotEmpty() && tasks.peek().fireAtTick <= currentTick && processed < MAX_TASKS_PER_TICK) {
+                val task = tasks.poll()
+                processed++
+
+                if (task.id in cancelledIds) {
+                    cancelledIds.remove(task.id)
+                    continue
+                }
+
+                if (task.repeating && task.interval > 0) {
+                    tasks.offer(task.copy(fireAtTick = task.fireAtTick + task.interval))
+                }
+                due.add(task)
+            }
+        }
 
         val state = stateProvider()
-        var processed = 0
-
-        while (tasks.isNotEmpty() && tasks.peek().fireAtTick <= currentTick && processed < MAX_TASKS_PER_TICK) {
-            val task = tasks.poll()
-            processed++
-
-            if (task.id in cancelledIds) {
-                cancelledIds.remove(task.id)
-                continue
-            }
-
+        for (task in due) {
             try {
                 val cb = task.callback
                 if (cb is LuaClosure) {
@@ -42,40 +54,37 @@ class Scheduler(private val stateProvider: () -> LuaState) {
             } catch (e: LuaError) {
                 PxIgnis.logger.error("Ошибка в задании планировщика #${task.id}: ${e.message}", e)
             }
-
-            if (task.repeating && task.interval > 0) {
-                tasks.offer(task.copy(fireAtTick = task.fireAtTick + task.interval))
-            }
         }
     }
 
-    fun schedule(delay: Int, callback: LuaFunction): Int {
+    fun schedule(delay: Int, callback: LuaFunction): Int = lock.withLock {
         val id = nextId++
         tasks.offer(ScheduledTask(id, currentTick + delay.coerceAtLeast(0), 0, false, callback))
-        return id
+        id
     }
 
-    fun scheduleRepeating(delay: Int, interval: Int, callback: LuaFunction): Int {
+    fun scheduleRepeating(delay: Int, interval: Int, callback: LuaFunction): Int = lock.withLock {
         val id = nextId++
-
         val safeInterval = interval.coerceAtLeast(1)
         tasks.offer(
             ScheduledTask(id, currentTick + delay.coerceAtLeast(0), safeInterval, true, callback)
         )
-        return id
+        id
     }
 
-    fun cancel(id: Int): Boolean {
-        if (id >= nextId) return false
-        if (id in cancelledIds) return false
+    fun cancel(id: Int): Boolean = lock.withLock {
+        if (id >= nextId) return@withLock false
+        if (id in cancelledIds) return@withLock false
         cancelledIds.add(id)
-        return true
+        true
     }
 
     fun clear() {
-        tasks.clear()
-        cancelledIds.clear()
-        nextId = 0
+        lock.withLock {
+            tasks.clear()
+            cancelledIds.clear()
+            nextId = 0
+        }
     }
 }
 

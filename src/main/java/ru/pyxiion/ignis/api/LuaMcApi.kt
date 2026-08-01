@@ -29,7 +29,8 @@ import ru.pyxiion.ignis.api.wrappertoLuaValue.PlayerListWrapper
 import ru.pyxiion.ignis.storage.StorageManager
 import java.nio.file.Path
 import java.util.*
-import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class LuaMcApi(
     private val server: MinecraftServer,
@@ -39,7 +40,34 @@ class LuaMcApi(
     private val modScope: CoroutineScope,
 ) {
     val scheduler = Scheduler(stateProvider)
-    val asyncLib = AsyncLib(Executor { r -> server.execute(r) }, stateProvider(), scheduler)
+
+    private val asyncExecutors = AsyncExecutorRegistry()
+    private val asyncThreadPool: ExecutorService = Executors.newFixedThreadPool(
+        Runtime.getRuntime().availableProcessors().coerceIn(2, 8),
+        Thread.ofPlatform().name("PxIgnis-async-", 0).factory()
+    )
+
+    init {
+        asyncExecutors.register(
+            AsyncExecutor(
+                name = "main",
+                dispatch = { runnable -> server.execute(runnable) },
+            )
+        )
+        asyncExecutors.register(
+            AsyncExecutor(
+                name = "threadpool",
+                dispatch = { runnable -> asyncThreadPool.execute(runnable) },
+                shutdown = { asyncThreadPool.shutdown() },
+            )
+        )
+    }
+
+    val asyncLib = AsyncLib(asyncExecutors, stateProvider(), scheduler)
+
+    fun shutdownAsync() {
+        asyncExecutors.shutdown()
+    }
     private val playerCache = mutableMapOf<UUID, LuaValue>()
 
     fun suspendFunction(block: suspend (Varargs) -> Varargs): LuaFunction =
@@ -316,8 +344,10 @@ class LuaMcApi(
         MetaTableRegistry.init()
 
         val state = stateProvider()
+        val mainExecutor = asyncExecutors.resolve("main")
+        state.getMainThread().executionContext = mainExecutor
         state.getMainThread().resumeHandler = LuaThread.ResumeHandler { thread: LuaThread, args: Varargs ->
-            server.run { thread.resumeOrLog(args, "async callback") }
+            mainExecutor.dispatch { thread.resumeOrLog(args, "async callback") }
         }
 
         val mcMeta = LuaTable()
