@@ -2,6 +2,8 @@ package org.luaj.vm2;
 
 import junit.framework.TestCase;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.luaj.vm2.lib.VarArgFunction;
 import org.luaj.vm2.lib.jse.JsePlatform;
 
@@ -150,5 +152,50 @@ public class JavaFunctionYieldTest extends TestCase {
 		} catch (LuaError e) {
 			assertTrue(e.getMessage().contains("cannot yield main thread"));
 		}
+	}
+
+	public void testClosureErrorWithoutLuaThreadDoesNotNPE() {
+		LuaValue func = state.load("error('test-error-123')", "test").checkfunction();
+		AtomicReference<Throwable> caught = new AtomicReference<>();
+		Thread t = new Thread(() -> {
+			try {
+				func.call();
+			} catch (Throwable ex) {
+				caught.set(ex);
+			}
+		});
+		t.start();
+		try {
+			t.join();
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			fail("interrupted while joining test thread");
+		}
+		assertNotNull("expected an exception", caught.get());
+		assertTrue(caught.get() instanceof LuaError);
+		assertTrue(caught.get().getMessage().contains("test-error-123"));
+	}
+
+	public void testClosureErrorWithDebuglibWithoutLuaThreadDoesNotNPE() {
+		LuaState debugState = JsePlatform.debugState();
+		LuaValue func = debugState.load("error('dbg-error')", "test").checkfunction();
+		AtomicReference<Throwable> caught = new AtomicReference<>();
+		Thread t = new Thread(() -> {
+			try {
+				func.call();
+			} catch (Throwable ex) {
+				caught.set(ex);
+			}
+		});
+		t.start();
+		try {
+			t.join();
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			fail("interrupted while joining test thread");
+		}
+		assertNotNull("expected an exception", caught.get());
+		assertTrue(caught.get() instanceof LuaError);
+		assertTrue(caught.get().getMessage().contains("dbg-error"));
 	}
 }
