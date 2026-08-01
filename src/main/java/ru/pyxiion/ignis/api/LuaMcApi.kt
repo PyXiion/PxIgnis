@@ -1,6 +1,7 @@
 package ru.pyxiion.ignis.api
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException
+import kotlinx.coroutines.CoroutineScope
 import net.minecraft.entity.Entity
 import net.minecraft.inventory.SimpleInventory
 import net.minecraft.nbt.NbtIo
@@ -34,13 +35,18 @@ class LuaMcApi(
     private val storage: StorageManager,
     private val stateProvider: () -> LuaState,
     private val eventBus: EventBus,
+    private val modScope: CoroutineScope,
 ) {
     val scheduler = Scheduler(stateProvider)
     private val playerCache = mutableMapOf<UUID, LuaValue>()
 
+    fun suspendFunction(block: suspend (Varargs) -> Varargs): LuaFunction =
+        luaSuspendFunction(modScope, block)
+
     init {
         EntityWrap.sharedPlayerCache = playerCache
         EntityWrap.sharedTickProvider = { scheduler.currentTick }
+        RegionManager.sharedStateProvider = stateProvider
     }
 
     fun invalidatePlayer(uuid: UUID) {
@@ -306,6 +312,11 @@ class LuaMcApi(
 
     fun toTable(): LuaTable {
         MetaTableRegistry.init()
+
+        val state = stateProvider()
+        state.getMainThread().resumeHandler = LuaThread.ResumeHandler { thread: LuaThread, args: Varargs ->
+            server.run { thread.resumeOrLog(args, "async callback") }
+        }
 
         val mcMeta = LuaTable()
         mcMeta.rawset("__index", luaFunction { _, key ->

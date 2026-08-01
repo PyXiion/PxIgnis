@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis
 
+import kotlinx.coroutines.cancel
 import me.lucko.fabric.api.permissions.v0.Permissions
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
@@ -96,6 +97,10 @@ class PxIgnis : ModInitializer {
         })
 
         ServerLifecycleEvents.SERVER_STOPPING.register(fun(server) {
+            try {
+                runtime.modScope.cancel()
+            } catch (_: UninitializedPropertyAccessException) {
+            }
             try {
                 if (storageManager != null) {
                     runtime.scheduler.clear()

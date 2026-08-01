@@ -9,6 +9,7 @@ import net.minecraft.util.math.Box
 import net.minecraft.util.math.ChunkPos
 import net.minecraft.util.math.Vec3d
 import org.luaj.vm2.LuaFunction
+import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.EventBus
 import ru.pyxiion.ignis.PxIgnis
@@ -37,7 +38,7 @@ class Region internal constructor(
     val world: ServerWorld,
     @Volatile var bounds: Box,
 ) {
-    internal val bus = EventBus(" region #$id", PxIgnis.logger)
+    internal val bus = EventBus(" region #$id", PxIgnis.logger) { RegionManager.sharedStateProvider() }
     private val contained = mutableSetOf<UUID>()
 
     fun contains(pos: Vec3d): Boolean = bounds.contains(pos)
@@ -137,6 +138,8 @@ object RegionManager {
     private val regionsById = mutableMapOf<Int, Region>()
     private val tickSubscribers = mutableSetOf<Region>()
     private var nextId = 0
+
+    var sharedStateProvider: () -> LuaState? = { null }
 
     internal fun create(world: ServerWorld, bounds: Box): Region {
         val region = Region(nextId++, world, bounds)

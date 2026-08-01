@@ -1,5 +1,8 @@
 package ru.pyxiion.ignis
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import net.minecraft.server.MinecraftServer
 import ru.pyxiion.ignis.api.LuaMcApi
 import ru.pyxiion.ignis.api.manager.*
@@ -13,11 +16,11 @@ class IgnisRuntime(
     private val server: MinecraftServer,
     private val storageManager: StorageManager,
 ) {
-    val eventManager = EventBus("root", PxIgnis.logger)
-
     private val commandManager = LuaCommandManager(server)
     private val environment = ScriptEnvironment()
-    val api: LuaMcApi = LuaMcApi(server, storageManager, { environment.luaState }, eventManager)
+    val modScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val eventManager = EventBus("root", PxIgnis.logger, { environment.luaStateOrNull })
+    val api: LuaMcApi = LuaMcApi(server, storageManager, { environment.luaState }, eventManager, modScope)
     val scheduler: Scheduler get() = api.scheduler
     private val commandRegistrar: CommandRegistrar = CommandRegistrar(commandManager, { environment.luaState })
     private val scriptLoader = ScriptLoader()

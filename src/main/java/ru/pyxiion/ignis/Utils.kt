@@ -1,14 +1,20 @@
 package ru.pyxiion.ignis
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import me.lucko.fabric.api.permissions.v0.Permissions
 import net.minecraft.command.CommandSource
 import org.luaj.vm2.*
+import org.luaj.vm2.lib.LuaContinuableFunction
 import org.luaj.vm2.lib.OneArgFunction
 import org.luaj.vm2.lib.ThreeArgFunction
 import org.luaj.vm2.lib.TwoArgFunction
 import org.luaj.vm2.lib.VarArgFunction
 import org.luaj.vm2.lib.ZeroArgFunction
 import org.slf4j.Logger
+import java.util.concurrent.CancellationException
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
 
 fun CommandSource.checkPermission(permission: String): Boolean = Permissions.check(this, permission)
 
@@ -40,16 +46,13 @@ class KotlinVarArgBridge(private val f: (args: Varargs) -> Varargs) : VarArgFunc
     override fun invoke(args: Varargs): Varargs = f(args)
 }
 
-fun luaFunctionZero(f: () -> LuaValue) = KotlinZeroArgBridge(f)
 fun luaFunction(f: (LuaValue) -> LuaValue): LuaFunction = KotlinOneArgBridge(f)
 fun luaFunction(f: (LuaValue, LuaValue) -> LuaValue): LuaFunction = KotlinTwoArgBridge(f)
 fun luaFunction(f: (LuaValue, LuaValue, LuaValue) -> LuaValue): LuaFunction = KotlinThreeArgBridge(f)
-
-
 fun ((Varargs) -> Varargs).asVarArgFunction() = KotlinVarArgBridge(this)
-
 fun luaVarFunction(f: (args: Varargs) -> Varargs): LuaFunction = KotlinVarArgBridge(f)
 
+fun luaFunctionZero(f: () -> LuaValue) = KotlinZeroArgBridge(f)
 inline fun luaFunctionNil(crossinline f: (LuaValue) -> Unit): LuaFunction =
     luaFunction { v: LuaValue ->
         f(v)
@@ -71,6 +74,53 @@ inline fun luaFunctionNil(crossinline f: (LuaValue, LuaValue, LuaValue) -> Unit)
 inline fun luaVarFunctionNil(crossinline f: (Varargs) -> Unit): LuaFunction =
     KotlinVarArgBridge { args ->
         f(args)
+        LuaValue.NIL
+    }
+
+fun luaSuspendFunction(scope: CoroutineScope, block: suspend (Varargs) -> Varargs): LuaFunction =
+    object : LuaContinuableFunction<CompletableFuture<Varargs>>() {
+        override fun invoke(args: Varargs, continuation: CompletableFuture<Varargs>?): Varargs {
+            if (continuation != null) {
+                if (continuation.isDone) {
+                    try {
+                        return continuation.get() ?: LuaValue.NIL
+                    } catch (e: ExecutionException) {
+                        throw LuaError(e.cause ?: e)
+                    } catch (e: CancellationException) {
+                        throw LuaError("coroutine cancelled")
+                    } catch (e: InterruptedException) {
+                        throw LuaError("coroutine interrupted")
+                    }
+                }
+                throw YieldContinuationException(this, args, continuation)
+            }
+
+            val thread = LuaState.current()?.currentThread
+                ?: throw LuaError("must run inside a coroutine")
+            if (thread.isMainThread)
+                throw LuaError("cannot yield from main thread")
+            val handler = thread.resumeHandler
+                ?: throw LuaError("no resume handler configured")
+
+            val future = CompletableFuture<Varargs>()
+            future.handle { _, _ ->
+                handler.resume(thread, LuaValue.NONE)
+                null
+            }
+            scope.launch {
+                try {
+                    future.complete(block(args))
+                } catch (e: Exception) {
+                    future.completeExceptionally(e)
+                }
+            }
+            throw YieldContinuationException(this, args, future)
+        }
+    }
+
+inline fun luaSuspendFunctionNil(scope: CoroutineScope, crossinline block: suspend (Varargs) -> Unit): LuaFunction =
+    luaSuspendFunction(scope) { args ->
+        block(args)
         LuaValue.NIL
     }
 

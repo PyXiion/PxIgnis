@@ -24,6 +24,7 @@ import ru.pyxiion.ignis.sandbox.Vfs
 class ScriptEnvironment {
     private var _state: LuaState? = null
     val luaState: LuaState get() = _state!!
+    val luaStateOrNull: LuaState? get() = _state
 
     fun rebuild(api: LuaMcApi, commandRegistrar: CommandRegistrar): LuaState {
         val state = LuaState()
