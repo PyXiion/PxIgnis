@@ -69,7 +69,11 @@ dependencies {
     implementation "com.pxluanova:pxluanova-core:3.1.0"
     shadow "com.pxluanova:pxluanova-core:3.1.0"
     implementation "com.pxluanova:pxluanova-jse:3.1.0"
-    shadow "com.pxluanova:pxluanova-jse:3.1.0"
+    // Minecraft already ships commons-lang3 (3.17.0 on 1.21.10, 3.19.0 on 1.21.11);
+    // BCEL only pulls it in transitively, so don't shadow a conflicting copy.
+    shadow ("com.pxluanova:pxluanova-jse:3.1.0") {
+        exclude group: 'org.apache.commons', module: 'commons-lang3'
+    }
 
     // Permissions API
     def permApiVersion = buildTarget == '1.21.10' ? '0.5.0' : '0.6.1'
