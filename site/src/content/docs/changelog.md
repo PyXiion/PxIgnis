@@ -5,6 +5,23 @@ description: Release history for PxIgnis.
 
 # Changelog
 
+## Unreleased — Async coroutines
+
+### Internal
+
+- **Async suspend bridge**: `luaSuspendFunction` / `luaSuspendFunctionNil` let Lua coroutines call Kotlin `suspend`
+  blocks without blocking the server thread. The coroutine yields, the block runs on a `CoroutineScope`, and the result
+  resumes the coroutine via a per-thread `LuaThread.ResumeHandler` — set on the main thread and inherited by child
+  coroutines, dispatching resumes back to the server. Calls from outside a coroutine or without a resume handler raise
+  a clear `LuaError` instead of hanging. See `docs/async-suspend-bridge.md`.
+- **`lua_resume_sync`**: now sets and restores `LuaState.current()` so thread-local state lookups work on the server
+  thread like they do in async coroutines.
+- **EventBus**: Lua closure handlers now run through a `LuaThread` instead of being invoked directly, so `mc.sleep`,
+  `mc.fetch`, and suspend functions work inside event callbacks like they do in scheduled tasks and commands.
+- **modScope**: `IgnisRuntime` owns a mod-lifetime `CoroutineScope` (`SupervisorJob`, cancelled on server stop).
+  `LuaMcApi.suspendFunction` wraps it for convenience. `RegionManager` gained a shared state provider so region events
+  resolve the Lua state like the root event bus does.
+
 ## 0.16.1 — Interop refactor, scheduler bounds, template fixes (2026-06-26)
 
 ### Bugfixes
