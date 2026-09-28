@@ -5,6 +5,40 @@ description: Release history for PxIgnis.
 
 ## Unreleased
 
+### Breaking
+
+- **New event model.** Built-in events have new names (`player.join`, `block.break`, `entity.hurt`, ...) and pass
+  one event table `e` instead of positional arguments; cancel with `e:cancel(reason?)`. The old names still work
+  with positional arguments and `return false`, and log a deprecation warning. See
+  [Events](/reference/events#old-event-names) for the mapping.
+- **Cancelled events skip later handlers** unless they are registered with `{ receiveCancelled = true }`. This also
+  applies to handlers under the old names.
+- **Errors cancel.** A handler of a cancellable event that throws now cancels the event (a crashing whitelist used to
+  let everyone in).
+- **`mc.emit` refuses built-in event names.** It returns `false` when a handler of the custom event returned `false`.
+- Region events: `enter`, `leave`, `move`, `death` with `e.entity` / `e.player` / `e.region`; the old `entity_*` /
+  `player_*` names still work.
+
+### New
+
+- **Handler options** for `mc.on` and `region:on`: `priority` (a number, higher runs first; aliases `lowest` ...
+  `highest`), `receiveCancelled`, `throttle`. Options may also come before the handler, for Nova trailing blocks.
+- **Unknown event names** produce a warning with the closest name ("did you mean 'player.join'?").
+- **Script errors in chat**: errors in handlers, commands and scheduled tasks are sent to players with
+  `px.ignis.prompt_errors` (operators by default), at most once per 10 seconds per error.
+- **Editor support**: `config/ignis/.types/` (LuaLS type definitions, refreshed on start) and `.luarc.json` (created
+  once). Event handlers are typed per event.
+- **`/ignis watch on|off`**: reload automatically when a `.lua` file is saved (`-Dpxignis.watch=true` to start on).
+- **`/ignis eval <lua>`**: run Lua in the scripts' environment, `me` is the caller (`px.ignis.eval`).
+- **`/ignis status`**: loaded scripts, handlers per event, commands, scheduled tasks, regions.
+- `player.login` kick message: `e:cancel("reason")`.
+
+### Bugfixes
+
+- Region `death` / `entity_death` / `player_death` handlers were never called.
+- `throttle` on region handlers only counted down while the region had a `tick` handler; the global bus only while
+  some `tick` handler existed.
+
 ## 0.17.1 — CI and bootstrap fixes (2026-08-01)
 
 ### Bugfixes
