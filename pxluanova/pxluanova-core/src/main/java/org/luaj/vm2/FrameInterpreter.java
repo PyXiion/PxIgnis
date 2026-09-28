@@ -6,10 +6,79 @@ import org.luaj.vm2.lib.LuaContinuableFunction;
 
 class FrameInterpreter {
 
+	/** Callee result is returned straight from the caller frame (pcall/xpcall in tail position). */
+	static final int TAIL_RETURN = -1;
+
+	/**
+	 * Bytecode for {@code function(f, ...) return f(...) end}. Used as the frame for a coroutine body or
+	 * a pcall target that is a Java function, so that function runs as an ordinary (yieldable) call.
+	 */
+	static final Prototype TRAMPOLINE = trampoline();
+
+	private static Prototype trampoline() {
+		Prototype p = new Prototype();
+		p.code = new int[] {
+			Lua.OP_VARARG | (1 << Lua.POS_A),     // VARARG   1 0  -> R1.. = ...
+			Lua.OP_TAILCALL | (0 << Lua.POS_A),   // TAILCALL 0 0 0 -> return R0(R1..)
+			Lua.OP_RETURN | (0 << Lua.POS_A),     // RETURN   0 0
+		};
+		p.lineinfo = new int[] { 0, 0, 0 };
+		p.k = new LuaValue[0];
+		p.p = new Prototype[0];
+		p.upvalues = new Upvaldesc[0];
+		p.locvars = new LocVars[0];
+		p.source = LuaString.valueOf("=[C]");
+		p.numparams = 1;
+		p.is_vararg = 1;
+		p.maxstacksize = 2;
+		return p;
+	}
+
+	static LuaFrame newFrame(LuaClosure lc, Varargs args) {
+		LuaValue[] stack = new LuaValue[lc.p.maxstacksize];
+		System.arraycopy(LuaValue.NILS, 0, stack, 0, lc.p.maxstacksize);
+		int nfix = Math.min(args.narg(), lc.p.numparams);
+		for (int j = 0; j < nfix; j++)
+			stack[j] = args.arg(j + 1);
+		LuaFrame frame = new LuaFrame();
+		frame.closure = lc;
+		frame.stack = stack;
+		frame.varargs = lc.p.is_vararg != 0 ? args.subargs(lc.p.numparams + 1) : LuaValue.NONE;
+		frame.v = LuaValue.NONE;
+		frame.openups = lc.p.p.length > 0 ? new UpValue[stack.length] : null;
+		return frame;
+	}
+
+	/** Frame that calls a non-closure function {@code f} with {@code args}. */
+	static LuaFrame trampolineFrame(LuaState state, LuaValue f, Varargs args) {
+		return newFrame(new LuaClosure(TRAMPOLINE, LuaValue.NIL, state), LuaValue.varargsOf(f, args));
+	}
+
 	static Varargs run(LuaThread.State s) {
 		Deque<LuaFrame> frames = s.frameStack;
+		while (true) {
+			try {
+				return runFrames(s, frames);
+			} catch (LuaError le) {
+				if (!recover(s, frames, le)) {
+					if (le.traceback == null)
+						unwindFrames(frames, le);
+					throw le;
+				}
+			} catch (Exception e) {
+				LuaError le = new LuaError(e);
+				if (!recover(s, frames, le)) {
+					unwindFrames(frames, le);
+					throw le;
+				}
+			}
+			if (frames.isEmpty())
+				return s.result != null ? s.result : LuaValue.NONE;
+		}
+	}
 
-		try {
+	private static Varargs runFrames(LuaThread.State s, Deque<LuaFrame> frames) {
+		{
 			while (!frames.isEmpty()) {
 				if (s.yieldRequested) {
 					if (s.yieldIsInterrupt) {
@@ -39,32 +108,10 @@ class FrameInterpreter {
 								s.result = yce.continuation instanceof Varargs v ? v : LuaValue.NONE;
 								return s.result;
 							}
-							int ci = frame.closure.p.code[frame.pc];
-							int a = (ci >> 6) & 0xff;
-							int c = (ci >> 14) & 0x1ff;
-							if (c > 0) {
-								ret.copyto(frame.stack, a, c - 1);
-								frame.v = LuaValue.NONE;
-							} else {
-								frame.top = a + ret.narg();
-								frame.v = ret.dealias();
-							}
-							frame.pc++;
+							storeCallResults(frame, ret);
 							s.resumeArgs = LuaValue.NONE;
 						} else {
-							int ci = frame.closure.p.code[frame.pc];
-							int ca = (ci >> 6) & 0xff;
-							int cc = (ci >> 14) & 0x1ff;
-							Varargs ra = s.resumeArgs;
-							if (cc > 0) {
-								// FIXME: idk it should be cc - 1 or just cc
-								ra.copyto(frame.stack, ca, cc);
-								frame.v = LuaValue.NONE;
-							} else {
-								frame.top = ca + ra.narg();
-								frame.v = ra.dealias();
-							}
-							frame.pc++;
+							storeCallResults(frame, s.resumeArgs);
 							s.resumeArgs = LuaValue.NONE;
 						}
 					}
@@ -74,15 +121,148 @@ class FrameInterpreter {
 					return s.result != null ? s.result : LuaValue.NONE;
 			}
 			return s.result != null ? s.result : LuaValue.NONE;
-		} catch (LuaError le) {
-			if (le.traceback == null)
-				unwindFrames(frames, le);
-			throw le;
-		} catch (Exception e) {
-			LuaError le = new LuaError(e);
-			unwindFrames(frames, le);
-			throw le;
 		}
+	}
+
+	/** Writes the results of the call instruction at frame.pc (CALL, TAILCALL or TFORCALL) and steps past it. */
+	private static void storeCallResults(LuaFrame frame, Varargs ret) {
+		int ci = frame.closure.p.code[frame.pc];
+		int a = (ci >> 6) & 0xff;
+		int c = (ci >> 14) & 0x1ff;
+		if ((ci & 0x3f) == Lua.OP_TFORCALL) {
+			for (int j = 0; j < c; j++)
+				frame.stack[a + 3 + j] = ret.arg(j + 1);
+			frame.v = LuaValue.NONE;
+		} else if (c > 0) {
+			ret.copyto(frame.stack, a, c - 1);
+			frame.v = LuaValue.NONE;
+		} else {
+			frame.top = a + ret.narg();
+			frame.v = ret.dealias();
+		}
+		frame.pc++;
+	}
+
+	/**
+	 * Pops the top frame and hands {@code result} to its caller (adding the leading {@code true} of a protected
+	 * frame). Returns false when the coroutine body itself has returned; the result is then in {@code s.result}.
+	 */
+	private static boolean finishFrame(LuaThread.State s, Deque<LuaFrame> frames, Varargs result) {
+		LuaState state = s.state;
+		while (true) {
+			LuaFrame frame = frames.pop();
+			closeOpenUps(frame);
+			if (state != null && state.debuglib != null)
+				state.debuglib.onReturn();
+			if (frame.protectedCall) {
+				restoreErrorFunc(s, frame);
+				result = LuaValue.varargsOf(LuaValue.TRUE, result);
+			}
+			if (frames.isEmpty()) {
+				s.result = result;
+				return false;
+			}
+			LuaFrame caller = frames.peek();
+			switch (frame.callerOp) {
+				case Lua.OP_CALL:
+					if (frame.callerC > 0) {
+						result.copyto(caller.stack, frame.callerA, frame.callerC - 1);
+						caller.v = LuaValue.NONE;
+					} else {
+						caller.top = frame.callerA + result.narg();
+						caller.v = result.dealias();
+					}
+					return true;
+				case Lua.OP_TFORCALL:
+					for (int j = 0; j < frame.callerC; j++)
+						caller.stack[frame.callerA + 3 + j] = result.arg(j + 1);
+					caller.v = LuaValue.NONE;
+					return true;
+				case TAIL_RETURN:
+					continue; // the caller returns this result as its own
+				default:
+					return true;
+			}
+		}
+	}
+
+	/** Runs pcall(f, ...) / xpcall(f, h, ...) as a protected frame on top of the current one. */
+	private static void pushProtected(LuaThread.State s, Deque<LuaFrame> frames, boolean xpcall,
+			Varargs callArgs, int callerOp, int a, int c) {
+		LuaValue target = callArgs.arg1();
+		Varargs fnArgs = callArgs.subargs(xpcall ? 3 : 2);
+		LuaFrame f = target instanceof LuaClosure lc
+			? newFrame(lc, fnArgs)
+			: trampolineFrame(s.state, target, fnArgs);
+		f.callerOp = callerOp;
+		f.callerA = a;
+		f.callerC = c;
+		f.protectedCall = true;
+		LuaThread t = s.lua_thread.get();
+		if (t != null) {
+			f.savedErrorFunc = t.errorfunc;
+			t.errorfunc = xpcall ? callArgs.arg(2) : null;
+		}
+		if (s.state != null && s.state.debuglib != null)
+			s.state.debuglib.onCall(f.closure, f.varargs, f.stack);
+		frames.push(f);
+	}
+
+	private static void restoreErrorFunc(LuaThread.State s, LuaFrame f) {
+		LuaThread t = s.lua_thread.get();
+		if (t != null)
+			t.errorfunc = f.savedErrorFunc;
+	}
+
+	/**
+	 * If a protected frame is on the stack, unwinds to it and delivers {@code false, message} to its caller.
+	 * Returns false when nothing catches the error.
+	 */
+	private static boolean recover(LuaThread.State s, Deque<LuaFrame> frames, LuaError le) {
+		LuaFrame target = null;
+		for (LuaFrame f : frames) {
+			if (f.protectedCall) {
+				target = f;
+				break;
+			}
+		}
+		if (target == null)
+			return false;
+
+		// Position and message handler come from the innermost frame, while the handler is still installed.
+		if (le.fileline == null && le.traceback == null) {
+			LuaFrame top = frames.peek();
+			if (top.closure.p != TRAMPOLINE)
+				le.fileline = position(top);
+			try {
+				top.closure.errorHook(le, le.level);
+			} catch (Throwable ignored) {
+			}
+		}
+
+		LuaState state = s.state;
+		while (frames.peek() != target) {
+			LuaFrame f = frames.pop();
+			closeOpenUps(f);
+			if (state != null && state.debuglib != null)
+				state.debuglib.onReturn();
+		}
+		restoreErrorFunc(s, target);
+		target.protectedCall = false;
+		s.yieldRequested = false;
+		s.yieldIsInterrupt = false;
+		s.status = LuaThread.STATUS_RUNNING;
+		LuaValue m = le.getMessageObject();
+		finishFrame(s, frames, LuaValue.varargsOf(LuaValue.FALSE, m != null ? m : LuaValue.NIL));
+		return true;
+	}
+
+	private static String position(LuaFrame frame) {
+		Prototype p = frame.closure.p;
+		return (p.source != null ? p.source.tojstring() : "?") + ":"
+			+ (p.lineinfo != null && frame.pc >= 0 && frame.pc < p.lineinfo.length
+				? String.valueOf(p.lineinfo[frame.pc]) : "?")
+			+ ": ";
 	}
 
 	static void unwindFrames(Deque<LuaFrame> frames, LuaError le) {
@@ -347,6 +527,10 @@ class FrameInterpreter {
 					frame.pc--;
 					return false;
 				}
+				if (func instanceof ProtectedCall pc && callArgs.narg() >= (pc.hasMessageHandler() ? 2 : 1)) {
+					pushProtected(s, frames, pc.hasMessageHandler(), callArgs, Lua.OP_CALL, a, c);
+					return true;
+				}
 				if (func instanceof LuaClosure lc) {
 					LuaValue[] newStack = new LuaValue[lc.p.maxstacksize];
 					System.arraycopy(LuaValue.NILS, 0, newStack, 0, lc.p.maxstacksize);
@@ -422,6 +606,11 @@ class FrameInterpreter {
 					frame.pc--;
 					return false;
 				}
+				if (tfunc instanceof ProtectedCall pc && tcArgs.narg() >= (pc.hasMessageHandler() ? 2 : 1)) {
+					// Not a real tail call: the protected frame must stay to catch errors and add `true`.
+					pushProtected(s, frames, pc.hasMessageHandler(), tcArgs, TAIL_RETURN, a, 0);
+					return true;
+				}
 				if (tfunc instanceof LuaClosure lc) {
 					LuaValue[] newStack = new LuaValue[lc.p.maxstacksize];
 					System.arraycopy(LuaValue.NILS, 0, newStack, 0, lc.p.maxstacksize);
@@ -467,33 +656,8 @@ class FrameInterpreter {
 					TailcallVarargs tv = (TailcallVarargs) tcResult;
 					tcResult = tv.eval();
 				}
-				closeOpenUps(frame);
-				if (state != null && state.debuglib != null)
-					state.debuglib.onReturn();
-				int tcRetOp = frame.callerOp;
-				int tcRetA = frame.callerA;
-				int tcRetC = frame.callerC;
-				frames.pop();
-				if (frames.isEmpty()) {
-					s.result = tcResult;
-					return false;
-				}
-				LuaFrame tcCaller = frames.peek();
-				if (tcRetOp == Lua.OP_CALL) {
-					if (tcRetC > 0) {
-						tcResult.copyto(tcCaller.stack, tcRetA, tcRetC - 1);
-						tcCaller.v = LuaValue.NONE;
-					} else {
-						tcCaller.top = tcRetA + tcResult.narg();
-						tcCaller.v = tcResult.dealias();
-					}
-				} else if (tcRetOp == Lua.OP_TFORCALL) {
-					for (int j = 0; j < tcRetC; j++)
-						tcCaller.stack[tcRetA + 3 + j] = tcResult.arg(j + 1);
-					tcCaller.v = LuaValue.NONE;
-				}
+				return finishFrame(s, frames, tcResult);
 			}
-			return true;
 
 		case Lua.OP_RETURN:
 			b = i >>> 23;
@@ -513,32 +677,7 @@ class FrameInterpreter {
 					result = LuaValue.varargsOf(stack, a, b - 1);
 					break;
 			}
-			closeOpenUps(frame);
-			if (state != null && state.debuglib != null)
-				state.debuglib.onReturn();
-			int retOp = frame.callerOp;
-			int retA = frame.callerA;
-			int retC = frame.callerC;
-			frames.pop();
-			if (frames.isEmpty()) {
-				s.result = result;
-				return false;
-			}
-			LuaFrame caller = frames.peek();
-			if (retOp == Lua.OP_CALL) {
-				if (retC > 0) {
-					result.copyto(caller.stack, retA, retC - 1);
-					caller.v = LuaValue.NONE;
-				} else {
-					caller.top = retA + result.narg();
-					caller.v = result.dealias();
-				}
-			} else if (retOp == Lua.OP_TFORCALL) {
-				for (int j = 0; j < retC; j++)
-					caller.stack[retA + 3 + j] = result.arg(j + 1);
-				caller.v = LuaValue.NONE;
-			}
-			return true;
+			return finishFrame(s, frames, result);
 
 		case Lua.OP_FORLOOP:
 			{
@@ -595,7 +734,22 @@ class FrameInterpreter {
 					frames.push(newFrame);
 					return true;
 				}
-				frame.v = iterFunc.invoke(iterArgs);
+				try {
+					frame.v = iterFunc.invoke(iterArgs);
+				} catch (YieldContinuationException yce) {
+					frame.storedFunc = yce.func;
+					frame.storedCallArgs = yce.callArgs;
+					frame.storedContinuation = yce.continuation;
+					s.yieldRequested = true;
+					s.status = LuaThread.STATUS_SUSPENDED;
+					s.result = yce.continuation instanceof Varargs v ? v : LuaValue.NONE;
+					frame.pc--;
+					return false;
+				}
+				if (s.yieldRequested && !s.yieldIsInterrupt) {
+					frame.pc--;
+					return false;
+				}
 				while (--c >= 0)
 					stack[a + 3 + c] = frame.v.arg(c + 1);
 				frame.v = LuaValue.NONE;

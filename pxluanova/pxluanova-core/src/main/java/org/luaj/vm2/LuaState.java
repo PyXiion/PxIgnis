@@ -208,8 +208,6 @@ public final class LuaState {
 	public PackageLib package_;
 	public DebugLib debuglib;
 
-	public LuaThread.ThreadFactory coroutineThreadFactory = LuaThread.VIRTUAL_THREAD_FACTORY;
-
 	public LuaState() {
 		this(new Builder());
 	}
@@ -293,6 +291,8 @@ public final class LuaState {
 			}
 			if (ct.isMainThread())
 				throw new LuaError("cannot yield main thread");
+			if (!ct.threadState.isYieldable())
+				return; // inside Java-entered or sync-compiled code: keep running, suspend at a later checkpoint
 			ct.threadState.yieldIsInterrupt = true;
 			ct.threadState.lua_yield_sync(LuaValue.NONE);
 			}

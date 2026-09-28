@@ -17,4 +17,9 @@ class LuaFrame {
 	LuaValue storedFunc;
 	Varargs storedCallArgs;
 	Object storedContinuation;
+
+	/** Frame was entered through pcall/xpcall: errors unwind to it and its results get a leading true. */
+	boolean protectedCall;
+	/** The thread's errorfunc before this protected frame replaced it. */
+	LuaValue savedErrorFunc;
 }

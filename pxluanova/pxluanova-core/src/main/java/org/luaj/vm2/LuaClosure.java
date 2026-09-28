@@ -207,6 +207,10 @@ public class LuaClosure extends LuaFunction {
 		if (state != null && state.debuglib != null)
 			state.debuglib.onCall( this, varargs, stack );
 
+		// Inside a coroutine, this nested interpreter was entered from Java: it has no frames the coroutine
+		// could resume, so yielding must fail cleanly instead of silently running on.
+		LuaThread.State nonYieldable = LuaThread.State.enterNonYieldable(state);
+
 		// process instructions
 		try {
 			for (; true; ++pc) {
@@ -522,6 +526,10 @@ public class LuaClosure extends LuaFunction {
 					throw new java.lang.IllegalArgumentException("Illegal opcode: " + (i & 0x3f));
 				}
 			}
+		} catch ( YieldContinuationException yce ) {
+			LuaError le = new LuaError("attempt to yield across a C-call boundary");
+			processErrorHooks(le, p, pc);
+			throw le;
 		} catch ( LuaError le ) {
 			if (le.traceback == null)
 				processErrorHooks(le, p, pc);
@@ -531,6 +539,8 @@ public class LuaClosure extends LuaFunction {
 			processErrorHooks(le, p, pc);
 			throw le;
 		} finally {
+			if (nonYieldable != null)
+				nonYieldable.nonYieldableDepth--;
 			if ( openups != null )
 				for ( int u=openups.length; --u>=0; )
 					if ( openups[u] != null )

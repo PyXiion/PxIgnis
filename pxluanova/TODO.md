@@ -93,7 +93,7 @@
 - [x] MathLib fmod NaN handling
 - [x] OsLib date format improvements
 
-### Phase 7: Virtual Thread Migration (Java 21+)
+### Phase 7: Virtual Thread Migration (Java 21+) — superseded: coroutines are frame-based and synchronous now
 - [x] Raise minimum Java version to 21
 - [x] Replace `synchronized`/`wait()`/`notify()` with `ReentrantLock`/`Condition` in LuaThread.State
 - [x] Add `ThreadFactory` interface with `VIRTUAL_THREAD_FACTORY` and `PLATFORM_THREAD_FACTORY`

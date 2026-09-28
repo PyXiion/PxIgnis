@@ -61,18 +61,27 @@ public class TailcallVarargs extends Varargs {
 	}
 	
 	public Varargs eval() {
-		while ( result == null ) {
-			Varargs r = func.onInvoke(args);
-			if (r.isTailcall()) {
-				TailcallVarargs t = (TailcallVarargs) r;
-				func = t.func;
-				args = t.args;
+		if (result != null)
+			return result;
+		// Evaluated by Java after the nested interpreter that produced it returned: still not yieldable.
+		LuaThread.State nonYieldable = LuaThread.State.enterNonYieldable(LuaState.current());
+		try {
+			while ( result == null ) {
+				Varargs r = func.onInvoke(args);
+				if (r.isTailcall()) {
+					TailcallVarargs t = (TailcallVarargs) r;
+					func = t.func;
+					args = t.args;
+				}
+				else {
+					result = r;
+					func = null;
+					args = null;
+				}
 			}
-			else {
-				result = r;			
-				func = null;
-				args = null;
-			}
+		} finally {
+			if (nonYieldable != null)
+				nonYieldable.nonYieldableDepth--;
 		}
 		return result;
 	}
