@@ -13,7 +13,20 @@ class AsyncLib(
     private val executors: AsyncExecutorRegistry,
     private val luaState: LuaState,
     private val scheduler: Scheduler,
+    private val isolation: Isolation? = null,
 ) {
+
+    /**
+     * Lua states are single-threaded, so tasks on an [AsyncExecutor.isolated] executor run in a fresh state
+     * from [newWorkerState], and work a worker sends to any other executor runs in [mainState]. Crossing states
+     * copies the function, its upvalues, the arguments and the results with [LuaTransfer]; [userdata] decides
+     * which userdata may cross. Without an Isolation every task runs in this library's own state.
+     */
+    class Isolation(
+        val mainState: LuaState,
+        val userdata: LuaTransfer.UserdataPolicy,
+        val newWorkerState: () -> LuaState,
+    )
 
     // ── Executor resolution ──────────────────────────────────────────
 
@@ -32,7 +45,7 @@ class AsyncLib(
     // the owner is notified once through onFailure and queued resumes drop.
 
     internal class SerializedResumer(
-        private val thread: LuaThread,
+        private val isDead: () -> Boolean,
         private val executor: AsyncExecutor,
         private val resume: (Varargs) -> Unit,
         private val onFailure: (Throwable) -> Unit,
@@ -46,7 +59,7 @@ class AsyncLib(
         fun requestResume(args: Varargs) {
             var runNow = false
             lock.withLock {
-                if (failed || thread.status == "dead") return
+                if (failed || isDead()) return
                 if (running) {
                     pending.addLast(args)
                     return
@@ -78,7 +91,7 @@ class AsyncLib(
                     failed = true
                     pending.clear()
                     running = false
-                } else if (thread.status == "dead") {
+                } else if (isDead()) {
                     pending.clear()
                     running = false
                 } else if (pending.isNotEmpty()) {
@@ -125,6 +138,11 @@ class AsyncLib(
         private var _error: Throwable? = null
         private val waiters = mutableListOf<(String, Varargs, Throwable?) -> Unit>()
 
+        // Results produced in another Lua state: kept as a snapshot and rebuilt, once, on the first read.
+        // Reads happen on the consumer's own thread (wait/try/run/all continuations).
+        private var _transferred: LuaTransfer.Snapshot? = null
+        private var _materialize: ((LuaTransfer.Snapshot) -> Varargs)? = null
+
         val state: String get() { lock.withLock { return _state } }
         val isDone: Boolean get() { lock.withLock { return _state != STATE_PENDING } }
         val error: Throwable? get() { lock.withLock { return _error } }
@@ -139,6 +157,25 @@ class AsyncLib(
             return true
         }
 
+        fun resolveTransferred(snapshot: LuaTransfer.Snapshot, materialize: (LuaTransfer.Snapshot) -> Varargs): Boolean {
+            lock.withLock {
+                if (_state != STATE_PENDING) return false
+                _state = STATE_RESOLVED
+                _transferred = snapshot
+                _materialize = materialize
+            }
+            notifyWaiters()
+            return true
+        }
+
+        private fun resultLocked(): Varargs {
+            val snapshot = _transferred ?: return _result
+            _result = _materialize!!(snapshot)
+            _transferred = null
+            _materialize = null
+            return _result
+        }
+
         fun reject(err: Throwable): Boolean {
             lock.withLock {
                 if (_state != STATE_PENDING) return false
@@ -151,7 +188,7 @@ class AsyncLib(
 
         fun get(): Varargs = lock.withLock {
             when (_state) {
-                STATE_RESOLVED -> _result
+                STATE_RESOLVED -> resultLocked()
                 STATE_REJECTED -> throw _error ?: LuaError("awaitable rejected")
                 else -> throw LuaError("awaitable is still pending")
             }
@@ -159,7 +196,7 @@ class AsyncLib(
 
         fun getOrNull(): Varargs? = lock.withLock {
             when (_state) {
-                STATE_RESOLVED -> _result
+                STATE_RESOLVED -> resultLocked()
                 else -> null
             }
         }
@@ -280,16 +317,9 @@ class AsyncLib(
                 val coro = luaState.currentThread
                     ?: throw LuaError("try: must be called inside a coroutine")
 
-                awaitable.await { state, _, error ->
-                    val result = if (state == Awaitable.STATE_RESOLVED) {
-                        LuaValue.varargsOf(LuaValue.TRUE, awaitable.getOrNull() ?: LuaValue.NONE)
-                    } else {
-                        LuaValue.varargsOf(
-                            LuaValue.FALSE,
-                            LuaValue.valueOf(error?.message ?: "unknown error")
-                        )
-                    }
-                    resumeThread(coro, result, "async.try callback")
+                // The continuation reads the outcome; results may only be read on this coroutine's thread.
+                awaitable.await { _, _, _ ->
+                    resumeThread(coro, LuaValue.NONE, "async.try callback")
                 }
                 throw YieldContinuationException(this, args, awaitable)
             }
@@ -298,14 +328,29 @@ class AsyncLib(
 
     // ── Task execution helpers ────────────────────────────────────────
 
-    private fun resumeTask(thread: LuaThread, args: Varargs, awaitable: Awaitable) {
+    /**
+     * Resumes a task coroutine of [state]. When [exportTo] is set the task runs in another state than this
+     * library's, and its results are handed over as a snapshot that this library materializes on read.
+     */
+    private fun resumeTask(
+        thread: LuaThread,
+        args: Varargs,
+        awaitable: Awaitable,
+        state: LuaState = luaState,
+        exportTo: LuaTransfer.UserdataPolicy? = null,
+    ) {
         val previous = LuaState.current()
-        LuaState.setCurrent(luaState)
+        LuaState.setCurrent(state)
         try {
             val result = ScriptWatchdog.guard { thread.resume(args) }
             if (thread.status == "dead") {
                 if (result.arg1().toboolean()) {
-                    awaitable.resolve(result.subargs(2))
+                    if (exportTo == null) {
+                        awaitable.resolve(result.subargs(2))
+                    } else {
+                        val snapshot = LuaTransfer.snapshot(result.subargs(2), state, exportTo) { "task result #$it" }
+                        awaitable.resolveTransferred(snapshot) { LuaTransfer.materialize(it, luaState, exportTo) }
+                    }
                 } else {
                     awaitable.reject(LuaError(result.arg(2).optjstring("task error")))
                 }
@@ -318,12 +363,16 @@ class AsyncLib(
     }
 
     private fun createTaskInternal(executor: AsyncExecutor, f: LuaFunction, taskArgs: Varargs): Awaitable {
+        val iso = isolation
+        if (iso != null && (executor.isolated || luaState !== iso.mainState)) {
+            return createCrossStateTask(iso, executor, f, taskArgs)
+        }
         val awaitable = Awaitable()
         val thread = LuaThread(luaState, f)
         thread.executionContext = executor
 
         val resumer = SerializedResumer(
-            thread,
+            { thread.status == "dead" },
             executor,
             resume = { args -> resumeTask(thread, args, awaitable) },
             onFailure = { e -> awaitable.reject(e) },
@@ -334,6 +383,51 @@ class AsyncLib(
 
         resumer.requestResume(taskArgs)
         return awaitable
+    }
+
+    /**
+     * Runs [f] in another Lua state: a fresh worker state for an isolated executor, the main state otherwise.
+     * The function and arguments are snapshotted here, on the caller's thread, and rebuilt on the executor's
+     * thread before the first resume, so neither state is ever touched by the other's thread.
+     */
+    private fun createCrossStateTask(iso: Isolation, executor: AsyncExecutor, f: LuaFunction, taskArgs: Varargs): Awaitable {
+        val payload = LuaTransfer.snapshot(LuaValue.varargsOf(f, taskArgs), luaState, iso.userdata) { i ->
+            if (i == 1) "the task function" else "task argument #${i - 1}"
+        }
+        val awaitable = Awaitable()
+        val task = CrossStateTask()
+        lateinit var resumer: SerializedResumer
+        resumer = SerializedResumer(
+            { task.thread?.status == "dead" },
+            executor,
+            resume = { args ->
+                var thread = task.thread
+                var resumeArgs = args
+                if (thread == null) {
+                    val state = if (executor.isolated) iso.newWorkerState() else iso.mainState
+                    val values = LuaTransfer.materialize(payload, state, iso.userdata)
+                    thread = LuaThread(state, values.arg1())
+                    thread.executionContext = executor
+                    thread.resumeHandler = LuaThread.ResumeHandler { _, value -> resumer.requestResume(value) }
+                    task.thread = thread
+                    resumeArgs = values.subargs(2)
+                }
+                resumeTask(thread, resumeArgs, awaitable, thread.state, iso.userdata)
+            },
+            onFailure = { e -> awaitable.reject(e) },
+        )
+        resumer.requestResume(LuaValue.NONE)
+        return awaitable
+    }
+
+    companion object {
+        /** Tasks, promises and mutexes: bound to the Lua state that created them. */
+        fun isAsyncObject(instance: Any?): Boolean = instance is AsyncObject || instance is MutexObject
+    }
+
+    private class CrossStateTask {
+        @Volatile
+        var thread: LuaThread? = null
     }
 
     // ── Task ───────────────────────────────────────────────────────────
@@ -699,7 +793,7 @@ class AsyncLib(
         childThread.executionContext = op.executor
 
         val resumer = SerializedResumer(
-            childThread,
+            { childThread.status == "dead" },
             op.executor,
             resume = { args -> resumeMutexChild(childThread, args, continuation) },
             onFailure = { e -> finishMutexOperation(continuation, LuaValue.NONE, e) },
@@ -764,7 +858,7 @@ class AsyncLib(
     // ── Module table ───────────────────────────────────────────────────
 
     fun buildModule(): LuaTable {
-        LuaHttp.resetResponseMeta()
+        if (isolation == null || luaState === isolation.mainState) LuaHttp.resetResponseMeta()
         val module = LuaTable()
         module.set("task", luaVarFunction(::handleTask))
         module.set("run", runContinuable)

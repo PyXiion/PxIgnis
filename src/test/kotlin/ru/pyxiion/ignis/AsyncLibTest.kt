@@ -1194,7 +1194,7 @@ class AsyncLibTest {
             val calls = CopyOnWriteArrayList<Int>()
             val throwOnFirst = AtomicBoolean(true)
             val resumer = AsyncLib.SerializedResumer(
-                co,
+                { co.status == "dead" },
                 executor,
                 resume = { args ->
                     if (throwOnFirst.getAndSet(false)) throw LuaError("callback boom")
@@ -1367,7 +1367,7 @@ class AsyncLibTest {
             val release = CountDownLatch(1)
             val failures = CopyOnWriteArrayList<Throwable>()
             val resumer = AsyncLib.SerializedResumer(
-                co,
+                { co.status == "dead" },
                 executor,
                 resume = { args ->
                     resumed.add(args.arg(1).toint())

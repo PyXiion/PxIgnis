@@ -59,11 +59,14 @@ class LuaMcApi(
                 name = "threadpool",
                 dispatch = { runnable -> asyncThreadPool.execute(runnable) },
                 shutdown = { asyncThreadPool.shutdown() },
+                isolated = true,
             )
         )
     }
 
-    val asyncLib = AsyncLib(asyncExecutors, stateProvider(), scheduler)
+    /** A new `async` library for [state]; each Lua state (main or worker) needs its own. */
+    fun createAsyncLib(state: LuaState, isolation: AsyncLib.Isolation): AsyncLib =
+        AsyncLib(asyncExecutors, state, scheduler, isolation)
 
     fun shutdownAsync() {
         asyncExecutors.shutdown()

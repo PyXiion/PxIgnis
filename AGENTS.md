@@ -48,6 +48,10 @@ JUnit 5 via `kotlin-test-junit5`. Pure logic, no MC runtime. Two tests have quir
   the coroutine when the suspend block completes. Requirements: must be called inside a coroutine (not main thread) and
   the thread must have a `LuaThread.resumeHandler`. The main thread handler is set in `LuaMcApi.init`. `future.handle`
   must be registered BEFORE `scope.launch` (fast-completion race). Design rationale: `docs/async-suspend-bridge.md`.
+- Lua states are single-threaded. `async` tasks on the `threadpool` executor (`AsyncExecutor.isolated`) run in a
+  fresh worker state (`ScriptEnvironment.newWorkerState`: sandbox + `async`, no `mc`); `AsyncLib.Isolation` copies
+  the function, upvalues, args and results across with PxLuaNova's `LuaTransfer` (userdata rules:
+  `StateTransferPolicy`). One `AsyncLib` per state, created in `ScriptEnvironment.rebuild`.
 - `EventBus` requires a `stateProvider: () -> LuaState?` for `LuaClosure` handlers; without it they throw. Regions use
   `RegionManager.sharedStateProvider` (set in `LuaMcApi.init`).
 
