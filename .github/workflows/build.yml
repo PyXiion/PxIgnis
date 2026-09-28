@@ -4,8 +4,8 @@ on:
   push:
     branches: [master]
     tags: ["v*"]
+  # Any base branch, so stacked PRs (PR into another PR's branch) get CI too.
   pull_request:
-    branches: [master]
   workflow_dispatch:
 
 jobs:
