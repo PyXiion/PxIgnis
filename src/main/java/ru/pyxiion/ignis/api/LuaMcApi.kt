@@ -25,7 +25,7 @@ import ru.pyxiion.ignis.api.manager.*
 import ru.pyxiion.ignis.api.util.ItemBuilder
 import ru.pyxiion.ignis.api.util.ItemStackCodec
 import ru.pyxiion.ignis.api.wrapper.*
-import ru.pyxiion.ignis.api.wrappertoLuaValue.PlayerListWrapper
+import ru.pyxiion.ignis.api.wrapper.PlayerListWrapper
 import ru.pyxiion.ignis.storage.StorageManager
 import java.nio.file.Path
 import java.util.*

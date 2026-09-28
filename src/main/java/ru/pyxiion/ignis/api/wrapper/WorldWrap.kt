@@ -46,7 +46,6 @@ import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.unwrapOrNull
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.api.util.performRaycast
-import ru.pyxiion.ignis.api.wrappertoLuaValue.PlayerListWrapper
 import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.unwrap
 import java.util.*
