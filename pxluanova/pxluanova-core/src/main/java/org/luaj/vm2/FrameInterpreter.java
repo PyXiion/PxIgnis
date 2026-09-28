@@ -119,8 +119,8 @@ class FrameInterpreter {
 
 		if (state != null && state.debuglib != null)
 			state.debuglib.onInstruction(frame.pc, frame.v, frame.top);
-		if (state != null && state.isInterrupted())
-			state.handleInterrupt();
+		if (state != null && --state.checkpointCountdown <= 0)
+			state.checkpoint();
 
 		if (s.yieldRequested)
 			return false;

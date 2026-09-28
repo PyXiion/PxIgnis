@@ -55,6 +55,15 @@ globals.coroutineThreadFactory = LuaThread.PLATFORM_THREAD_FACTORY;
 
 The handoff between resumer and coroutine uses `ReentrantLock` + `Condition` (not `synchronized`/`wait()`/`notify()`). The `run()` method holds the lock for the entire Lua execution; `lua_yield()` and `lua_resume()` use `condition.await()`/`condition.signal()` to hand off.
 
+## Checkpoints (instruction polling)
+
+Both interpreters (`FrameInterpreter.step`, `LuaClosure.execute`) decrement `LuaState.checkpointCountdown` per
+instruction and call `LuaState.checkpoint()` every `checkpointInterval` instructions (default 100) — nothing heavier
+runs per instruction. `checkpoint()` services `LuaState.interrupt()` requests and polls the optional
+`Builder.checkpointHandler` (CONTINUE / SUSPEND / throw `LuaError`), which hosts use for time limits. The countdown is
+per-state and unsynchronized on purpose, and it carries across calls so short functions (e.g. infinite tail
+recursion) are still covered.
+
 ## Lambda literal extension
 
 PxLuaNova adds a non-standard `\{ ... }` lambda syntax (off by default, opt-in per file via `--# nova syntax` on line 1):

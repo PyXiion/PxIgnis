@@ -212,8 +212,8 @@ public class LuaClosure extends LuaFunction {
 			for (; true; ++pc) {
 				if (state != null && state.debuglib != null)
 					state.debuglib.onInstruction( pc, v, top );
-				if (state != null && state.isInterrupted())
-					state.handleInterrupt();
+				if (state != null && --state.checkpointCountdown <= 0)
+					state.checkpoint();
 				
 				// pull out instruction
 				i = code[pc];
