@@ -67,6 +67,10 @@ runs per instruction. `checkpoint()` services `LuaState.interrupt()` requests an
 per-state and unsynchronized on purpose, and it carries across calls so short functions (e.g. infinite tail
 recursion) are still covered.
 
+LuaJC-compiled code (`nova.sync`) has no interpreter loop: `JavaBuilder.addBranch` emits a call to the static
+`LuaState.compiledBackwardJump()` before every backward branch, and `TailcallVarargs.eval` calls it per tail
+call; it runs `checkpoint()` on `LuaState.current()` every 100 calls.
+
 ## Lambda literal extension
 
 PxLuaNova adds a non-standard `\{ ... }` lambda syntax (off by default, opt-in per file via `--# nova syntax` on line 1):

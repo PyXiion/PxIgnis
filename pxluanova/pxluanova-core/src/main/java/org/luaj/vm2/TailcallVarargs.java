@@ -67,6 +67,7 @@ public class TailcallVarargs extends Varargs {
 		LuaThread.State nonYieldable = LuaThread.State.enterNonYieldable(LuaState.current());
 		try {
 			while ( result == null ) {
+				LuaState.compiledBackwardJump(); // endless tail recursion has no loop instruction to poll at
 				Varargs r = func.onInvoke(args);
 				if (r.isTailcall()) {
 					TailcallVarargs t = (TailcallVarargs) r;

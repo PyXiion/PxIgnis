@@ -183,6 +183,29 @@ public final class LuaState {
 	private final InterruptHandler checkpointHandler;
 	private final int checkpointInterval;
 
+	/** Countdown for LuaJC-compiled code, which has no LuaState at hand; see {@link #compiledBackwardJump()}. */
+	private static int compiledCountdown = DEFAULT_CHECKPOINT_INTERVAL;
+
+	/**
+	 * Called by LuaJC-compiled code on every backward jump (loop iteration) and by tail-call loops: runs
+	 * {@link #checkpoint()} on the current state once every {@link #DEFAULT_CHECKPOINT_INTERVAL} calls.
+	 * Unsynchronized on purpose, like {@link #checkpointCountdown}.
+	 */
+	public static void compiledBackwardJump() throws LuaError {
+		if (--compiledCountdown > 0)
+			return;
+		compiledCountdown = DEFAULT_CHECKPOINT_INTERVAL;
+		LuaState s = current();
+		if (s == null)
+			return;
+		try {
+			s.checkpoint();
+		} catch (LuaError e) {
+			compiledCountdown = 1; // as in checkpoint(): re-check at the very next jump, so pcall cannot hide it
+			throw e;
+		}
+	}
+
 	/** Instructions left until the next checkpoint. Shared by every thread running this state;
 	 *  it is deliberately not synchronized: a lost decrement only delays a checkpoint slightly. */
 	int checkpointCountdown;

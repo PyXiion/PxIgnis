@@ -103,6 +103,47 @@ public class LuaStateCheckpointTest extends TestCase {
 		assertTrue("too many polls: " + polls.get(), polls.get() < 1000);
 	}
 
+	/** nova.sync / LuaJC code has no interpreter loop: it polls on backward jumps and tail-call loops. */
+	private static LuaState compilingState(AtomicInteger polls, int limit) {
+		LuaState state = abortingState(polls, limit);
+		state.globals.load(new org.luaj.vm2.lib.BaseLib());
+		state.globals.load(new org.luaj.vm2.lib.jse.NovaLib());
+		return state;
+	}
+
+	private static void assertStopped(LuaState state, String script) {
+		try {
+			state.load(script, "test").call();
+			fail("expected LuaError");
+		} catch (LuaError e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("checkpoint limit"));
+		}
+	}
+
+	public void testCompiledInfiniteLoopIsStopped() {
+		AtomicInteger polls = new AtomicInteger();
+		LuaState state = compilingState(polls, 50);
+		assertStopped(state, "nova.sync(function() while true do end end)()");
+	}
+
+	public void testCompiledNumericForIsPolled() {
+		AtomicInteger polls = new AtomicInteger();
+		LuaState state = compilingState(polls, 50);
+		assertStopped(state, "nova.sync(function() local x = 0 for i = 1, 1e12 do x = x + i end return x end)()");
+	}
+
+	public void testCompiledPcallLoopIsStopped() {
+		AtomicInteger polls = new AtomicInteger();
+		LuaState state = compilingState(polls, 50);
+		assertStopped(state, "nova.sync(function() while true do pcall(function() while true do end end) end end)()");
+	}
+
+	public void testCompiledTailRecursionIsStopped() {
+		AtomicInteger polls = new AtomicInteger();
+		LuaState state = compilingState(polls, 50);
+		assertStopped(state, "nova.sync(function() local function f(n) return f(n + 1) end return f(0) end)()");
+	}
+
 	public void testSuspendYieldsCoroutine() {
 		LuaState state = newState(LuaState.builder().checkpointHandler(() -> InterruptAction.SUSPEND));
 		LuaThread thread = new LuaThread(state, state.load("while true do end", "test"));
