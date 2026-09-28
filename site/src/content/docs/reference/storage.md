@@ -39,6 +39,25 @@ data.stats.kills = 5
 data.stats.name = "player_stats"
 ```
 
+## Assigning a Table Stores a Copy
+
+Assigning a table to `mc.data` or `player.data` stores a copy of it. Changes to the original table after the
+assignment are not saved:
+
+```lua
+-- Wrong: `homes` is the local table, the saved copy stays empty
+local homes = {}
+player.data.homes = homes
+homes.base = { x = 0, y = 64, z = 0 }
+
+-- Right: assign first, then work with the saved table
+player.data.homes = player.data.homes or {}
+local homes = player.data.homes
+homes.base = { x = 0, y = 64, z = 0 }
+```
+
+The table you read back from storage is the saved one, so changes to it (at any depth) are saved.
+
 ## Data Validation
 
 The following types are **not** allowed in storage and will raise an error:
