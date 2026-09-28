@@ -27,7 +27,8 @@ Region.entities = nil
 ---@param callback fun(e: RegionEvent)
 ---@param opts? EventOptions
 ---@return integer
----@overload fun(self: Region, event: '"enter"'|'"leave"', callback: fun(e: RegionEntityEvent), opts?: EventOptions): integer
+---@overload fun(self: Region, event: '"enter"', callback: fun(e: RegionEntityEvent), opts?: EventOptions): integer
+---@overload fun(self: Region, event: '"leave"', callback: fun(e: RegionEntityEvent), opts?: EventOptions): integer
 ---@overload fun(self: Region, event: '"move"', callback: fun(e: RegionMoveEvent), opts?: EventOptions): integer
 ---@overload fun(self: Region, event: '"death"', callback: fun(e: RegionDeathEvent), opts?: EventOptions): integer
 function Region:on(event, callback, opts) end

@@ -5,6 +5,16 @@
 ---@class mcApi
 mc = {}
 
+---@class ItemOpts
+---@field count? integer
+---@field name? string
+---@field lore? string[]
+---@field unbreakable? boolean
+---@field custom_model_data? integer
+
+---@class ItemSpec : ItemOpts
+---@field id string
+
 -- === Functions =============================================================
 
 ---@param text string
@@ -116,7 +126,7 @@ function mc.mapped(className) end
 
 ---Registers a custom mob behaviour handler. See /reference/mob-ai.
 ---@param id string
----@param fn fun(entity. Mob, ctx. table)
+---@param fn fun(entity: Mob, ctx: table)
 function mc.registerBehaviour(id, fn) end
 
 ---@param title string
@@ -131,13 +141,14 @@ function mc.createBossBar(title, color, style) end
 ---@return boolean, integer|string
 function mc.execute(command, opts) end
 
----Creates an ItemStack. Two overloads.
----  createItem("minecraft.stone", 64)
----  createItem({ id = "minecraft.diamond_sword", count = 1, name = "Excalibur", lore = {...}, unbreakable = true, custom_model_data = 1 })
----@param idOrSpec string|table
----@param count? integer
+---Creates an ItemStack. Three forms:
+---  createItem("minecraft:stone", 64)
+---  createItem("minecraft:diamond_sword", { name = "Excalibur", lore = {...}, unbreakable = true })
+---  createItem({ id = "minecraft:diamond_sword", count = 1, name = "Excalibur", custom_model_data = 1 })
+---@param idOrSpec string|ItemSpec
+---@param countOrOpts? integer|ItemOpts
 ---@return Item
-function mc.createItem(idOrSpec, count) end
+function mc.createItem(idOrSpec, countOrOpts) end
 
 -- === Event methods =========================================================
 
