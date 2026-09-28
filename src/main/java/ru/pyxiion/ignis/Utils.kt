@@ -18,7 +18,11 @@ import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 
-fun CommandSource.checkPermission(permission: String): Boolean = Permissions.check(this, permission)
+/** Op level that has a script permission when no permissions mod decides it (same as `/ignis`). */
+const val SCRIPT_PERMISSION_LEVEL = 4
+
+fun CommandSource.checkPermission(permission: String): Boolean =
+    Permissions.check(this, permission, SCRIPT_PERMISSION_LEVEL)
 
 fun luaTableOf(vararg items: Pair<String, LuaValue>): LuaTable {
     return LuaTable().apply {
