@@ -1,0 +1,177 @@
+---
+title: 3. Rounds
+description: "Arena tutorial, chapter 3: a game loop with phases, the scheduler and async.sleep."
+---
+
+import { Code } from '@astrojs/starlight/components';
+import checkpoint from '../../../../tutorial/arena/03-rounds.lua?raw';
+
+Now the arena gets a game loop: when enough players have joined, a countdown starts, everyone is
+teleported to a spawn point, and after a while the round ends. Fights come in the next chapter; here the
+round simply ends in a draw when time runs out.
+
+## Phases
+
+A round goes through four phases:
+
+- **waiting**: players join, until there are enough of them;
+- **countdown**: a few seconds to get ready;
+- **playing**: the fight;
+- **ending**: the winner celebrates, then everyone returns to the lobby and it is `waiting` again.
+
+The current phase and a timer go into the game state, together with the set of players still in the fight:
+
+```lua
+local MIN_PLAYERS = 2
+local COUNTDOWN = 10   -- seconds before a round starts
+local ROUND_TIME = 300 -- seconds before a round ends in a draw
+```
+
+```lua
+local game = {
+    phase = "waiting", -- waiting -> countdown -> playing -> ending
+    players = {},      -- uuid -> Player: everyone who joined
+    alive = {},        -- uuid -> true: still fighting (playing phase only)
+    timer = 0,         -- seconds left in the current phase
+}
+```
+
+## A tick every second
+
+`mc.scheduleRepeating(delay, interval, fn)` calls a function every `interval` ticks (20 ticks = 1 second).
+One function that runs once a second and moves the game along is the whole game loop:
+
+```lua
+-- Runs once per second and moves the game from phase to phase.
+local function tick()
+    if game.phase == "waiting" then
+        if count(game.players) >= MIN_PLAYERS then
+            game.phase = "countdown"
+            game.timer = COUNTDOWN
+        end
+    elseif game.phase == "countdown" then
+        if count(game.players) < MIN_PLAYERS then
+            game.phase = "waiting"
+            tell("§eNot enough players, the countdown stopped.")
+        else
+            game.timer = game.timer - 1
+            if game.timer <= 0 then
+                startRound()
+            elseif game.timer <= 3 then
+                tell("§e" .. game.timer .. "...")
+            end
+        end
+    elseif game.phase == "playing" then
+        game.timer = game.timer - 1
+        if game.timer <= 0 then finish(nil) end
+    end
+end
+
+mc.scheduleRepeating(20, 20, tick)
+```
+
+Scheduled tasks are removed on reload, and the file schedules a new one when it loads, so there is always
+exactly one.
+
+:::note[Why not a loop with `async.sleep`?]
+A `while true do ... async.sleep(20) end` would work too. A tick function is easier to follow when several
+things can happen in any order (players leave during the countdown, someone dies, time runs out): each
+second it looks at the state and decides, instead of being somewhere in the middle of a long function.
+:::
+
+## Starting a round
+
+```lua
+local function startRound()
+    game.phase = "playing"
+    game.timer = ROUND_TIME
+    game.alive = {}
+
+    local i = 0
+    for uuid, player in pairs(game.players) do
+        i = i + 1
+        local spawn = config.spawns[(i - 1) % #config.spawns + 1]
+        game.alive[uuid] = true
+        player.health = player.maxHealth
+        player.food = 20
+        teleport(player, spawn)
+    end
+    tell("§aFight!")
+end
+```
+
+`(i - 1) % #config.spawns + 1` goes through the spawn points one by one and starts over when there are more
+players than points: with 3 points, players 1, 2, 3, 4, 5 get points 1, 2, 3, 1, 2.
+
+While a round is running nobody can join:
+
+```lua
+    elseif game.phase == "playing" or game.phase == "ending" then
+        player:sendMessage("§eA round is in progress, try again in a moment.")
+```
+
+## Ending a round
+
+`finish(winner)` shows the winner (none yet, that is the next chapter) and brings everyone back after a
+five-second celebration:
+
+```lua
+local function finish(winner)
+    game.phase = "ending"
+
+    if winner then
+        for _, player in pairs(game.players) do
+            player:sendTitle("§6" .. winner.name, "wins the round!")
+        end
+    else
+        tell("§eThe round ended in a draw.")
+    end
+
+    -- Celebrate for five seconds, then send everyone back to the lobby.
+    mc.schedule(0, function()
+        for _ = 1, 5 do
+            if winner and game.alive[winner.uuid] then
+                local pos = winner.pos + vec(0, 1, 0)
+                winner.world:particle("minecraft:totem_of_undying", pos, { count = 40, spread = 0.5 })
+                winner.world:playSound("minecraft:entity.firework_rocket.launch", winner.pos)
+            end
+            async.sleep(20)
+        end
+        for uuid in pairs(game.alive) do
+            local player = game.players[uuid]
+            teleport(player, config.lobby)
+        end
+        game.alive = {}
+        game.phase = "waiting"
+    end)
+end
+```
+
+`async.sleep(ticks)` (from `local async = require "async"` at the top of the file) pauses the function
+without pausing the server. It only works inside a coroutine; scheduled callbacks, event handlers and
+command handlers all run as one, so it works there. `mc.schedule(0, ...)` starts the celebration in its
+own coroutine, and `finish` returns right away.
+
+`winner.pos + vec(0, 1, 0)` is one block above the winner's feet: vectors support `+`, `-` and `*`.
+
+## Try it
+
+1. Set `ROUND_TIME` to `30` while testing.
+2. Join with two players (a second account, or a friend). After ten seconds both are teleported to the
+   spawn points; after 30 more the round ends in a draw and you are back in the lobby.
+3. Leave during the countdown: it stops.
+
+Dying does nothing special yet: a dead player respawns as usual and is still "alive" in the round. That is
+fixed in the next chapter.
+
+## Checkpoint
+
+<details>
+<summary>config/ignis/arena.lua after chapter 3</summary>
+
+<Code code={checkpoint} lang="lua" title="config/ignis/arena.lua" />
+
+</details>
+
+**Exercise:** start the round early when the arena is full: if `count(game.players)` reaches
+`#config.spawns` during the countdown, skip to 3 seconds.

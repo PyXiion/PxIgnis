@@ -208,6 +208,11 @@ mc.on("player.join") \{ e ->
 
 Keep going with the topics that match what you want to build:
 
+**Build a whole game**
+
+- [Tutorial: an arena minigame](/tutorial) — commands, regions, rounds, kits, statistics and more, in one
+  script that grows chapter by chapter
+
 **More about events and data**
 
 - [Events reference](/reference/events) — complete event list and handler signatures

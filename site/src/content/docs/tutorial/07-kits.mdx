@@ -1,0 +1,148 @@
+---
+title: 7. Kits and inventories
+description: "Arena tutorial, chapter 7: saving the player's items, giving kits and a chest menu to choose one."
+---
+
+import { Code } from '@astrojs/starlight/components';
+import checkpoint from '../../../../tutorial/arena/07-kits.lua?raw';
+
+So far players fight with whatever they carry, and a diamond sword wins every round. Now everyone gets a kit
+of their choice, and their own items wait in storage until the round is over.
+
+## Putting items away
+
+A player's inventory is numbered: slots 0 to 35 are the main inventory and the hotbar, 36 to 39 the armor,
+40 the offhand. `item:serialise()` turns an item into a string with all its enchantments and names, and
+`mc.deserialise("item", text)` turns it back. Strings can be stored, so the items go into `player.data`:
+
+```lua
+-- Player inventory slots: 0-35 main, 36-39 armor, 40 offhand.
+local LAST_SLOT = 40
+
+-- Saves the player's items in player.data and empties the inventory.
+local function stash(player)
+    local saved = {}
+    for slot = 0, LAST_SLOT do
+        local item = player:getItem(slot)
+        if item then
+            saved[tostring(slot)] = item:serialise()
+        end
+    end
+    player.data.arenaStash = saved
+    player:clear()
+end
+
+local function restore(player)
+    local saved = player.data.arenaStash
+    if not saved then return end
+    player:clear()
+    for slot, json in pairs(saved) do
+        player:setItem(tonumber(slot), mc.deserialise("item", json))
+    end
+    player.data.arenaStash = nil
+end
+```
+
+The slot numbers are stored as strings (`"0"`, `"38"`). Storage is JSON, and a table with gaps in its
+numbers comes back from JSON with string keys anyway; converting on both sides keeps it predictable.
+
+Why `player.data` and not a local table? If the server crashes in the middle of a round, a local table is
+gone, and so are the player's items. `player.data` is on disk. Chapter 9 uses that to give the items back.
+
+Items go away when a round starts, and come back when a player is knocked out and at the end of the round:
+
+```lua
+        stash(player)
+        giveKit(player)
+```
+
+```lua
+    restore(player)
+```
+
+```lua
+            restore(player)
+```
+
+## Kits
+
+A kit is plain data: a name, an icon, items with counts, and a chestplate.
+
+```lua
+local KITS = {
+    {
+        id = "warrior", name = "§cWarrior", icon = "minecraft:iron_sword",
+        items = {
+            { "minecraft:iron_sword", 1 }, { "minecraft:shield", 1 }, { "minecraft:cooked_beef", 8 },
+        },
+        chest = "minecraft:iron_chestplate",
+    },
+```
+
+The player's choice is saved in `player.data.arenaKit`; `findKit` falls back to the first kit:
+
+```lua
+local function giveKit(player)
+    local kit = findKit(player.data.arenaKit)
+    for _, entry in ipairs(kit.items) do
+        player:give(entry[1], entry[2])
+    end
+    player.chest = mc.createItem(kit.chest)
+end
+```
+
+`player.chest` is the chestplate slot; `head`, `legs`, `feet`, `mainhand` and `offhand` work the same way.
+
+## A chest menu
+
+The built-in `chestgui` library makes a menu out of a chest window. Load it at the top of the file:
+
+```lua
+local chestgui = require "core:chestgui"
+```
+
+One menu serves all players. `kitMenu:set(row, column, item, callback)` puts a button in it:
+
+```lua
+local kitMenu = chestgui.create(1, "Choose a kit")
+for i, kit in ipairs(KITS) do
+    local icon = mc.createItem(kit.icon, { name = kit.name, lore = { "§7Click to choose" } })
+    kitMenu:set(1, i * 2 + 1, icon, function(player)
+        player.data.arenaKit = kit.id
+        player:sendMessage("Kit: " .. kit.name)
+        player:playSound("minecraft:ui.button.click")
+        return false
+    end)
+end
+```
+
+`return false` cancels the click, so the item does not end up on the cursor. The buttons go in columns 3, 5
+and 7 of the single row.
+
+```lua
+register("arena kit", function(ctx) kitMenu:open(ctx.player) end)
+```
+
+And the scoreboard shows the chosen kit:
+
+```lua
+                "Kit: " .. findKit(player.data.arenaKit).name,
+```
+
+## Try it
+
+1. Put something recognizable in your inventory, e.g. a named item and some armor.
+2. `/arena kit`, choose the archer, join and wait for the round. Your inventory is replaced by the kit.
+3. After the round your own items are back, in the same slots.
+
+## Checkpoint
+
+<details>
+<summary>config/ignis/arena.lua after chapter 7</summary>
+
+<Code code={checkpoint} lang="lua" title="config/ignis/arena.lua" />
+
+</details>
+
+**Exercise:** give each kit an `effect` field (e.g. `"minecraft:speed"` for the archer) and apply it in
+`giveKit` with `player:addEffect(kit.effect, 20 * ROUND_TIME)`.

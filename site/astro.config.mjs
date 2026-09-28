@@ -26,6 +26,21 @@ export default defineConfig({
           ],
         },
         {
+          label: "Tutorial: Arena",
+          items: [
+            { label: "Overview", slug: "tutorial" },
+            { label: "1. Commands and settings", slug: "tutorial/01-commands" },
+            { label: "2. The arena region", slug: "tutorial/02-region" },
+            { label: "3. Rounds", slug: "tutorial/03-rounds" },
+            { label: "4. Fights", slug: "tutorial/04-fights" },
+            { label: "5. Boss bar and scoreboard", slug: "tutorial/05-interface" },
+            { label: "6. Statistics and leaderboard", slug: "tutorial/06-stats" },
+            { label: "7. Kits and inventories", slug: "tutorial/07-kits" },
+            { label: "8. Events for other scripts", slug: "tutorial/08-events" },
+            { label: "9. Reloads and crashes", slug: "tutorial/09-reliability" },
+          ],
+        },
+        {
           label: "Core API",
           items: [
             { label: "mc.* API", slug: "reference/mc-api" },
