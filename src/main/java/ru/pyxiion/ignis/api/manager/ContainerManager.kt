@@ -15,6 +15,7 @@ import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
+import ru.pyxiion.ignis.runtime.ScriptWatchdog
 
 class LockableInventory(size: Int) : SimpleInventory(size) {
     var locked = false
@@ -126,13 +127,13 @@ object ContainerManager {
         val cursorStack = player.currentScreenHandler.cursorStack
         val luaCursor = if (cursorStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(cursorStack.copy())
 
-        val result = cb.invoke(LuaValue.varargsOf(arrayOf(
+        val result = ScriptWatchdog.guard { cb.invoke(LuaValue.varargsOf(arrayOf(
             luaPlayer,
             LuaValue.valueOf(slot + 1),
             LuaValue.valueOf(actionType.name.lowercase()),
             luaItem,
             luaCursor
-        )))
+        ))) }
 
         val firstResult = result.arg1()
         if (firstResult.isboolean() && !firstResult.toboolean())

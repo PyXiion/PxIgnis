@@ -40,6 +40,7 @@ import ru.pyxiion.ignis.network.RegionInterestPayload
 import ru.pyxiion.ignis.network.RegionRemovePayload
 import ru.pyxiion.ignis.network.RegionSyncPayload
 import ru.pyxiion.ignis.network.RegionUpsertPayload
+import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import ru.pyxiion.ignis.storage.JsonBackend
 import ru.pyxiion.ignis.storage.StorageManager
 
@@ -76,6 +77,7 @@ class PxIgnis : ModInitializer {
 
         ServerLifecycleEvents.SERVER_STARTED.register(fun(server) {
             try {
+                ScriptWatchdog.serverThread = Thread.currentThread()
                 val storagePath = FabricLoader.getInstance().configDir.resolve("ignis/storage")
                 storageManager = StorageManager(JsonBackend(storagePath))
                 runtime = IgnisRuntime(server, storageManager!!)
@@ -88,8 +90,8 @@ class PxIgnis : ModInitializer {
                         Vector.fromMc(to).toLuaValue()
                     )
                 }
+                // reload() has already fired "init"
                 runtime.eventManager.fire("server_start")
-                runtime.eventManager.fire("init")
 
             } catch (e: Throwable) {
                 logger.error("Ошибка при запуске PxIgnis: ${e.message}", e)
@@ -365,11 +367,9 @@ class PxIgnis : ModInitializer {
                     .then(
                         CommandManager.literal("reload").executes { ctx ->
                             try {
-                                runtime.reload()
-                                ctx.source.sendFeedback({
-                                    Text.literal("Перезагрузилось")
-                                }, false)
-                                return@executes 1
+                                val result = runtime.reload()
+                                ctx.source.sendFeedback({ Text.literal(result.summary()) }, false)
+                                return@executes if (result.ok) 1 else 0
                             } catch (e: LuaError) {
                                 logger.error("Ошибка при перезагрузке PxIgnis: ${e.message}")
                                 ctx.source.sendFeedback({

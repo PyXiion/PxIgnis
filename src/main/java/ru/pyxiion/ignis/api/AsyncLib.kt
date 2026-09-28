@@ -3,6 +3,7 @@ package ru.pyxiion.ignis.api
 import org.luaj.vm2.*
 import org.luaj.vm2.lib.LuaContinuableFunction
 import ru.pyxiion.ignis.*
+import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
@@ -301,7 +302,7 @@ class AsyncLib(
         val previous = LuaState.current()
         LuaState.setCurrent(luaState)
         try {
-            val result = thread.resume(args)
+            val result = ScriptWatchdog.guard { thread.resume(args) }
             if (thread.status == "dead") {
                 if (result.arg1().toboolean()) {
                     awaitable.resolve(result.subargs(2))
@@ -673,7 +674,7 @@ class AsyncLib(
         val previous = LuaState.current()
         LuaState.setCurrent(luaState)
         try {
-            val result = childThread.resume(args)
+            val result = ScriptWatchdog.guard { childThread.resume(args) }
             if (childThread.status == "dead") {
                 if (result.arg1().toboolean()) {
                     finishMutexOperation(continuation, result.subargs(2), null)

@@ -12,6 +12,7 @@ import org.luaj.vm2.lib.TwoArgFunction
 import org.luaj.vm2.lib.VarArgFunction
 import org.luaj.vm2.lib.ZeroArgFunction
 import org.slf4j.Logger
+import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
@@ -189,13 +190,13 @@ fun Iterable<Pair<LuaValue, LuaValue>>?.toLuaTable(): LuaTable {
 }
 
 fun LuaThread.resumeOrThrow(args: Varargs): Varargs {
-    val r = resume(args)
+    val r = ScriptWatchdog.guard { resume(args) }
     if (!r.arg1().toboolean()) throw LuaError(r.arg(2).optjstring("Unknown coroutine error"))
     return r
 }
 
 fun LuaThread.resumeOrLog(args: Varargs, context: String): Varargs {
-    val r = resume(args)
+    val r = ScriptWatchdog.guard { resume(args) }
     if (!r.arg1().toboolean()) {
         val err = lastError ?: LuaError(r.arg(2).optjstring("Unknown coroutine error"))
         PxIgnis.logger.error("$context: ${err.message}", err)

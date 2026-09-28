@@ -27,7 +27,9 @@ class ScriptEnvironment {
     val luaStateOrNull: LuaState? get() = _state
 
     fun rebuild(api: LuaMcApi, commandRegistrar: CommandRegistrar): LuaState {
-        val state = LuaState()
+        val state = LuaState.builder()
+            .checkpointHandler(ScriptWatchdog::checkpoint)
+            .build()
         LuaC.install(state)
         LoadState.install(state)
 
