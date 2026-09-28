@@ -70,7 +70,7 @@ JVM bytecode cannot suspend and resume - the entire call runs atomically.
 
 ## When to avoid
 
-- Functions that need to yield (`mc.sleep`, `mc.fetch`, `coroutine.yield`).
+- Functions that need to yield (`async.sleep`, `async.fetch`, `coroutine.yield`).
 - Trivially simple logic (single arithmetic op, field access).
 
 ## Example

@@ -43,7 +43,7 @@ JUnit 5 via `kotlin-test-junit5`. Pure logic, no MC runtime. Two tests have quir
   `__pxrp_data` userdata, not on Kotlin `companion object` fields. The shared `BUILT` metatable template on
   `companion object` IS the right place for shared/constant data — it must survive reload.
 - EventBus runs `LuaClosure` handlers through a `LuaThread` (`EventBus.kt` `invokeCallback`), so coroutine-yielding
-  async (`mc.sleep`/`mc.fetch`) and suspend functions work inside event handlers — they did not before.
+  async (`async.sleep`/`async.fetch`) and suspend functions work inside event handlers — they did not before.
 - `luaSuspendFunction(scope, block)` / `luaSuspendFunctionNil` (`Utils.kt`) return Lua functions that yield and resume
   the coroutine when the suspend block completes. Requirements: must be called inside a coroutine (not main thread) and
   the thread must have a `LuaThread.resumeHandler`. The main thread handler is set in `LuaMcApi.init`. `future.handle`

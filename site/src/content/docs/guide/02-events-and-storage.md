@@ -171,18 +171,20 @@ Because `player.data` persists, your coin total survives disconnects and reloads
 
 - Storage saves automatically. You do not need to call a save method.
 - Deep nested tables work directly: `mc.data.guilds.mine.members.leader = player.name`.
-- Some APIs, such as `mc.sleep` and `mc.fetch`, are async and cannot be used directly inside event handlers. If you need them, defer the work to the scheduler:
+- Event handlers run as coroutines, so they can wait on the `async` module directly:
 
 ```lua
 --# nova syntax
+local async = require "async"
+
 mc.on("player_join") \{ player ->
-    mc.schedule(0) \{
-        -- async work goes here
-        mc.sleep(1000)
-        player:sendMessage("Delayed hello!")
-    }
+    async.sleep(100) -- 5 seconds
+    player:sendMessage("Delayed hello!")
 }
 ```
+
+- Handlers run on the server thread. A handler that runs too long (5 seconds by default, e.g. an endless loop) is
+  stopped with an error so it cannot freeze the server.
 
 ## Next steps
 

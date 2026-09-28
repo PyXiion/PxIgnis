@@ -106,5 +106,9 @@ end)
 - **alive** on `player_respawn` is `true` if the player respawned alive, `false` if they died and respawned.
 - **player_block_place** only fires when the held item is a `BlockItem` - right-clicking with a non-block item (food,
   tool, etc.) does not trigger it.
-- **Async** is **not available** in event handlers. Use `mc.schedule(0, function() ... end)` to defer async work from an
-  event.
+- **Async**: handlers run as coroutines, so `async.sleep` / `async.fetch` (`require "async"`) work directly. To
+  cancel an event, `return false` before the first async call: once the handler starts waiting, the event has already
+  gone through.
+- **Time limit**: a handler (or any other Lua call on the server thread) that runs longer than 5 seconds is stopped with
+  the error `script exceeded the 5000ms time limit`. `pcall` cannot catch and continue past it. Server owners can
+  change the limit with the JVM flag `-Dpxignis.scriptTimeoutMs=<ms>` (`0` disables it).

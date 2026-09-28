@@ -159,7 +159,7 @@ See [ItemStack API](/reference/itemstack-api) for details.
 ### `mc.deserialise(type, json)`
 
 Serialise and deserialise items or inventories to/from JSON strings. Useful for saving
-stacks to `mc.data` or transferring over `mc.fetch`.
+stacks to `mc.data` or transferring over `async.fetch`.
 
 - `type` (`string`) — `"item"` or `"inventory"`
 - `obj` — An [ItemStack](/reference/itemstack-api) or [Inventory](/reference/inventory-api) wrapper

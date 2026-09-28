@@ -169,15 +169,3 @@ mc.onlineCount = nil
 ---@type table<string, any>
 mc.data = nil
 
--- === Async (coroutine only) ================================================
-
----Performs an HTTP request. **Only valid in a coroutine context** (e.g.
----inside `mc.schedule`); for event handlers, wrap with `mc.schedule(0, fn)`.
----@param request string|FetchRequest
----@return FetchResult
-function mc.fetch(request) end
-
----Yields the current coroutine for the given number of server ticks.
----**Only valid in a coroutine context.**
----@param ticks integer
-function mc.sleep(ticks) end

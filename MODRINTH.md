@@ -29,7 +29,7 @@ The API reflects what the project itself needed.
 | **Reload**    | `/ignis reload` re-executes all scripts; persistent state via `mc.data` / `player.data` |
 | **MC API**    | Particles, sounds, blocks, entities, NBT, structures, weather, world border, explosions |
 | **UI**        | Per-player sidebar, chest GUI lib, boss bars, holograms, titles                        |
-| **Async**     | `mc.fetch()` for HTTP, `mc.sleep()` for coroutine delays                               |
+| **Async**     | `require "async"`: `async.fetch()` for HTTP, `async.sleep()` for delays               |
 | **Storage**   | Per-player and global tables                                                           |
 | **Dev tools** | LuaLS types for IntelliSense, metatable extension hooks                                |
 
@@ -40,18 +40,18 @@ The API reflects what the project itself needed.
 ### 1. Region + async
 
 ```lua
+local async = require "async"
 local arena = world:createRegion(vec(-50, 64, -50), vec(50, 80, 50))
 
 arena:on("entity_enter", function(entity)
     if entity:isPlayer() then
         mc.broadcast(entity.name .. " entered the arena")
 
-        coroutine.wrap(function()
-            local res = mc.fetch("https://api.example.com/arena/log")
-            if not res.ok then
-                mc.broadcast("log failed: " .. res.error, true)
-            end
-        end)()
+        -- event handlers run as coroutines, so they can wait on async calls directly
+        local res = async.fetch("https://api.example.com/arena/log")
+        if not res.ok then
+            mc.broadcast("log failed: " .. res.error, true)
+        end
     end
 end)
 ```

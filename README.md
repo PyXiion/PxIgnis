@@ -76,7 +76,7 @@ end, "px.ignis.shop")
 | **Reload**    | `/ignis reload` re-executes all scripts; persistent state via `mc.data` / `player.data`                                    |
 | **MC API**    | Particles, sounds, blocks, entities, NBT, structures, weather, world border, explosions                                    |
 | **UI**        | Per-player sidebar, chest GUI lib, boss bars, holograms, titles                                                            |
-| **Async**     | `mc.fetch()` for HTTP, `mc.sleep()` for coroutine delays                                                                   |
+| **Async**     | `require "async"`: `async.fetch()` for HTTP, `async.sleep()` for delays, tasks on the server thread or a thread pool     |
 | **Storage**   | Per-player and global JSON-backed key-value tables                                                                         |
 | **Dev tools** | LuaLS types for IntelliSense, `mc.dump()`, metatable extension hooks                                                       |
 

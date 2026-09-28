@@ -13,7 +13,7 @@
 --   * Methods that mutate state return `nil`. Read methods return their value.
 --   * The runtime injects these as Lua globals: `mc`, `vec`, `register`.
 --   * All PxIgnis APIs are read synchronously unless documented as async
---     (the only async APIs are `mc.fetch` and `mc.sleep`).
+--     (async APIs live in the `async` module: `require "async"`).
 --
 -- See https://ignis.pyxiion.ru for the human-readable reference.
 
