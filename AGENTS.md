@@ -42,12 +42,23 @@ JUnit 5 via `kotlin-test-junit5`. Pure logic, no MC runtime. Two tests have quir
 - Per-instance wrapper state (e.g. `WorldWrap`'s `InstanceData` with `playerCache` + `tickProvider`) lives on
   `__pxrp_data` userdata, not on Kotlin `companion object` fields. The shared `BUILT` metatable template on
   `companion object` IS the right place for shared/constant data — it must survive reload.
-- EventBus runs `LuaClosure` handlers through a `LuaThread` (`EventBus.kt` `invokeCallback`), so coroutine-yielding
-  async (`mc.sleep`/`mc.fetch`) and suspend functions work inside event handlers — they did not before.
+- EventBus runs `LuaClosure` handlers through a `LuaThread` (`EventBus.kt` `invoke`), so coroutine-yielding
+  async (`async.sleep`/`async.fetch`) and suspend functions work inside event handlers.
+- Events: built-in names live in `events/EventCatalog.kt` (`GlobalEvents`, `RegionEvents`); Minecraft callbacks
+  post them through `events/GameEvents.kt` (mixins call its `@JvmStatic` functions). Handlers get one event table
+  `e` (fields set with `rawset`, `e:cancel()` from a shared metatable). Pre-0.18 names are `LegacyEvent` views that
+  rebuild positional args from `e`. Adding an event = `EventDef` + a `GameEvents` function + `lua-types/19-events.lua`
+  + `site/.../reference/events.md`. Design: `docs/events.md`.
+- Script errors/warnings go through `runtime/ScriptErrors` (log + chat to `px.ignis.prompt_errors`, rate-limited),
+  not `logger` directly.
 - `luaSuspendFunction(scope, block)` / `luaSuspendFunctionNil` (`Utils.kt`) return Lua functions that yield and resume
   the coroutine when the suspend block completes. Requirements: must be called inside a coroutine (not main thread) and
   the thread must have a `LuaThread.resumeHandler`. The main thread handler is set in `LuaMcApi.init`. `future.handle`
   must be registered BEFORE `scope.launch` (fast-completion race). Design rationale: `docs/async-suspend-bridge.md`.
+- Lua states are single-threaded. `async` tasks on the `threadpool` executor (`AsyncExecutor.isolated`) run in a
+  fresh worker state (`ScriptEnvironment.newWorkerState`: sandbox + `async`, no `mc`); `AsyncLib.Isolation` copies
+  the function, upvalues, args and results across with PxLuaNova's `LuaTransfer` (userdata rules:
+  `StateTransferPolicy`). One `AsyncLib` per state, created in `ScriptEnvironment.rebuild`.
 - `EventBus` requires a `stateProvider: () -> LuaState?` for `LuaClosure` handlers; without it they throw. Regions use
   `RegionManager.sharedStateProvider` (set in `LuaMcApi.init`).
 

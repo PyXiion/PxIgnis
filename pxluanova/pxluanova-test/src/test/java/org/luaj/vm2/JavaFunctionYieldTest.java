@@ -131,17 +131,17 @@ public class JavaFunctionYieldTest extends TestCase {
 		assertEquals("yield_val", result.arg(2).tojstring());
 		assertEquals("suspended", co.getStatus());
 
-		// Second call to yield_fn: yields
-		result = co.resume(LuaValue.NONE);
+		// Second call to yield_fn: yields; the first call returns what this resume passed
+		result = co.resume(LuaValue.valueOf("first"));
 		assertTrue(result.arg1().toboolean());
 		assertEquals("yield_val", result.arg(2).tojstring());
 		assertEquals("suspended", co.getStatus());
 
-		// After both calls complete, Lua returns r1, r2
-		result = co.resume(LuaValue.NONE);
+		// Each yield_fn call returns the values of the resume that continued it
+		result = co.resume(LuaValue.valueOf("second"));
 		assertTrue(result.arg1().toboolean());
-		assertEquals("yield_val", result.arg(2).tojstring());
-		assertEquals("yield_val", result.arg(3).tojstring());
+		assertEquals("first", result.arg(2).tojstring());
+		assertEquals("second", result.arg(3).tojstring());
 		assertEquals("dead", co.getStatus());
 	}
 

@@ -82,32 +82,37 @@ end)
 
 See the [mc.\* API](/reference/mc-api) for scheduler options.
 
-## 5. Coroutine delays with mc.sleep
+## 5. Coroutine delays with async.sleep
 
-Command handlers and `mc.schedule` callbacks support `mc.sleep` directly.
+Async helpers live in the `async` module. Command handlers, event handlers and `mc.schedule` callbacks run as
+coroutines, so they can call `async.sleep` directly.
 
-`mc.sleep(ticks)` pauses execution for the given number of ticks. See [Async API](/reference/async-api) for details:
+`async.sleep(ticks)` pauses execution for the given number of ticks. See [Async API](/reference/async-api) for details:
 
 ```lua
+local async = require "async"
+
 register("delayedheal", function(ctx)
     ctx.player:sendMessage("Healing in 3...")
-    mc.sleep(20)
+    async.sleep(20)
     ctx.player:sendMessage("2...")
-    mc.sleep(20)
+    async.sleep(20)
     ctx.player:sendMessage("1...")
-    mc.sleep(20)
+    async.sleep(20)
     ctx.player:heal(20)
     ctx.player:sendMessage("Healed!")
 end)
 ```
 
-## 6. Async HTTP with mc.fetch
+## 6. Async HTTP with async.fetch
 
-`mc.fetch(url)` sends an HTTP GET request and waits for the response. See [Async API](/reference/async-api) for POST config and response fields:
+`async.fetch(url)` sends an HTTP GET request and waits for the response. See [Async API](/reference/async-api) for POST config and response fields:
 
 ```lua
+local async = require "async"
+
 register("playerinfo", function(ctx)
-    local res = mc.fetch("https://api.github.com/users/" .. ctx.player.name)
+    local res = async.fetch("https://api.github.com/users/" .. ctx.player.name)
     if res.ok then
         local data = res.json
         ctx.player:sendMessage("GitHub account: " .. (data.login or "not found"))
@@ -148,7 +153,7 @@ end)
 
 - [Events and storage](/guide/02-events-and-storage) — part 2 of this guide: reacting to events and saving data
 - [Events](/reference/events) — react to player joins, block breaks, chat, and more
-- [Async API](/reference/async-api) — detailed mc.fetch and mc.sleep reference
+- [Async API](/reference/async-api) — detailed `async.fetch` and `async.sleep` reference
 - [Storage](/reference/storage) — persist data across reloads with `mc.data` and `player.data`
 - [Libraries](/docs/libraries/overview) — formatting templates, simple registrations, chest GUIs
 - [Language extensions](/reference/language) — `\{ ... }` lambda syntax

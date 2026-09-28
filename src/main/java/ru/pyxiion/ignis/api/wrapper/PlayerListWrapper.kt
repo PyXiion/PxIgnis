@@ -1,9 +1,8 @@
-package ru.pyxiion.ignis.api.wrappertoLuaValue
+package ru.pyxiion.ignis.api.wrapper
 
 import net.minecraft.server.network.ServerPlayerEntity
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
-import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import java.util.UUID
 
 class PlayerListWrapper(

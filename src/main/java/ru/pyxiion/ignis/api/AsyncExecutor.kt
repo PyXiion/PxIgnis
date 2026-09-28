@@ -7,6 +7,8 @@ data class AsyncExecutor(
     val name: String,
     val dispatch: (Runnable) -> Unit,
     val shutdown: (() -> Unit)? = null,
+    /** Runs tasks in parallel with other Lua code: each task then gets its own Lua state (see [AsyncLib.Isolation]). */
+    val isolated: Boolean = false,
 )
 
 class AsyncExecutorRegistry {

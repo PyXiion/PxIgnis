@@ -13,47 +13,44 @@
 --   * Methods that mutate state return `nil`. Read methods return their value.
 --   * The runtime injects these as Lua globals: `mc`, `vec`, `register`.
 --   * All PxIgnis APIs are read synchronously unless documented as async
---     (the only async APIs are `mc.fetch` and `mc.sleep`).
+--     (async APIs live in the `async` module: `require "async"`).
 --
 -- See https://ignis.pyxiion.ru for the human-readable reference.
 
 ---@alias PxIgnisEventName
----| 'server_start'           -- ()                                       not cancellable
----| 'server_stop'            -- ()                                       not cancellable
----| 'init'                   -- ()                                       not cancellable
----| 'uninit'                 -- ()                                       not cancellable
----| 'player_join_init'       -- (player)                                cancellable (return false)
----| 'player_join'            -- (player)                                not cancellable
----| 'player_respawn'         -- (player, alive: boolean)                not cancellable
----| 'player_leave'           -- (player)                                not cancellable
----| 'player_death'           -- (player, damageType: string)            not cancellable
----| 'player_chat'            -- (player, message: string)               cancellable
----| 'player_block_break'     -- (player, pos: Vec, blockId: string)     cancellable
----| 'player_block_place'     -- (player, pos: Vec, blockId: string)     cancellable
----| 'player_use_item'        -- (player, hand: string, item: Item|nil, itemId: string) cancellable
----| 'player_attack_entity'   -- (player, entity: Entity)                cancellable
----| 'player_interact_entity' -- (player, entity: Entity, hand: string)  cancellable
----| 'player_hurt'            -- (player, damageType: string, amount: number) cancellable
----| 'entity_hurt'            -- (entity: Entity, damageType: string, amount: number, source: Entity|nil) cancellable
----| 'player_damage'          -- (player, damageType: string, amount: number, blocked: boolean) not cancellable
----| 'entity_damage'          -- (entity: Entity, damageType: string, amount: number, source: Entity|nil, blocked: boolean) not cancellable
----| 'player_kill'            -- (player, target: Entity, damageSource: string) not cancellable
----| 'entity_spawn'           -- (entity: Entity)                        not cancellable
----| 'entity_despawn'         -- (entity: Entity)                        not cancellable
----| 'entity_death'           -- (entity: Entity, damageType: string, amount: number) cancellable
----| 'tick'                   -- ()                                       not cancellable
+---| 'init'             # scripts loaded (also after /ignis reload)
+---| 'uninit'           # before scripts are unloaded
+---| 'server_start'
+---| 'server_stop'
+---| 'tick'             # every server tick
+---| 'player.login'     # cancellable: e:cancel("kick message")
+---| 'player.join'
+---| 'player.leave'
+---| 'player.respawn'
+---| 'player.chat'      # cancellable
+---| 'player.move'
+---| 'player.use_item'  # cancellable
+---| 'player.attack'    # cancellable
+---| 'player.interact'  # cancellable
+---| 'player.kill'
+---| 'player.consume'   # cancellable
+---| 'player.pickup'    # cancellable
+---| 'player.drop'      # cancellable
+---| 'block.break'      # cancellable
+---| 'block.place'      # cancellable
+---| 'entity.spawn'
+---| 'entity.despawn'
+---| 'entity.hurt'      # cancellable, before damage is applied
+---| 'entity.damaged'   # after damage is applied
+---| 'entity.death'     # cancellable
 
 ---@alias RegionEventName
----| 'entity_enter'  -- (entity: Entity)
----| 'entity_leave'  -- (entity: Entity)
----| 'entity_move'   -- (entity: Entity, from: Vec, to: Vec)
----| 'player_enter'  -- (player: Player)
----| 'player_leave'  -- (player: Player)
----| 'player_move'   -- (player: Player, from: Vec, to: Vec)
----| 'entity_death'  -- (entity: Entity, source: string, amount: number)
----| 'player_death'  -- (player: Player, source: string)
----| 'tick'          -- ()
----| 'destroy'       -- ()
+---| 'enter'    # an entity (or player: e.player) entered the region
+---| 'leave'
+---| 'move'     # moved inside the region
+---| 'death'    # died inside the region
+---| 'tick'
+---| 'destroy'
 
 ---@class SidebarConfig
 ---@field title? string

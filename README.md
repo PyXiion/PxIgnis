@@ -23,17 +23,18 @@ end)
 ```
 
 ```lua
-mc.on("player_join", function(player)
-    player.data.joins = (player.data.joins or 0) + 1
-    player:sendMessage("Welcome back! (#" .. player.data.joins .. ")")
+mc.on("player.join", function(e)
+    local data = e.player.data
+    data.joins = (data.joins or 0) + 1
+    e.player:sendMessage("Welcome back! (#" .. data.joins .. ")")
 end)
 ```
 
 ```lua
-mc.on("player_block_break", function(player, pos, blockId)
-    if blockId == "minecraft:diamond_ore" then
-        player:sendTitle({ title = "Lucky!" })
-        player.world:particle("minecraft:totem_of_undying", pos)
+mc.on("block.break", function(e)
+    if e.block == "minecraft:diamond_ore" then
+        e.player:sendTitle({ title = "Lucky!" })
+        e.player.world:particle("minecraft:totem_of_undying", e.pos)
     end
 end)
 ```
@@ -76,7 +77,7 @@ end, "px.ignis.shop")
 | **Reload**    | `/ignis reload` re-executes all scripts; persistent state via `mc.data` / `player.data`                                    |
 | **MC API**    | Particles, sounds, blocks, entities, NBT, structures, weather, world border, explosions                                    |
 | **UI**        | Per-player sidebar, chest GUI lib, boss bars, holograms, titles                                                            |
-| **Async**     | `mc.fetch()` for HTTP, `mc.sleep()` for coroutine delays                                                                   |
+| **Async**     | `require "async"`: `async.fetch()` for HTTP, `async.sleep()` for delays, tasks on the server thread or a thread pool     |
 | **Storage**   | Per-player and global JSON-backed key-value tables                                                                         |
 | **Dev tools** | LuaLS types for IntelliSense, `mc.dump()`, metatable extension hooks                                                       |
 

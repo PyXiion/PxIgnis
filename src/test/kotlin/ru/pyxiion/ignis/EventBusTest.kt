@@ -22,7 +22,7 @@ class EventBusTest {
                 return LuaValue.NIL
             }
         })
-        bus.fire("test")
+        bus.emit("test", LuaValue.NONE)
         assertTrue(called)
     }
 
@@ -36,7 +36,7 @@ class EventBusTest {
                 return LuaValue.NIL
             }
         })
-        bus.fire("chat", LuaValue.valueOf("hello"))
+        bus.emit("chat", LuaValue.valueOf("hello"))
         assertEquals("hello", captured)
     }
 
@@ -52,12 +52,12 @@ class EventBusTest {
                 return LuaValue.NIL
             }
         })
-        bus.fire("multi", LuaValue.valueOf("a"), LuaValue.valueOf("b"), LuaValue.valueOf("c"))
+        bus.emit("multi", LuaValue.varargsOf(LuaValue.valueOf("a"), LuaValue.valueOf("b"), LuaValue.valueOf("c")))
         assertEquals(listOf("a", "b", "c"), result)
     }
 
     @Test
-    fun `fire with no event args passes only event name`() {
+    fun `emit with no event args passes nothing`() {
         val bus = EventBus("", logger)
         var narg = -1
         bus.on("ping", object : VarArgFunction() {
@@ -66,7 +66,7 @@ class EventBusTest {
                 return LuaValue.NIL
             }
         })
-        bus.fire("ping")
+        bus.emit("ping", LuaValue.NONE)
         assertEquals(0, narg)
     }
 
@@ -84,7 +84,7 @@ class EventBusTest {
                 order.add(2); return LuaValue.NIL
             }
         })
-        bus.fire("multi")
+        bus.emit("multi", LuaValue.NONE)
         assertEquals(listOf(1, 2), order)
     }
 
@@ -102,7 +102,7 @@ class EventBusTest {
                 called = true; return LuaValue.NIL
             }
         })
-        bus.fire("err")
+        bus.emit("err", LuaValue.NONE)
         assertTrue(called)
     }
 
@@ -128,11 +128,11 @@ class EventBusTest {
                 called++; return LuaValue.NIL
             }
         })
-        bus.fire("test")
+        bus.emit("test", LuaValue.NONE)
         assertEquals(1, called)
         val removed = bus.off(id)
         assertTrue(removed)
-        bus.fire("test")
+        bus.emit("test", LuaValue.NONE)
         assertEquals(1, called)
     }
 
@@ -160,16 +160,16 @@ class EventBusTest {
             override fun invoke(args: Varargs): Varargs {
                 called++; return LuaValue.NIL
             }
-        }, throttle = 2)
-        bus.fire("test") // fires: throttle 2 → set remaining = 2, call
+        }, HandlerOptions(throttle = 2))
+        bus.emit("test", LuaValue.NONE) // fires: throttle 2 → set remaining = 2, call
         assertEquals(1, called)
-        bus.fire("test") // skipped: remaining = 2 > 0
+        bus.emit("test", LuaValue.NONE) // skipped: remaining = 2 > 0
         assertEquals(1, called)
-        bus.fire("test") // skipped: remaining = 1 > 0
+        bus.emit("test", LuaValue.NONE) // skipped: remaining = 1 > 0
         assertEquals(1, called)
         bus.tick()        // remaining → 1
         bus.tick()        // remaining → 0
-        bus.fire("test") // fires: remaining = 0, set remaining = 2, call
+        bus.emit("test", LuaValue.NONE) // fires: remaining = 0, set remaining = 2, call
         assertEquals(2, called)
     }
 
@@ -181,10 +181,10 @@ class EventBusTest {
             override fun invoke(args: Varargs): Varargs {
                 called++; return LuaValue.NIL
             }
-        }, throttle = 0)
-        bus.fire("test")
-        bus.fire("test")
-        bus.fire("test")
+        }, HandlerOptions(throttle = 0))
+        bus.emit("test", LuaValue.NONE)
+        bus.emit("test", LuaValue.NONE)
+        bus.emit("test", LuaValue.NONE)
         assertEquals(3, called)
     }
 
@@ -197,10 +197,10 @@ class EventBusTest {
                 called++; return LuaValue.NIL
             }
         })
-        bus.fire("test")
+        bus.emit("test", LuaValue.NONE)
         assertEquals(1, called)
         bus.clear()
-        bus.fire("test")
+        bus.emit("test", LuaValue.NONE)
         assertEquals(1, called)
     }
 

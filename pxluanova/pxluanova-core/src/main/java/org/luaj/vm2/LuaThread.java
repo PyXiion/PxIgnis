@@ -25,66 +25,26 @@ package org.luaj.vm2;
 import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 
-/** 
- * Subclass of {@link LuaValue} that implements 
- * a lua coroutine thread using Java Threads.
+/**
+ * A Lua coroutine.
  * <p>
- * A LuaThread is typically created in response to a scripted call to 
- * {@code coroutine.create()}
+ * Coroutines run on the thread that resumes them: {@link #resume(Varargs)} drives the frame interpreter
+ * ({@link FrameInterpreter}) until the body returns, errors or yields. A yield saves the frame stack in
+ * {@link State} and returns to the resumer; no Java thread is parked.
  * <p>
- * The threads must be initialized with the {@link LuaState}, so that 
- * the global environment may be passed along according to rules of lua. 
- * This is done via the constructor arguments {@link #LuaThread(LuaState)} or 
- * {@link #LuaThread(LuaState, LuaValue)}.
- * <p> 
- * The utility class {@link org.luaj.vm2.lib.jse.JsePlatform} 
- * sees to it that this {@link LuaState} is initialized properly.
- * <p>
- * The behavior of coroutine threads matches closely the behavior 
- * of C coroutine library.  However, because of the use of Java threads 
- * to manage call state, it is possible to yield from anywhere in luaj. 
- * <p>
- * Each Java thread wakes up at regular intervals and checks a weak reference
- * to determine if it can ever be resumed.  If not, it throws 
- * {@link OrphanedThread} which is an {@link java.lang.Error}. 
- * Applications should not catch {@link OrphanedThread}, because it can break
- * the thread safety of luaj.  The value controlling the polling interval 
- * is {@link #thread_orphan_check_interval} and may be set by the user.
- * <p> 
- * There are two main ways to abandon a coroutine.  The first is to call 
- * {@code yield()} from lua, or equivalently {@link Globals#yield(Varargs)}, 
- * and arrange to have it never resumed possibly by values passed to yield.
- * The second is to throw {@link OrphanedThread}, which should put the thread
- * in a dead state.   In either case all references to the thread must be
- * dropped, and the garbage collector must run for the thread to be 
- * garbage collected. 
- * <p>
- * Coroutines use Java virtual threads by default (Java 21+), which allows
- * millions of concurrent coroutines with minimal memory overhead. Platform
- * threads can be used instead by setting {@link LuaState#coroutineThreadFactory}
- * to {@link #PLATFORM_THREAD_FACTORY}.
+ * Lua code can yield from anywhere the frame interpreter runs it directly, including inside pcall/xpcall
+ * and generic-for iterators. Lua code entered from a Java function (a metamethod, a table.sort comparator,
+ * a load reader, ...) runs in a nested interpreter and cannot yield: that raises
+ * "attempt to yield across a C-call boundary", as in Lua 5.2.
  *
-
  * @see LuaValue
- * @see org.luaj.vm2.lib.jse.JsePlatform
  * @see org.luaj.vm2.lib.CoroutineLib
  */
 public class LuaThread extends LuaValue {
 
 	/** Shared metatable for lua threads. */
 	public static LuaValue s_metatable;
-
-	private static final AtomicLong coroutineCounter = new AtomicLong(0);
-
-	@FunctionalInterface
-	public interface ThreadFactory {
-		Thread newThread(Runnable target, String name);
-	}
 
 	/** Callback used to resume a coroutine after an asynchronous operation completes.
 	 * The runtime sets this on the main thread; child coroutines inherit it. */
@@ -93,21 +53,6 @@ public class LuaThread extends LuaValue {
 		void resume(LuaThread thread, Varargs args);
 	}
 
-	public static final ThreadFactory VIRTUAL_THREAD_FACTORY =
-		(target, name) -> Thread.ofVirtual().name(name).unstarted(target);
-
-	public static final ThreadFactory PLATFORM_THREAD_FACTORY =
-		(target, name) -> Thread.ofPlatform().name(name).unstarted(target);
-
-	/** Polling interval, in milliseconds, which each thread uses while waiting to
-	 * return from a yielded state to check if the lua threads is no longer
-	 * referenced and therefore should be garbage collected.  
-	 * A short polling interval for many threads will consume server resources. 
-	 * Orphaned threads cannot be detected and collected unless garbage
-	 * collection is run.  This can be changed by Java startup code if desired.
-	 */
-	public static long thread_orphan_check_interval = 5000;
-	
 	public static final int STATUS_INITIAL       = 0;
 	public static final int STATUS_SUSPENDED     = 1;
 	public static final int STATUS_RUNNING       = 2;
@@ -144,28 +89,21 @@ public class LuaThread extends LuaValue {
 
 	Throwable lastError = null;
 
-	/** Whether this thread runs synchronously on the calling thread.
-	 * May be changed to support async (virtual thread) mode in the future. */
-	public final boolean isSync;
-
 	/** Private constructor for main thread only */
 	public LuaThread(LuaState state) {
 		threadState = new State(state, this, null);
 		threadState.status = STATUS_RUNNING;
 		this.state = state;
-		this.isSync = false;
 	}
 
 	/**
-	 * Create a LuaThread around a function and environment.
-	 * Always runs synchronously on the calling thread.
+	 * Create a coroutine around a function.
 	 * @param func The function to execute
 	 */
 	public LuaThread(LuaState state, LuaValue func) {
 		LuaValue.assert_(func != null, "function cannot be null");
 		threadState = new State(state, this, func);
 		this.state = state;
-		this.isSync = true; // may support async in future
 		this.resumeHandler = resolveResumeHandler(state);
 		this.executionContext = resolveExecutionContext(state);
 		inheritHook();
@@ -250,26 +188,10 @@ public class LuaThread extends LuaValue {
 		return s.lua_resume_sync(this, args);
 	}
 
-	public static class State implements Runnable {
+	public static class State {
 		final LuaState state;
 		final WeakReference<LuaThread> lua_thread;
 		public final LuaValue function;
-		private ReentrantLock lock;
-		private Condition condition;
-
-		private ReentrantLock getLock() {
-			if (lock == null) {
-				lock = new ReentrantLock();
-				condition = lock.newCondition();
-			}
-			return lock;
-		}
-
-		private Condition getCondition() {
-			getLock();
-			return condition;
-		}
-		Varargs args = LuaValue.NONE;
 		public Varargs result = LuaValue.NONE;
 		String error = null;
 
@@ -286,6 +208,29 @@ public class LuaThread extends LuaValue {
 		/** Depth of sync-compiled (nova.sync) calls on this thread.
 		 *  Non-zero means yielding is prohibited. */
 		int syncCompiledDepth;
+
+		/** Depth of Lua code entered from Java on this coroutine (nested {@link LuaClosure#execute} calls).
+		 *  Such code has no saved frames to resume, so non-zero means yielding is prohibited. */
+		int nonYieldableDepth;
+
+		/**
+		 * Marks the start of Lua code entered from Java on the current coroutine, if any.
+		 * Returns the state whose {@code nonYieldableDepth} the caller must decrement when done, or null.
+		 */
+		static State enterNonYieldable(LuaState state) {
+			if (state == null)
+				return null;
+			LuaThread ct = state.getCurrentThread();
+			if (ct == null || ct.isMainThread())
+				return null;
+			ct.threadState.nonYieldableDepth++;
+			return ct.threadState;
+		}
+
+		/** Whether a yield is allowed right now. */
+		public boolean isYieldable() {
+			return syncCompiledDepth == 0 && nonYieldableDepth == 0;
+		}
 
 		/** Hook function control state used by debug lib. */
 		public LuaValue hookfunc;
@@ -313,96 +258,11 @@ public class LuaThread extends LuaValue {
 			}
 		}
 		
-		public void run() {
-			LuaState.setCurrent(state);
-			getLock().lock();
-			try {
-				try {
-					Varargs a = this.args;
-					this.args = LuaValue.NONE;
-					this.result = function.invoke(a);
-				} catch (Throwable t) {
-					this.error = t.getMessage();
-					setLastError(t);
-				} finally {
-					this.status = LuaThread.STATUS_DEAD;
-					getCondition().signal();
-				}
-			} finally {
-				getLock().unlock();
-			}
-		}
-
-		public Varargs lua_resume(LuaThread new_thread, Varargs args) {
-			getLock().lock();
-			try {
-				LuaThread previous_thread = state.getCurrentThread();
-				try {
-					state.setCurrentThread(new_thread);
-					this.args = args;
-					if (this.status == STATUS_INITIAL) {
-						this.status = STATUS_RUNNING;
-						ThreadFactory factory = state.coroutineThreadFactory != null
-							? state.coroutineThreadFactory
-							: VIRTUAL_THREAD_FACTORY;
-						Thread t = factory.newThread(this, "Coroutine-" + coroutineCounter.incrementAndGet());
-						t.start();
-					} else {
-						getCondition().signal();
-					}
-					if (previous_thread != null && previous_thread != new_thread
-						&& previous_thread.threadState.status == STATUS_RUNNING)
-						previous_thread.threadState.status = STATUS_NORMAL;
-					this.status = STATUS_RUNNING;
-					getCondition().await();
-					return (this.error != null?
-						LuaValue.varargsOf(LuaValue.FALSE, LuaValue.valueOf(this.error)):
-						LuaValue.varargsOf(LuaValue.TRUE, this.result));
-				} catch (InterruptedException ie) {
-					throw new OrphanedThread();
-				} finally {
-					this.args = LuaValue.NONE;
-					this.result = LuaValue.NONE;
-					this.error = null;
-					state.setCurrentThread(previous_thread);
-				}
-			} finally {
-				getLock().unlock();
-			}
-		}
-
-		public Varargs lua_yield(Varargs args) {
-			if (syncCompiledDepth > 0)
-				throw new LuaError("attempt to yield across a sync-compiled boundary");
-			getLock().lock();
-			try {
-				try {
-					this.result = args;
-					this.status = STATUS_SUSPENDED;
-					getCondition().signal();
-					do {
-						getCondition().await(thread_orphan_check_interval, TimeUnit.MILLISECONDS);
-						if (this.lua_thread.get() == null) {
-							this.status = STATUS_DEAD;
-							throw new OrphanedThread();
-						}
-					} while (this.status == STATUS_SUSPENDED);
-					return this.args;
-				} catch (InterruptedException ie) {
-					this.status = STATUS_DEAD;
-					throw new OrphanedThread();
-				} finally {
-					this.args = LuaValue.NONE;
-					this.result = LuaValue.NONE;
-				}
-			} finally {
-				getLock().unlock();
-			}
-		}
-
 		public Varargs lua_yield_sync(Varargs args) {
 			if (syncCompiledDepth > 0)
 				throw new LuaError("attempt to yield across a sync-compiled boundary");
+			if (nonYieldableDepth > 0)
+				throw new LuaError("attempt to yield across a C-call boundary");
 			this.result = args;
 			this.status = STATUS_SUSPENDED;
 			this.yieldRequested = true;
@@ -427,26 +287,10 @@ public class LuaThread extends LuaValue {
 				}
 
 				if (frameStack.isEmpty()) {
-					if (this.function instanceof LuaClosure lc) {
-						LuaValue[] stack = new LuaValue[lc.p.maxstacksize];
-						System.arraycopy(LuaValue.NILS, 0, stack, 0, lc.p.maxstacksize);
-						for (int i = 0; i < lc.p.numparams; i++)
-							stack[i] = args.arg(i + 1);
-						Varargs varargs = lc.p.is_vararg != 0 ? args.subargs(lc.p.numparams + 1) : LuaValue.NONE;
-						LuaFrame frame = new LuaFrame();
-						frame.closure = lc;
-						frame.stack = stack;
-						frame.varargs = varargs;
-						frame.v = LuaValue.NONE;
-						frame.openups = lc.p.p.length > 0 ? new UpValue[stack.length] : null;
-						frame.callerOp = 0;
-						frame.callerA = 0;
-						frame.callerB = 0;
-						frame.callerC = 0;
-						frameStack.push(frame);
-					} else {
-						throw new LuaError("cannot resume non-LuaClosure coroutine");
-					}
+					// A Java function body runs through a trampoline frame, so it can yield like a Lua call.
+					frameStack.push(this.function instanceof LuaClosure lc
+						? FrameInterpreter.newFrame(lc, args)
+						: FrameInterpreter.trampolineFrame(state, this.function, args));
 				} else {
 					this.resumeArgs = args;
 				}
@@ -479,7 +323,9 @@ public class LuaThread extends LuaValue {
 			} finally {
 				state.setCurrentThread(previous_thread);
 				LuaState.setCurrent(previousState);
-				this.args = LuaValue.NONE;
+				if (previous_thread != null && previous_thread != new_thread
+					&& previous_thread.threadState.status == STATUS_NORMAL)
+					previous_thread.threadState.status = STATUS_RUNNING;
 				this.result = LuaValue.NONE;
 				this.error = null;
 				this.resumeArgs = LuaValue.NONE;

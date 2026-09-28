@@ -13,7 +13,9 @@ import org.luaj.vm2.lib.TableLib
 import org.luaj.vm2.lib.jse.JseBaseLib
 import org.luaj.vm2.lib.jse.JseMathLib
 import org.luaj.vm2.lib.jse.NovaLib
+import ru.pyxiion.ignis.api.AsyncLib
 import ru.pyxiion.ignis.api.LuaMcApi
+import ru.pyxiion.ignis.api.StateTransferPolicy
 import ru.pyxiion.ignis.api.vecTable
 import ru.pyxiion.ignis.asFunction
 import ru.pyxiion.ignis.commands.CommandRegistrar
@@ -27,7 +29,39 @@ class ScriptEnvironment {
     val luaStateOrNull: LuaState? get() = _state
 
     fun rebuild(api: LuaMcApi, commandRegistrar: CommandRegistrar): LuaState {
-        val state = LuaState()
+        val state = newBaseState()
+        val globals = state.globals
+
+        globals.set("register", commandRegistrar.registerFunction)
+
+        _state = state
+        globals.set("mc", api.toTable())
+
+        lateinit var isolation: AsyncLib.Isolation
+        isolation = AsyncLib.Isolation(state, StateTransferPolicy) { newWorkerState(api, isolation) }
+        installAsync(state, api.createAsyncLib(state, isolation))
+
+        return state
+    }
+
+    /**
+     * A state for one threadpool task: the same sandbox and pure libraries as scripts get, plus its own `async`,
+     * but no `mc`, `register` or script globals — it runs in parallel with the server thread.
+     */
+    private fun newWorkerState(api: LuaMcApi, isolation: AsyncLib.Isolation): LuaState {
+        val state = newBaseState()
+        installAsync(state, api.createAsyncLib(state, isolation))
+        return state
+    }
+
+    private fun installAsync(state: LuaState, lib: AsyncLib) {
+        state.globals.get("package").checktable().get("loaded").checktable().set("async", lib.buildModule())
+    }
+
+    private fun newBaseState(): LuaState {
+        val state = LuaState.builder()
+            .checkpointHandler(ScriptWatchdog::checkpoint)
+            .build()
         LuaC.install(state)
         LoadState.install(state)
 
@@ -62,8 +96,6 @@ class ScriptEnvironment {
             }
         })
 
-        globals.set("register", commandRegistrar.registerFunction)
-
         val vecConstructor = luaVarFunction { args ->
             require(args.narg() == 3) { "vec(x, y, z) require 3 args" }
             val x = args.arg(1).checkdouble()
@@ -73,12 +105,6 @@ class ScriptEnvironment {
             vecTable(x, y, z)
         }
         globals.set("vec", vecConstructor)
-
-        _state = state
-        globals.set("mc", api.toTable())
-
-        val asyncModule = api.asyncLib.buildModule()
-        globals.get("package").checktable().get("loaded").checktable().set("async", asyncModule)
 
         return state
     }

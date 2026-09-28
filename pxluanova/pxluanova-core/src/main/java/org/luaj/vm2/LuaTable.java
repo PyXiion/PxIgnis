@@ -511,14 +511,17 @@ public class LuaTable extends LuaValue implements Metatable {
                 }
             }
             if (checkLoadFactor()) {
-                if ((m_metatable == null || !m_metatable.useWeakValues())
-                        && key.isinttype() && key.toint() > 0) {
+                if (key.isinttype() && key.toint() > 0) {
                     // a rehash might make room in the array portion for this key.
                     rehash(key.toint());
                     if (arrayset(key.toint(), value))
                         return;
                 } else {
                     rehash(-1);
+                    // The array part may have grown to cover this key; it must not end up in the hash part,
+                    // where lookups for array-range keys never look.
+                    if (key.isinttype() && arrayset(key.toint(), value))
+                        return;
                 }
                 index = hashSlot(key);
             }

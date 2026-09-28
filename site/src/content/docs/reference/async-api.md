@@ -45,17 +45,41 @@ Every task requires an executor:
 
 `"main"` runs Lua on the Minecraft server thread. Keep it short. A long calculation there pauses the server tick.
 
-`"threadpool"` runs Lua away from the server thread. Do not access Minecraft objects from it:
+`"threadpool"` runs Lua away from the server thread, in parallel with it. Each thread-pool task gets
+**its own Lua state**, so it can never race with your scripts:
+
+- The function, the values it captures (upvalues) and its arguments are **copied** into the task. Changing
+  them inside the task does not change them in your script.
+- Return values are **copied back** when the task finishes.
+- The task sees the standard libraries (`math`, `string`, `table`, ...), `vec` and `require "async"`,
+  but **not** `mc`, `register` or your script's globals.
+- Tables are copied deeply, functions keep working (captured library functions such as `math.floor` too),
+  and vectors are copied. Players, worlds, entities and other server objects, as well as tasks, promises
+  and mutexes, cannot be sent: the call fails with an error that names the value.
 
 ```lua
--- Safe: pure computation
-local task = async.task("threadpool", function()
+local input = { size = 64 }
+
+-- Safe: the task gets a copy of `input` and returns plain data
+local mesh = async.run("threadpool", function()
     return generate_mesh(input)
 end)
 
--- Unsafe: Minecraft state belongs on the main executor
+-- Error: players cannot leave the main thread
 async.task("threadpool", function()
     player:sendMessage("hello")
+end)
+```
+
+To touch the server from a thread-pool task, hand the work back to the main executor; it runs in your
+script's state, with the same copying rules:
+
+```lua
+async.run("threadpool", function()
+    local result = expensive_calculation()
+    async.run("main", function()
+        mc.broadcast("done: " .. result)
+    end)
 end)
 ```
 
@@ -352,6 +376,9 @@ local ok, err = pcall \{
 ```
 
 Mutexes are non-reentrant. Avoid waiting for another mutex while holding one, because that can deadlock.
+
+A mutex coordinates coroutines of one Lua state (for example several `"main"` tasks that sleep in between).
+Thread-pool tasks have their own state and share nothing, so a mutex cannot be sent to them.
 
 ## Coroutine requirements
 

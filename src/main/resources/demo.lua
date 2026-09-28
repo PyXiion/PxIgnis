@@ -758,7 +758,8 @@ function sidebarsetHandler(ctx, title, line1, line2, line3)
 end
 
 -- Show a welcome sidebar when a player joins
-mc.on("player_join_init", function(player)
+mc.on("player.join", function(e)
+    local player = e.player
     player.sidebar = {
         title = "§a§lWelcome!",
         lines = {
@@ -1255,68 +1256,67 @@ end
 -- ==========================================================================
 -- These handlers react to game events using state set by commands above.
 
-mc.on("player_chat", function(player, message)
-    if player.data.muted then
-        player:sendMessage("§cYou are muted and cannot chat.")
-        return false
-    end
-end)
+-- Handlers get one event table `e`. Cancellable events are stopped with e:cancel();
+-- later handlers then skip the event unless registered with { receiveCancelled = true }.
 
-mc.on("player_join_init", function(player)
+mc.on("player.chat", function(e)
+    if e.player.data.muted then
+        e.player:sendMessage("§cYou are muted and cannot chat.")
+        e:cancel()
+    end
+end, { priority = "high" })
+
+mc.on("player.join", function(e)
     local welcome = mc.data.welcomeMessage
     if welcome then
-        player:sendMessage("§6" .. welcome)
+        e.player:sendMessage("§6" .. welcome)
     end
 end)
 
-mc.on("player_leave", function(player)
-    player.data.lastSeen = mc.time()
+mc.on("player.leave", function(e)
+    e.player.data.lastSeen = mc.time()
 end)
 
-mc.on("player_block_place", function(player, pos, blockId)
-    player.data.blockNumber = (player.data.blockNumber or 0) + 1
-    if player.data.blockNumber % 10 == 0 then
-        player:sendMessage("Вы поставили уже " .. player.data.blockNumber .. " блоков")
+mc.on("block.place", function(e)
+    local data = e.player.data
+    data.blockNumber = (data.blockNumber or 0) + 1
+    if data.blockNumber % 10 == 0 then
+        e.player:sendMessage("Вы поставили уже " .. data.blockNumber .. " блоков")
     end
 end)
 
-mc.on("player_block_break", function(player, pos, blockId)
-    player.data.blockNumber = (player.data.blockNumber or 0) - 1
-
-    if player.data.blockNumber % 10 == 0 then
-        player:sendMessage("Вы поставили уже " .. player.data.blockNumber .. " блоков")
+mc.on("block.break", function(e)
+    local data = e.player.data
+    data.blockNumber = (data.blockNumber or 0) - 1
+    if data.blockNumber % 10 == 0 then
+        e.player:sendMessage("Вы поставили уже " .. data.blockNumber .. " блоков")
     end
 end)
 
-mc.on("player_death", function(player)
-    player:sendMessage("§cYou died at " .. string.format("%.1f, %.1f, %.1f", player.pos.x, player.pos.y, player.pos.z))
+mc.on("entity.death", function(e)
+    if not e.player then return end
+    local pos = e.player.pos
+    e.player:sendMessage("§cYou died at " .. string.format("%.1f, %.1f, %.1f", pos.x, pos.y, pos.z))
 end)
 
-mc.on("player_use_item", function(player, hand)
+mc.on("player.attack", function(e)
+    e.player:sendMessage("§eYou attacked §f" .. e.target.name)
 end)
 
-mc.on("player_attack_entity", function(player, target)
-    player:sendMessage("§eYou attacked §f" .. target.name)
+mc.on("player.interact", function(e)
+    e.player:sendMessage("§eYou interacted with §f" .. e.target.name)
 end)
 
-mc.on("player_interact_entity", function(player, target)
-    player:sendMessage("§eYou interacted with §f" .. target.name)
+mc.on("entity.hurt", function(e)
+    -- e.entity, e.player (if a player), e.source, e.amount, e.attacker; e:cancel() prevents the damage
 end)
 
-mc.on("player_hurt", function(player, source, amount)
+mc.on("entity.damaged", function(e)
+    -- same fields plus e.blocked, after the damage was applied
 end)
 
-mc.on("entity_hurt", function(entity, source, amount)
-end)
-
-mc.on("player_damage", function(player, source, amount)
-end)
-
-mc.on("entity_damage", function(entity, source, amount)
-end)
-
-mc.on("player_kill", function(player, target)
-    player:sendMessage("§cYou killed §f" .. target.name)
+mc.on("player.kill", function(e)
+    e.player:sendMessage("§cYou killed §f" .. e.target.name)
 end)
 
 

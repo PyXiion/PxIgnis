@@ -22,11 +22,14 @@ Region.players = nil
 Region.entities = nil
 
 ---Subscribes a callback to a region event. Returns a handler id (pass to
----`region:off` to unsubscribe).
+---`region:off` to unsubscribe). Event tables are described in 19-events.lua.
 ---@param event RegionEventName
----@param callback fun(...):boolean|nil  -- return false to cancel (cancellable events only)
----@param opts? { throttle?: integer }
+---@param callback fun(e: RegionEvent)
+---@param opts? EventOptions
 ---@return integer
+---@overload fun(self: Region, event: '"enter"'|'"leave"', callback: fun(e: RegionEntityEvent), opts?: EventOptions): integer
+---@overload fun(self: Region, event: '"move"', callback: fun(e: RegionMoveEvent), opts?: EventOptions): integer
+---@overload fun(self: Region, event: '"death"', callback: fun(e: RegionDeathEvent), opts?: EventOptions): integer
 function Region:on(event, callback, opts) end
 
 ---@param id integer

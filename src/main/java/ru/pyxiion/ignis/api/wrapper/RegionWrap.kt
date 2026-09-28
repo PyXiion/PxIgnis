@@ -3,6 +3,7 @@ package ru.pyxiion.ignis.api.wrapper
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
+import ru.pyxiion.ignis.HandlerOptions
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
@@ -37,14 +38,8 @@ object RegionWrap {
                 val self = args.arg(1).checktable()
                 val region = self.unwrap<Region>()
                 val event = args.arg(2).checkjstring()
-                val callback = args.arg(3).checkfunction()
-                val throttle = if (args.narg() >= 4 && args.arg(4).istable()) {
-                    val t = args.arg(4).checktable()
-                    val v = t.get("throttle").optint(0)
-                    if (v < 0) throw LuaError("on: throttle должен быть >= 0")
-                    v
-                } else 0
-                LuaValue.valueOf(region.on(event, callback, throttle))
+                val (callback, options) = HandlerOptions.handlerAndOptions(args.arg(3), args.arg(4), "region:on")
+                LuaValue.valueOf(region.on(event, callback, options))
             }
 
             method("off") { args ->

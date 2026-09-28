@@ -69,7 +69,7 @@ now sets it on entry and restores it in `finally`, making both execution paths c
 
 ## Why event handlers run through `LuaThread`
 
-Event handlers used to be invoked directly (`callback.invoke()`). A handler that called `mc.sleep` / `mc.fetch` / a
+Event handlers used to be invoked directly (`callback.invoke()`). A handler that called `mc.sleep` / `mc.fetch` (now `async.sleep` / `async.fetch`) / a
 suspend function would yield across a plain call and crash. Routing `LuaClosure` handlers through a `LuaThread`
 (`LuaThread(state, cb).resumeOrLog(...)`) gives event handlers the same coroutine semantics as scheduled tasks and
 commands.

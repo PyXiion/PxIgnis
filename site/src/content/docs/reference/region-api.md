@@ -95,84 +95,33 @@ Array of entity wrappers currently inside the region. Read-only.
 
 ## Events
 
-All region events are subscribed via `region:on(event, callback, opts?)`. The `opts` table can include:
+Subscribe with `region:on(event, handler, opts?)`. Handlers get an event table `e` with `e.region` and the fields
+below. Region events are not cancellable. Options (`priority`, `receiveCancelled`, `throttle`) work as for
+[`mc.on`](/reference/events#options).
 
-| Option     | Type     | Default | Description                                                           |
-|------------|----------|---------|-----------------------------------------------------------------------|
-| `throttle` | `number` | `0`     | Minimum ticks between invocations of this callback. `0` = no throttle |
+| Event     | Fields                                  | When                                                        |
+|-----------|-----------------------------------------|-------------------------------------------------------------|
+| `enter`   | `entity`, `player?`                     | An entity moves into the region (or is loaded inside it)    |
+| `leave`   | `entity`, `player?`                     | An entity moves out (or is unloaded)                        |
+| `move`    | `entity`, `player?`, `from`, `to`       | An entity inside changes position, including teleports      |
+| `death`   | `entity`, `player?`, `source`, `amount` | An entity inside dies                                       |
+| `tick`    | —                                       | Every server tick                                           |
+| `destroy` | —                                       | The region is destroyed; clean up your script state here    |
 
-### `region:on("entity_enter", function(entity))`
-
-Fires when an entity moves into the region.
-
-- `entity` ([`Entity`](/reference/entity-api)) — The entering entity
+`e.player` is set (to the same object as `e.entity`) when the entity is a player, so player-only handlers start with
+`if not e.player then return end`.
 
 ```lua
-r:on("entity_enter", function(e)
-  e:sendMessage("Welcome!")
+r:on("enter", function(e)
+  if e.player then e.player:sendMessage("Welcome!") end
 end)
-```
 
-### `region:on("entity_leave", function(entity))`
-
-Fires when an entity moves out of the region.
-
-```lua
-r:on("entity_leave", function(e)
-  e:sendMessage("Goodbye!")
-end)
-```
-
-### `region:on("entity_move", function(entity, from, to))`
-
-Fires each tick while an entity is inside the region and changes position. Fires for any position change, including
-teleports.
-
-- `entity` ([`Entity`](/reference/entity-api)) — The moving entity
-- `from` ([`vec`](/reference/vector-api)) — Previous position
-- `to` ([`vec`](/reference/vector-api)) — Current position
-
-```lua
-r:on("entity_move", function(e, from, to)
-  local dist = (to - from):length()
-  if dist > 50 then
-    e:sendMessage("That was a big jump!")
+r:on("move", function(e)
+  if (e.to - e.from):length() > 50 then
+    e.entity:sendMessage("That was a big jump!")
   end
 end, { throttle = 5 })
-```
 
-### `region:on("player_enter", function(player))`
-
-Convenience over `entity_enter`, fires only for players. Shares the event lifecycle with `entity_enter`.
-
-### `region:on("player_leave", function(player))`
-
-Convenience over `entity_leave`, fires only for players.
-
-### `region:on("player_move", function(player, from, to))`
-
-Convenience over `entity_move`, fires only for players.
-
-### `region:on("entity_death", function(entity, source, amount))`
-
-Fires when a tracked entity inside the region dies.
-
-- `entity` ([`Entity`](/reference/entity-api)) — The dying entity
-- `source` (`string`) — Damage source name
-- `amount` (`number`) — Damage amount
-
-### `region:on("player_death", function(player, source))`
-
-Fires when a player inside the region dies.
-
-- `player` ([`Player`](/reference/player-api)) — The dying player
-- `source` (`string`) — Damage source name
-
-### `region:on("tick", function())`
-
-Fires every server tick.
-
-```lua
 r:on("tick", function()
   for _, p in ipairs(r.players) do
     p:addEffect("minecraft:regeneration", 40, 0)
@@ -180,9 +129,8 @@ r:on("tick", function()
 end)
 ```
 
-### `region:on("destroy", function())`
-
-Fires when the region is destroyed, allowing cleanup of user script state.
+The old names (`entity_enter`, `player_enter`, `entity_leave`, `player_leave`, `entity_move`, `player_move`,
+`entity_death`, `player_death`) still work with positional arguments and log a deprecation warning.
 
 ## Methods
 
@@ -197,13 +145,13 @@ Removes a handler previously registered with `region:on`. Returns `true` if the 
 otherwise.
 
 ```lua
-local id = r:on("entity_enter", function(e) e:sendMessage("Hi!") end)
+local id = r:on("enter", function(e) e.entity:sendMessage("Hi!") end)
 r:off(id)  -- unsubscribes
 ```
 
 ### `region:destroy()`
 
-Destroys the region. No `entity_leave` events fire on destruction.
+Destroys the region. No `leave` events fire on destruction.
 
 ```lua
 r:destroy()
@@ -230,7 +178,7 @@ r:setBounds({ x = -10, y = 0, z = -10 }, { x = 10, y = 32, z = 10 })
 
 ## Lifetime
 
-Regions are destroyed on `/ignis reload`. No `entity_leave` events fire during reload cleanup. To persist region data
+Regions are destroyed on `/ignis reload`. No `leave` events fire during reload cleanup. To persist region data
 across reloads, store bounds in `mc.data` and recreate in `server_start`:
 
 ```lua
@@ -238,8 +186,8 @@ mc.on("server_start", function()
   local zones = mc.data.zones or {}
   for _, z in ipairs(zones) do
     local r = world:createRegion(z.A, z.B)
-    r:on("entity_enter", function(e)
-      e:sendMessage("Welcome!")
+    r:on("enter", function(e)
+      e.entity:sendMessage("Welcome!")
     end)
   end
 end)

@@ -6,7 +6,7 @@
 ./gradlew build                          # Build all modules
 ./gradlew test                           # Run all tests
 ./gradlew :pxluanova-core:build          # Build core only
-./gradlew :pxluanova-test:test --tests "org.luaj.vm2.OrphanedThreadTest"  # Single test
+./gradlew :pxluanova-test:test --tests "org.luaj.vm2.CoroutineYieldTest"  # Single test
 ```
 
 ## Architecture
@@ -19,22 +19,21 @@
 **Package names are `org.luaj.vm2.*`** — NOT renamed from LuaJ. This is intentional for API compatibility.
 
 **Key files:**
-- `LuaThread.java` — Coroutine implementation (virtual threads via ReentrantLock/Condition)
-- `LuaClosure.java` — Main interpreter loop, errorHook
-- `Globals.java` — Global environment, `running` thread, `coroutineThreadFactory`
+- `LuaThread.java` — Coroutine state; `resume` runs `FrameInterpreter` on the caller's thread
+- `FrameInterpreter.java` — Frame-based interpreter for coroutines (yields, protected pcall/xpcall frames)
+- `LuaClosure.java` — Recursive interpreter for Lua entered from Java (not yieldable), errorHook
+- `LuaState.java` — Global environment, current thread, interrupts/checkpoints
 - `JsePlatform.java` — Entry point: `standardGlobals()`, `debugGlobals()`
 
 ## Java Version
 
-**Java 21+ required.** Not 11, not multi-release. Virtual threads are the default for coroutines.
+**Java 21+ required.** Not 11, not multi-release.
 
 ## Test Quirks
 
 - **Working directory**: Tests run from `pxluanova-test/src/test/`, not project root. Lua test scripts are at `pxluanova-test/src/test/lua/*.lua`.
-- **40 known test failures** (not regressions):
-  - 13 `CompatibiltyTest` — need native Lua binary for output comparison / timezone differences
-  - 6 `ErrorsTest` — error message format changes from our fixes
-  - 21 `WeakTableTest` — pre-existing bug in weak table array part handling
+- **The suite must be green.** Reference-output tests with known differences are excluded one by one, each with
+  its reason, in `pxluanova-test/build.gradle`. Fix a difference → delete its entry. CI runs `./gradlew test` here.
 - **ScriptDrivenTest** compares output against reference Lua scripts. Tests look for files in `lua/` subdir (not `test/lua/`).
 - **Zip fallback**: Tests can load from `luaj3.0-tests.zip` if plain files not found.
 
@@ -47,13 +46,30 @@ These are local clones for reference only, not built:
 
 ## Coroutine Model
 
-Coroutines use **virtual threads by default** (Java 21+). Each coroutine gets a virtual thread (~1-10KB). Platform threads available via opt-out:
+Coroutines are synchronous: `LuaThread.resume` → `State.lua_resume_sync` → `FrameInterpreter.run` on the
+caller's thread. A yield sets `yieldRequested`, the interpreter returns, and the frame stack stays in `State`
+until the next resume. There are no coroutine threads (the old virtual-thread model was removed).
 
-```java
-globals.coroutineThreadFactory = LuaThread.PLATFORM_THREAD_FACTORY;
-```
+- **Lua→Lua calls** in a coroutine push `LuaFrame`s; nothing recurses in Java, so they can yield.
+- **pcall/xpcall** (`ProtectedCall`) with any target run as protected frames: `FrameInterpreter.recover`
+  unwinds errors to the nearest one and delivers `false, msg`; a normal return gets a leading `true`.
+  Non-closure targets (and non-closure coroutine bodies) run through the `TRAMPOLINE` prototype.
+- **Lua entered from Java** (`LuaClosure.execute`, `TailcallVarargs.eval`) bumps `State.nonYieldableDepth`;
+  yielding there (`lua_yield_sync` or a `YieldContinuationException`) is "attempt to yield across a C-call
+  boundary". `LuaContinuableFunction`s called straight from the frame interpreter can still yield.
 
-The handoff between resumer and coroutine uses `ReentrantLock` + `Condition` (not `synchronized`/`wait()`/`notify()`). The `run()` method holds the lock for the entire Lua execution; `lua_yield()` and `lua_resume()` use `condition.await()`/`condition.signal()` to hand off.
+## Checkpoints (instruction polling)
+
+Both interpreters (`FrameInterpreter.step`, `LuaClosure.execute`) decrement `LuaState.checkpointCountdown` per
+instruction and call `LuaState.checkpoint()` every `checkpointInterval` instructions (default 100) — nothing heavier
+runs per instruction. `checkpoint()` services `LuaState.interrupt()` requests and polls the optional
+`Builder.checkpointHandler` (CONTINUE / SUSPEND / throw `LuaError`), which hosts use for time limits. The countdown is
+per-state and unsynchronized on purpose, and it carries across calls so short functions (e.g. infinite tail
+recursion) are still covered.
+
+LuaJC-compiled code (`nova.sync`) has no interpreter loop: `JavaBuilder.addBranch` emits a call to the static
+`LuaState.compiledBackwardJump()` before every backward branch, and `TailcallVarargs.eval` calls it per tail
+call; it runs `checkpoint()` on `LuaState.current()` every 100 calls.
 
 ## Lambda literal extension
 
@@ -73,4 +89,4 @@ Implemented in `LexState.java` (lexer synth of `TK_LAMBDA`/`TK_DARROW`, `lambdaB
 
 - **Don't rename packages** — `org.luaj.vm2` is intentional for drop-in LuaJ replacement
 - **Don't add JME code** — Java ME support was deliberately removed
-- **Don't change `synchronized` in DebugLib** — those are per-coroutine, no contention, won't pin virtual threads
+- **Don't change `synchronized` in DebugLib** — those are per-coroutine and uncontended

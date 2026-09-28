@@ -101,47 +101,47 @@ function items.find(item)
     return _templatesById[item.id .. "#_"]
 end
 
-mc.on("player_use_item", function(player, hand, item, itemId)
-    local tpl = items.find(item)
+-- Template callbacks keep their positional style: returning false cancels the action.
+local function cancelIfFalse(e, result)
+    if result == false then e:cancel() end
+end
+
+mc.on("player.use_item", function(e)
+    local tpl = items.find(e.item)
     if tpl and tpl.onUse then
-        return tpl.onUse(player, hand, item, tpl)
+        cancelIfFalse(e, tpl.onUse(e.player, e.hand, e.item, tpl))
     end
 end)
 
-mc.on("player_attack_entity", function(player, target)
-    local item = player.mainhand
+mc.on("player.attack", function(e)
+    local item = e.player.mainhand
     if not item then return end
     local tpl = items.find(item)
     if tpl and tpl.onAttack then
-        return tpl.onAttack(player, target, item, tpl)
+        cancelIfFalse(e, tpl.onAttack(e.player, e.target, item, tpl))
     end
 end)
 
-mc.on("player_consume_item", function(player, item)
-    local tpl = items.find(item)
+mc.on("player.consume", function(e)
+    local tpl = items.find(e.item)
     if tpl and tpl.onConsume then
-        return tpl.onConsume(player, item, tpl)
+        cancelIfFalse(e, tpl.onConsume(e.player, e.item, tpl))
     end
 end)
 
-mc.on("player_pickup_item", function(player, item, count)
-    local tpl = items.find(item)
+mc.on("player.pickup", function(e)
+    local tpl = items.find(e.item)
     if tpl and tpl.onPickup then
-        return tpl.onPickup(player, item, count, tpl)
+        cancelIfFalse(e, tpl.onPickup(e.player, e.item, e.count, tpl))
     end
 end)
 
-mc.on("player_interact_entity", function(player, target, hand)
-    local item
-    if hand and hand:lower() == "off" then
-        item = player.offhand
-    else
-        item = player.mainhand
-    end
+mc.on("player.interact", function(e)
+    local item = e.hand == "off" and e.player.offhand or e.player.mainhand
     if not item then return end
     local tpl = items.find(item)
     if tpl and tpl.onInteractEntity then
-        return tpl.onInteractEntity(player, target, hand, item, tpl)
+        cancelIfFalse(e, tpl.onInteractEntity(e.player, e.target, e.hand, item, tpl))
     end
 end)
 

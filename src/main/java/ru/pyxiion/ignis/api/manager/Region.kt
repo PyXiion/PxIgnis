@@ -10,10 +10,14 @@ import net.minecraft.util.math.ChunkPos
 import net.minecraft.util.math.Vec3d
 import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaState
+import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.EventBus
+import ru.pyxiion.ignis.HandlerOptions
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
+import ru.pyxiion.ignis.api.wrapper.RegionWrap
+import ru.pyxiion.ignis.events.RegionEvents
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.network.RegionCapWarningPayload
 import ru.pyxiion.ignis.network.RegionEntry
@@ -38,14 +42,16 @@ class Region internal constructor(
     val world: ServerWorld,
     @Volatile var bounds: Box,
 ) {
-    internal val bus = EventBus(" region #$id", PxIgnis.logger) { RegionManager.sharedStateProvider() }
+    internal val bus = EventBus(
+        "region #$id", PxIgnis.logger, { RegionManager.sharedStateProvider() }, RegionEvents.CATALOG, RegionManager::ticks,
+    )
     private val contained = mutableSetOf<UUID>()
 
     fun contains(pos: Vec3d): Boolean = bounds.contains(pos)
 
-    fun on(event: String, callback: LuaFunction, throttle: Int = 0): Int {
-        val handlerId = bus.on(event, callback, throttle)
-        if (event == "tick") RegionManager.registerTickSubscriber(this)
+    fun on(event: String, callback: LuaFunction, options: HandlerOptions = HandlerOptions.DEFAULT): Int {
+        val handlerId = bus.on(event, callback, options)
+        if (bus.hasHandlers("tick")) RegionManager.registerTickSubscriber(this)
         return handlerId
     }
 
@@ -57,9 +63,37 @@ class Region internal constructor(
         return removed
     }
 
-    internal fun fire(event: String, vararg args: LuaValue) = bus.fire(event, *args)
+    private fun post(event: String, fill: (LuaTable) -> Unit = {}) {
+        if (!bus.hasHandlers(event)) return
+        bus.post(event) {
+            it.rawset("region", RegionWrap.wrap(this))
+            fill(it)
+        }
+    }
 
-    internal fun tick() = bus.tick()
+    private fun LuaTable.entity(entity: Entity) {
+        val w = EntityFactory.wrap(entity)
+        rawset("entity", w)
+        if (entity is ServerPlayerEntity) rawset("player", w)
+    }
+
+    internal fun fire(event: String) = post(event)
+
+    internal fun fireEnter(entity: Entity) = post("enter") { it.entity(entity) }
+
+    internal fun fireLeave(entity: Entity) = post("leave") { it.entity(entity) }
+
+    internal fun fireMove(entity: Entity, from: Vec3d, to: Vec3d) = post("move") {
+        it.entity(entity)
+        it.rawset("from", Vector.of(from.x, from.y, from.z).toLuaValue())
+        it.rawset("to", Vector.of(to.x, to.y, to.z).toLuaValue())
+    }
+
+    internal fun fireDeath(entity: Entity, source: String, amount: Double) = post("death") {
+        it.entity(entity)
+        it.rawset("source", LuaValue.valueOf(source))
+        it.rawset("amount", LuaValue.valueOf(amount))
+    }
 
     fun contains(uuid: UUID): Boolean = uuid in contained
 
@@ -90,8 +124,7 @@ class Region internal constructor(
             contained.remove(uuid)
             val e = world.getEntity(uuid)
             if (e != null) {
-                fire("entity_leave", regionWrapperFor(e))
-                if (e is ServerPlayerEntity) fire("player_leave", regionWrapperFor(e))
+                fireLeave(e)
             }
         }
         for (e in world.players) {
@@ -111,8 +144,7 @@ class Region internal constructor(
         }
         for (uuid in toEnter) {
             val e = world.getEntity(uuid) ?: continue
-            fire("entity_enter", regionWrapperFor(e))
-            if (e is ServerPlayerEntity) fire("player_enter", regionWrapperFor(e))
+            fireEnter(e)
         }
     }
 
@@ -153,6 +185,8 @@ object RegionManager {
 
     fun get(id: Int): Region? = regionsById[id]
 
+    val count: Int get() = regionsById.size
+
     fun getAt(world: ServerWorld, pos: Vec3d): List<Region> {
         val chunk = chunkPosFor(pos)
         val chunkMap = regionsByChunk[world] ?: return emptyList()
@@ -181,12 +215,16 @@ object RegionManager {
         tickSubscribers.clear()
     }
 
+    /** Server ticks since start; the clock for region handlers' `throttle`. */
+    var ticks = 0L
+        private set
+
     fun tick() {
-        tickSubscribers.forEach { r ->
+        ticks++
+        tickSubscribers.toList().forEach { r ->
             try {
                 r.fire("tick")
             } catch (_: Throwable) { }
-            r.tick()
         }
     }
 
@@ -317,25 +355,18 @@ object RegionManager {
         chunkMap[toChunk]?.let { candidates.addAll(it) }
 
         val uuid = entity.uuid
-        val isPlayer = entity is ServerPlayerEntity
 
         for (region in candidates) {
             val wasIn = region.contains(from)
             val isIn = region.contains(to)
             if (isIn && !wasIn) {
                 region.addContained(uuid)
-                region.fire("entity_enter", regionWrapperFor(entity))
-                if (isPlayer) region.fire("player_enter", regionWrapperFor(entity))
+                region.fireEnter(entity)
             } else if (!isIn && wasIn) {
                 region.removeContained(uuid)
-                region.fire("entity_leave", regionWrapperFor(entity))
-                if (isPlayer) region.fire("player_leave", regionWrapperFor(entity))
+                region.fireLeave(entity)
             } else if (isIn) {
-                val fromLua = Vector.of(from.x, from.y, from.z).toLuaValue()
-                val toLua = Vector.of(to.x, to.y, to.z).toLuaValue()
-                val w = regionWrapperFor(entity)
-                region.fire("entity_move", w, fromLua, toLua)
-                if (isPlayer) region.fire("player_move", w, fromLua, toLua)
+                region.fireMove(entity, from, to)
             }
         }
     }
@@ -347,12 +378,10 @@ object RegionManager {
         val chunkMap = regionsByChunk[world] ?: return
         val candidates = chunkMap[chunk] ?: return
         val uuid = entity.uuid
-        val isPlayer = entity is ServerPlayerEntity
         for (region in candidates) {
             if (region.contains(pos) && !region.isContained(uuid)) {
                 region.addContained(uuid)
-                region.fire("entity_enter", regionWrapperFor(entity))
-                if (isPlayer) region.fire("player_enter", regionWrapperFor(entity))
+                region.fireEnter(entity)
             }
         }
     }
@@ -364,12 +393,10 @@ object RegionManager {
         val chunkMap = regionsByChunk[world] ?: return
         val candidates = chunkMap[chunk] ?: return
         val uuid = entity.uuid
-        val isPlayer = entity is ServerPlayerEntity
         for (region in candidates) {
             if (region.isContained(uuid)) {
                 region.removeContained(uuid)
-                region.fire("entity_leave", regionWrapperFor(entity))
-                if (isPlayer) region.fire("player_leave", regionWrapperFor(entity))
+                region.fireLeave(entity)
             }
         }
     }
@@ -381,20 +408,9 @@ object RegionManager {
         val chunkMap = regionsByChunk[world] ?: return
         val candidates = chunkMap[chunk] ?: return
         val uuid = entity.uuid
-        val isPlayer = entity is ServerPlayerEntity
-        val w = regionWrapperFor(entity)
-        val src = LuaValue.valueOf(sourceName)
-        val amt = LuaValue.valueOf(amount)
-        for (region in candidates) {
-            if (region.isContained(uuid)) {
-                region.fire("entity_death", w, src, amt)
-                if (isPlayer) region.fire("player_death", w, src)
-            }
+        for (region in candidates.toList()) {
+            if (region.isContained(uuid)) region.fireDeath(entity, sourceName, amount)
         }
-    }
-
-    fun onPlayerDeath(player: ServerPlayerEntity, sourceName: String) {
-        onEntityDeath(player, sourceName, 0.0)
     }
 
     private fun indexChunks(region: Region) {
@@ -440,6 +456,3 @@ object RegionManager {
     }
 }
 
-internal fun regionWrapperFor(entity: Entity): LuaValue {
-    return EntityFactory.wrap(entity)
-}

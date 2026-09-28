@@ -68,3 +68,18 @@ function ChestGuiInstance:getItem(row, col) end
 function ChestGuiInstance:fill(item) end
 
 function ChestGuiInstance:clear() end
+
+---`require "async"`. Only `sleep` and `fetch` are typed here; see
+---https://ignis.pyxiion.ru/reference/async-api for tasks, promises and mutexes.
+---@class AsyncLib
+local Async = {}
+
+---Yields the current coroutine for the given number of server ticks.
+---Valid in command/event handlers, scheduler callbacks and async tasks.
+---@param ticks integer
+function Async.sleep(ticks) end
+
+---Performs an HTTP request, yielding the current coroutine until it completes.
+---@param request string|FetchRequest
+---@return FetchResult
+function Async.fetch(request) end

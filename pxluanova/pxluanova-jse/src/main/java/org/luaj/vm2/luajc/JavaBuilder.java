@@ -78,6 +78,7 @@ public class JavaBuilder {
 	private static final String STR_BUFFER = Buffer.class.getName();
 	private static final String STR_STRING = String.class.getName();
 	private static final String STR_JSEPLATFORM = "org.luaj.vm2.lib.jse.JsePlatform";
+	private static final String STR_LUASTATE = "org.luaj.vm2.LuaState";
 
 	private static final ObjectType TYPE_VARARGS = new ObjectType(STR_VARARGS);
 	private static final ObjectType TYPE_LUAVALUE = new ObjectType(STR_LUAVALUE);
@@ -744,6 +745,9 @@ public class JavaBuilder {
 	public static final int BRANCH_IFEQ = 3;
 	
 	public void addBranch( int pc, int branchType, int targetpc ) {
+		// Every loop iteration takes a backward branch: poll checkpoints there (no operand stack effect).
+		if ( targetpc <= pc )
+			append(factory.createInvoke(STR_LUASTATE, "compiledBackwardJump", Type.VOID, Type.NO_ARGS, Constants.INVOKESTATIC));
 		switch ( branchType ) {
 		default: 
 		case BRANCH_GOTO: branches[pc]  = new GOTO(null); break;

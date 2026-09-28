@@ -8,16 +8,13 @@ import net.minecraft.network.packet.s2c.play.SetCursorItemS2CPacket;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
-import org.luaj.vm2.LuaValue;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import ru.pyxiion.ignis.PxIgnis;
-import ru.pyxiion.ignis.api.wrapper.ItemStackWrap;
-import ru.pyxiion.ignis.api.wrapper.PlayerWrap;
+import ru.pyxiion.ignis.events.GameEvents;
 
 @Mixin(ServerPlayNetworkHandler.class)
 public abstract class ServerPlayNetworkHandlerMixin {
@@ -25,7 +22,7 @@ public abstract class ServerPlayNetworkHandlerMixin {
     @Shadow
     public ServerPlayerEntity player;
 
-    // player_drop_item — intercept DROP_ITEM / DROP_ALL_ITEMS (hotbar Q)
+    // player.drop — intercept DROP_ITEM / DROP_ALL_ITEMS (hotbar Q)
     @Inject(method = "onPlayerAction", at = @At("HEAD"), cancellable = true)
     private void pxrp$onDropItem(PlayerActionC2SPacket packet, CallbackInfo ci) {
         var action = packet.getAction();
@@ -52,7 +49,7 @@ public abstract class ServerPlayNetworkHandlerMixin {
         }
     }
 
-    // player_drop_item — intercept THROW + PICKUP(outside) from inventory (inventory Q)
+    // player.drop — intercept THROW + PICKUP(outside) from inventory (inventory Q)
     @Inject(method = "onClickSlot", at = @At(value = "INVOKE", target = "Lnet/minecraft/screen/ScreenHandler;getRevision()I"), cancellable = true)
     private void pxrp$onClickSlotDrop(ClickSlotC2SPacket packet, CallbackInfo ci) {
         var handler = player.currentScreenHandler;
@@ -95,11 +92,6 @@ public abstract class ServerPlayNetworkHandlerMixin {
 
     @Unique
     private boolean fireDropEvent(ItemStack stack, int count) {
-        var results = PxIgnis.instance.runtime.getEventManager()
-            .fireWithResults("player_drop_item",
-                PlayerWrap.INSTANCE.wrap(player),
-                ItemStackWrap.INSTANCE.wrap(stack),
-                LuaValue.valueOf(count));
-        return results.stream().anyMatch(r -> r.isboolean() && !r.toboolean());
+        return !GameEvents.drop(player, stack, count);
     }
 }

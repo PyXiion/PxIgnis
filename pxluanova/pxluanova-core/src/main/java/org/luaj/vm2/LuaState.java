@@ -1,5 +1,6 @@
 package org.luaj.vm2;
 
+import org.luaj.vm2.interrupt.InterruptAction;
 import org.luaj.vm2.interrupt.InterruptHandler;
 import org.luaj.vm2.lib.BaseLib;
 import org.luaj.vm2.lib.DebugLib;
@@ -174,8 +175,40 @@ public final class LuaState {
 	public Loader loader;
 	public Undumper undumper;
 
+	/** Default number of VM instructions between {@link #checkpoint()} polls. */
+	public static final int DEFAULT_CHECKPOINT_INTERVAL = 100;
+
 	private volatile boolean interrupted;
 	private final InterruptHandler interruptHandler;
+	private final InterruptHandler checkpointHandler;
+	private final int checkpointInterval;
+
+	/** Countdown for LuaJC-compiled code, which has no LuaState at hand; see {@link #compiledBackwardJump()}. */
+	private static int compiledCountdown = DEFAULT_CHECKPOINT_INTERVAL;
+
+	/**
+	 * Called by LuaJC-compiled code on every backward jump (loop iteration) and by tail-call loops: runs
+	 * {@link #checkpoint()} on the current state once every {@link #DEFAULT_CHECKPOINT_INTERVAL} calls.
+	 * Unsynchronized on purpose, like {@link #checkpointCountdown}.
+	 */
+	public static void compiledBackwardJump() throws LuaError {
+		if (--compiledCountdown > 0)
+			return;
+		compiledCountdown = DEFAULT_CHECKPOINT_INTERVAL;
+		LuaState s = current();
+		if (s == null)
+			return;
+		try {
+			s.checkpoint();
+		} catch (LuaError e) {
+			compiledCountdown = 1; // as in checkpoint(): re-check at the very next jump, so pcall cannot hide it
+			throw e;
+		}
+	}
+
+	/** Instructions left until the next checkpoint. Shared by every thread running this state;
+	 *  it is deliberately not synchronized: a lost decrement only delays a checkpoint slightly. */
+	int checkpointCountdown;
 
 	int javaCallDepth = 0;
 
@@ -198,8 +231,6 @@ public final class LuaState {
 	public PackageLib package_;
 	public DebugLib debuglib;
 
-	public LuaThread.ThreadFactory coroutineThreadFactory = LuaThread.VIRTUAL_THREAD_FACTORY;
-
 	public LuaState() {
 		this(new Builder());
 	}
@@ -207,6 +238,9 @@ public final class LuaState {
 	private LuaState(Builder builder) {
 		compiler = builder.compiler;
 		interruptHandler = builder.interruptHandler;
+		checkpointHandler = builder.checkpointHandler;
+		checkpointInterval = builder.checkpointInterval;
+		checkpointCountdown = checkpointInterval;
 		reportError = builder.reportError;
 
 		globals = new LuaTable();
@@ -245,7 +279,33 @@ public final class LuaState {
 
 	public void handleInterrupt() throws LuaError {
 		interrupted = false;
-		switch (interruptHandler.interrupted()) {
+		apply(interruptHandler.interrupted());
+	}
+
+	/**
+	 * Called by the interpreters once every {@code checkpointInterval} instructions instead of on each one.
+	 * Services a pending {@link #interrupt()} and polls the checkpoint handler, if any.
+	 */
+	void checkpoint() throws LuaError {
+		checkpointCountdown = checkpointInterval;
+		if (interrupted)
+			handleInterrupt();
+		if (checkpointHandler != null) {
+			InterruptAction action;
+			try {
+				action = checkpointHandler.interrupted();
+			} catch (LuaError e) {
+				// Poll again on the very next instruction: if a pcall catches this error, the handler gets
+				// to reject the code around it too, instead of that code running for another full interval.
+				checkpointCountdown = 1;
+				throw e;
+			}
+			apply(action);
+		}
+	}
+
+	private void apply(InterruptAction action) throws LuaError {
+		switch (action) {
 			case CONTINUE -> {}
 			case SUSPEND -> {
 			LuaThread ct = getCurrentThread();
@@ -254,6 +314,8 @@ public final class LuaState {
 			}
 			if (ct.isMainThread())
 				throw new LuaError("cannot yield main thread");
+			if (!ct.threadState.isYieldable())
+				return; // inside Java-entered or sync-compiled code: keep running, suspend at a later checkpoint
 			ct.threadState.yieldIsInterrupt = true;
 			ct.threadState.lua_yield_sync(LuaValue.NONE);
 			}
@@ -376,6 +438,8 @@ public final class LuaState {
 	public static class Builder {
 		private Compiler compiler;
 		private InterruptHandler interruptHandler;
+		private InterruptHandler checkpointHandler;
+		private int checkpointInterval = DEFAULT_CHECKPOINT_INTERVAL;
 		private ErrorReporter reportError;
 
 		public LuaState build() {
@@ -391,6 +455,25 @@ public final class LuaState {
 		public Builder interruptHandler(InterruptHandler handler) {
 			Objects.requireNonNull(handler, "handler cannot be null");
 			interruptHandler = handler;
+			return this;
+		}
+
+		/**
+		 * Polls {@code handler} every {@link #checkpointInterval(int)} instructions from whichever thread is
+		 * running Lua. It may return CONTINUE, SUSPEND (yield the current coroutine) or throw a {@link LuaError}
+		 * to abort the running code, e.g. to enforce a time limit. After a throw it is polled again on the next
+		 * instruction (not the next interval), so it can keep throwing until the offending code has unwound past
+		 * any {@code pcall} that caught the error; returning CONTINUE restores the normal interval.
+		 */
+		public Builder checkpointHandler(InterruptHandler handler) {
+			Objects.requireNonNull(handler, "handler cannot be null");
+			checkpointHandler = handler;
+			return this;
+		}
+
+		public Builder checkpointInterval(int instructions) {
+			if (instructions <= 0) throw new IllegalArgumentException("checkpoint interval must be positive");
+			checkpointInterval = instructions;
 			return this;
 		}
 

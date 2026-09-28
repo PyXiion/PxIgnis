@@ -8,7 +8,7 @@ In [part 1](/guide/01-your-first-command) you built commands. Now let's make you
 In this guide you will learn how to:
 
 - Listen to server events with `mc.on`.
-- Cancel events by returning `false`.
+- Cancel events with `e:cancel()` and order handlers with priorities.
 - Fire your own events with `mc.emit`.
 - Save data globally with `mc.data` and per-player with `player.data`.
 
@@ -28,26 +28,26 @@ Syntax:
 mc.on(eventName, handler)
 ```
 
-- `eventName` is a string like `"player_join"`.
-- `handler` is a function that receives event-specific arguments.
+- `eventName` is a string like `"player.join"`.
+- `handler` is a function that receives one argument: the event table `e`, with the event's fields.
 - `mc.on` returns a numeric ID. Save it if you want to stop listening later with `mc.off(id)`.
 
 Example:
 
 ```lua
 --# nova syntax
-mc.on("player_join") \{ player ->
-    mc.broadcast("Welcome, " .. player.name .. "!")
+mc.on("player.join") \{ e ->
+    mc.broadcast("Welcome, " .. e.player.name .. "!")
 }
 ```
 
-The handler receives `player`, the player who joined. Each event sends its own arguments, so check the [Events reference](/reference/events) for details.
+`e.player` is the player who joined. Each event has its own fields, see the [Events reference](/reference/events).
 
 To unsubscribe later:
 
 ```lua
 --# nova syntax
-local joinId = mc.on("player_join") \{ player ->
+local joinId = mc.on("player.join") \{ e ->
     mc.broadcast("Welcome!")
 }
 
@@ -57,23 +57,39 @@ mc.off(joinId)
 
 ## 2. Cancelling events
 
-Some events are cancellable. If your handler returns `false`, Minecraft stops the action.
+Some events are cancellable. Call `e:cancel()` and Minecraft stops the action.
 
 ```lua
 --# nova syntax
-mc.on("player_block_break") \{ player, pos, blockId ->
-    if not player:hasPermission("build") then
-        player:sendMessage("You cannot break blocks here.")
-        return false
+mc.on("block.break") \{ e ->
+    if not e.player:hasPermission("build") then
+        e.player:sendMessage("You cannot break blocks here.")
+        e:cancel()
     end
 }
 ```
 
-In this example, `player:hasPermission("build")` checks whether the player has the `build` permission. You can use any permission node you have configured on your server.
+In this example, `hasPermission("build")` checks whether the player has the `build` permission. You can use any permission node you have configured on your server.
 
-Cancellable events include `player_block_break`, `player_block_place`, `player_chat`, `player_hurt`, and several others. See the [Events reference](/reference/events) for the full list.
+Cancellable events include `block.break`, `block.place`, `player.chat`, `entity.hurt`, and several others. See the [Events reference](/reference/events) for the full list.
 
-If the event is cancelable and you return nothing (or true) the event will proceed normally.
+Once an event is cancelled, the handlers after it are skipped. Handlers run by **priority** (higher first), so put checks
+that may cancel before the rest:
+
+```lua
+--# nova syntax
+mc.on("block.break", { priority = "high" }) \{ e ->
+    if isProtected(e.pos) then e:cancel() end
+}
+
+mc.on("block.break") \{ e ->
+    -- not called for protected blocks
+    e.player.data.mined = (e.player.data.mined or 0) + 1
+}
+```
+
+A handler that wants to see cancelled events too passes `{ receiveCancelled = true }`. If a handler of a cancellable
+event fails with an error, the event is cancelled, so a bug in a protection script does not open the door.
 
 ## 3. Custom events with `mc.emit`
 
@@ -104,7 +120,7 @@ mc.emit("my_mod:boss_killed", somePlayer, "Ender Dragon")
 --# nova syntax
 mc.data.joins = (mc.data.joins or 0) + 1
 
-mc.on("player_join") \{ player ->
+mc.on("player.join") \{ e ->
     mc.broadcast("Visitor #" .. mc.data.joins .. "!")
 }
 ```
@@ -119,10 +135,10 @@ Every player wrapper has its own persistent table at `player.data`. It works exa
 
 ```lua
 --# nova syntax
-mc.on("player_join") \{ player ->
-    local visits = (player.data.visits or 0) + 1
-    player.data.visits = visits
-    player:sendMessage("This is visit #" .. visits)
+mc.on("player.join") \{ e ->
+    local visits = (e.player.data.visits or 0) + 1
+    e.player.data.visits = visits
+    e.player:sendMessage("This is visit #" .. visits)
 }
 ```
 
@@ -145,12 +161,14 @@ register("coins") \{ ctx ->
 }
 
 -- Killing another player gives 50 coins
-mc.on("player_kill") \{ player, target, damageSource ->
-    giveCoins(player, 50)
+mc.on("player.kill") \{ e ->
+    giveCoins(e.player, 50)
 }
 
 -- Dying makes you lose 10% of your coins
-mc.on("player_death") \{ player, damageType ->
+mc.on("entity.death") \{ e ->
+    local player = e.player
+    if not player then return end -- a mob died
     local coins = player.data.coins or 0
     local lost = math.floor(coins * 0.1)
     player.data.coins = coins - lost
@@ -162,8 +180,8 @@ How it works:
 
 1. `giveCoins` reads the player's saved coin count, adds the amount, and saves it back.
 2. The `coins` command calls it for the player who ran the command.
-3. The `player_kill` event gives a reward.
-4. The `player_death` event takes a penalty.
+3. The `player.kill` event gives a reward.
+4. The `entity.death` event takes a penalty when the one who died is a player.
 
 Because `player.data` persists, your coin total survives disconnects and reloads.
 
@@ -171,18 +189,20 @@ Because `player.data` persists, your coin total survives disconnects and reloads
 
 - Storage saves automatically. You do not need to call a save method.
 - Deep nested tables work directly: `mc.data.guilds.mine.members.leader = player.name`.
-- Some APIs, such as `mc.sleep` and `mc.fetch`, are async and cannot be used directly inside event handlers. If you need them, defer the work to the scheduler:
+- Event handlers run as coroutines, so they can wait on the `async` module directly:
 
 ```lua
 --# nova syntax
-mc.on("player_join") \{ player ->
-    mc.schedule(0) \{
-        -- async work goes here
-        mc.sleep(1000)
-        player:sendMessage("Delayed hello!")
-    }
+local async = require "async"
+
+mc.on("player.join") \{ e ->
+    async.sleep(100) -- 5 seconds
+    e.player:sendMessage("Delayed hello!")
 }
 ```
+
+- Handlers run on the server thread. A handler that runs too long (5 seconds by default, e.g. an endless loop) is
+  stopped with an error so it cannot freeze the server.
 
 ## Next steps
 

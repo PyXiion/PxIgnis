@@ -71,12 +71,11 @@ register("ban <target:player> [<reason:text>]", function(ctx, target, reason)
     target:kick("Banned: " .. msg)
 end, "px.ignis.ban")
 
-mc.on("player_join", function(player)
+mc.on("player.login", function(e)
     local bans = mc.data.bans or {}
-    local ban = bans[player.uuid]
+    local ban = bans[e.player.uuid]
     if ban then
-        player:kick("You are banned: " .. ban.reason)
-        return false
+        e:cancel("You are banned: " .. ban.reason) -- the reason is the kick message
     end
 end)
 ```

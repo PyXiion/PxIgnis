@@ -5,7 +5,7 @@ description: A persistent player whitelist implemented entirely in Lua.
 
 This example implements a simple whitelist without a separate database. It uses
 [`mc.data`](/reference/storage) for persistence, a typed player command argument,
-and the cancellable `player_join_init` event.
+and the cancellable `player.login` event.
 
 Save this as `config/ignis/whitelist.lua`:
 
@@ -13,16 +13,16 @@ Save this as `config/ignis/whitelist.lua`:
 local whitelist = mc.data.whitelist or {}
 mc.data.whitelist = whitelist
 
-mc.on("player_join_init", function(player)
+mc.on("player.login", function(e)
     -- Keep operators able to join while setting up the whitelist.
-    if player.isOp then
+    if e.player.isOp then
         return
     end
 
-    if not whitelist[player.uuid] then
-        return false
+    if not whitelist[e.player.uuid] then
+        e:cancel("You are not whitelisted on this server")
     end
-end)
+end, { priority = "highest" })
 
 register("px whitelist add <target:player>", function(ctx, target)
     whitelist[target.uuid] = {
@@ -98,8 +98,10 @@ uses the `/px whitelist` command path instead.
 ## Notes
 
 - The whitelist starts empty, so operators can join and add players.
-- Non-whitelisted players are rejected during `player_join_init`, before the
+- Non-whitelisted players are rejected during `player.login`, before the
   normal join event.
+- If the handler fails with an error, the login is refused as well (cancellable
+  events fail closed), so a bug does not let everyone in.
 - Entries survive `/ignis reload` and server restarts through `mc.data`.
 - The `player` form removes an online player by UUID.
 - The `word` form removes an offline player by their saved name or UUID.

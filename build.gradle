@@ -122,6 +122,11 @@ processResources {
     inputs.property "loader_version", project.loader_version
     filteringCharset = "UTF-8"
 
+    // LuaLS stubs, unpacked into config/ignis/.types on server start (EditorSupport)
+    from("lua-types") {
+        into "lua-types"
+    }
+
     filesMatching("fabric.mod.json") {
         expand "version": project.version,
                 "minecraft_version": project.minecraft_version,
