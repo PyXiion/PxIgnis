@@ -10,8 +10,8 @@ and the cancellable `player.login` event.
 Save this as `config/ignis/whitelist.lua`:
 
 ```lua
-local whitelist = mc.data.whitelist or {}
-mc.data.whitelist = whitelist
+mc.data.whitelist = mc.data.whitelist or {}
+local whitelist = mc.data.whitelist
 
 mc.on("player.login", function(e)
     -- Keep operators able to join while setting up the whitelist.

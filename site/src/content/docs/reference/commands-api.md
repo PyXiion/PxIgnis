@@ -74,6 +74,8 @@ register("warn <target:player> <reason:text>") \{ctx, target, reason ->
 ## Permissions
 
 Pass a permission node as the third argument. Players won't even see the command.
+Without a permissions mod, operators (op level 4) have every permission; `player:hasPermission(node)`
+follows the same rule.
 If omitted, all players can use the command.
 
 ```lua

@@ -1,0 +1,167 @@
+---
+title: 1. Commands and saved settings
+description: "Arena tutorial, chapter 1: admin commands, permissions and settings that survive restarts."
+---
+
+import { Code } from '@astrojs/starlight/components';
+import checkpoint from '../../../../tutorial/arena/01-commands.lua?raw';
+
+In this chapter the arena learns where its lobby and spawn points are, and players can join and leave a
+queue. Nothing fights yet, but the base everything else builds on is here.
+
+Create `config/ignis/arena.lua`. With `/ignis watch on` each save reloads it.
+
+## Settings that survive restarts
+
+An admin sets the arena up once, so the positions have to survive a restart. `mc.data` is a table that
+PxIgnis saves to `config/ignis/storage/global.json` by itself:
+
+```lua
+local ADMIN = "arena.admin"
+
+-- Corners, spawn points and lobby, kept across restarts by mc.data.
+mc.data.arena = mc.data.arena or {}
+local config = mc.data.arena
+config.spawns = config.spawns or {}
+```
+
+`mc.data.arena or {}` means "the saved table, or a new empty one the first time".
+
+:::caution[Assigning a table stores a copy]
+The order of those two lines matters. Assigning a table to `mc.data` (or `player.data`) stores a **copy**
+of it, so this does not work:
+
+```lua nocheck
+local config = {}
+mc.data.arena = config   -- saves a copy of the empty table
+config.lobby = ...       -- changes the local table, not the saved copy
+```
+
+Assign first, then read the saved table back, as above. Only numbers, strings, booleans and tables of them
+can be stored: no players, functions or vectors.
+:::
+
+A position is stored as a plain table with the world name. Two helpers convert between it and a player:
+
+```lua
+-- Where a player stands, as a plain table that can be saved.
+local function here(player)
+    local p = player.pos
+    return { x = p.x, y = p.y, z = p.z, world = player.world.name }
+end
+
+local function teleport(player, point)
+    player:teleport(point.x, point.y, point.z, point.world)
+end
+```
+
+## Admin commands
+
+`register(syntax, handler, permission)` adds a command. Words in the syntax are literal parts of the
+command, so `"arena setlobby"` is `/arena setlobby`. The handler gets `ctx`, and `ctx.player` is the player
+who ran it:
+
+```lua
+register("arena setlobby", function(ctx)
+    config.lobby = here(ctx.player)
+    ctx.player:sendMessage("Lobby set.")
+end, ADMIN)
+```
+
+The third argument is a permission. Players without `arena.admin` do not see the command at all. Without a
+permissions mod, operators (op level 4) have every script permission. Spawn points are a list, and a new one
+goes after the last one:
+
+```lua
+register("arena addspawn", function(ctx)
+    local spawns = config.spawns
+    spawns[#spawns + 1] = here(ctx.player)
+    ctx.player:sendMessage("Spawn point #" .. #spawns .. " added.")
+end, ADMIN)
+
+register("arena clearspawns", function(ctx)
+    config.spawns = {}
+    ctx.player:sendMessage("All spawn points removed.")
+end, ADMIN)
+```
+
+## The game state
+
+Who is in the arena right now is not worth saving: after a restart nobody is. That state lives in an
+ordinary local table, keyed by the player's UUID:
+
+```lua
+-- Game state. It lives only in memory: a reload starts from scratch.
+local game = {
+    players = {}, -- uuid -> Player: everyone who joined
+}
+
+local function tell(text)
+    for _, player in pairs(game.players) do
+        player:sendMessage(text)
+    end
+end
+```
+
+`tell` sends a message to everyone in the arena. `count(t)` (in the checkpoint) counts the keys of a table,
+since `#` only works for lists.
+
+## Joining and leaving
+
+```lua
+local function join(player)
+    if not config.lobby then
+        player:sendMessage("§cThe arena is not set up yet.")
+    elseif game.players[player.uuid] then
+        player:sendMessage("§eYou have already joined.")
+    else
+        game.players[player.uuid] = player
+        teleport(player, config.lobby)
+        tell("§a" .. player.name .. " §7joined the arena (" .. count(game.players) .. ")")
+    end
+end
+
+local function leave(player)
+    local uuid = player.uuid
+    if not game.players[uuid] then return end
+    game.players[uuid] = nil
+    player:sendMessage("§7You left the arena.")
+end
+```
+
+A player who disconnects must leave the arena too, or a round could wait for them forever. The
+`player.leave` event fires when a player leaves the server; handlers get an event table `e` with the
+player in `e.player`:
+
+```lua
+mc.on("player.leave", function(e)
+    leave(e.player)
+end)
+```
+
+Finally the player commands. They have no permission, so everyone can use them:
+
+```lua
+register("arena join", function(ctx) join(ctx.player) end)
+register("arena leave", function(ctx) leave(ctx.player) end)
+```
+
+## Try it
+
+1. Stand where the lobby should be and run `/arena setlobby`.
+2. Walk into your arena and run `/arena addspawn` in two or more places.
+3. Run `/ignis eval mc.data.arena` to see what was saved.
+4. `/arena join` teleports you to the lobby; `/arena leave` takes you out of the queue.
+5. Restart the server or run `/ignis reload`: the settings are still there, the queue is empty.
+
+## Checkpoint
+
+<details>
+<summary>config/ignis/arena.lua after chapter 1</summary>
+
+<Code code={checkpoint} lang="lua" title="config/ignis/arena.lua" />
+
+</details>
+
+**Exercise:** add `/arena where`, which tells the player how many spawn points are set and whether the lobby
+is set.

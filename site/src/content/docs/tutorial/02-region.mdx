@@ -1,0 +1,129 @@
+---
+title: 2. The arena region
+description: "Arena tutorial, chapter 2: a region for the arena and block protection with cancellable events."
+---
+
+import { Code } from '@astrojs/starlight/components';
+import checkpoint from '../../../../tutorial/arena/02-region.lua?raw';
+
+The arena needs borders: to protect its blocks now, and later to notice who walks in or out. A
+[region](/reference/region-api) is a box in a world that knows which entities are inside it.
+
+## Two corners
+
+The admin stands in one corner and runs `/arena pos1`, then in the opposite corner `/arena pos2`. Both
+commands do the same thing with a different key, so they share a function:
+
+```lua
+local function corner(ctx, key)
+    local pos = ctx.player.pos
+    config[key] = {
+        x = math.floor(pos.x), y = math.floor(pos.y), z = math.floor(pos.z),
+        world = ctx.player.world.name,
+    }
+    buildRegion()
+    local ready = region and ", the arena region is ready." or "."
+    ctx.player:sendMessage("Corner " .. key .. " set" .. ready)
+end
+
+register("arena pos1", function(ctx) corner(ctx, "pos1") end, ADMIN)
+register("arena pos2", function(ctx) corner(ctx, "pos2") end, ADMIN)
+```
+
+`math.floor` turns the player's position (say `12.7, 64, -3.2`) into the block they stand in
+(`12, 64, -4`).
+
+## Building the region
+
+Regions, like everything else a script creates, are removed on `/ignis reload`. So the region is not
+saved; the corners are, and the script builds the region from them every time it loads:
+
+```lua
+local region -- Region|nil, created by buildRegion() below
+```
+
+```lua
+local function buildRegion()
+    if region then region:destroy() end
+    region = nil
+    local a, b = config.pos1, config.pos2
+    if not (a and b) then return end
+
+    -- A region is a box from its min corner up to (but not including) its max
+    -- corner, so +1 makes the max block part of it.
+    region = mc.world(a.world):createRegion(
+        vec(math.min(a.x, b.x), math.min(a.y, b.y), math.min(a.z, b.z)),
+        vec(math.max(a.x, b.x) + 1, math.max(a.y, b.y) + 1, math.max(a.z, b.z) + 1)
+    )
+end
+
+buildRegion()
+```
+
+The corners can be given in any order, hence `min` and `max`. The `+ 1` matters: the region box ends
+*before* its second corner, and a block at `x = 20` spans from 20 to 21.
+
+`region` is declared near the top of the file because functions above `buildRegion` need it. The arena is
+ready once it has a region, a lobby and a spawn point, and `join` now checks exactly that:
+
+```lua
+local function isReady()
+    return region ~= nil and config.lobby ~= nil and #config.spawns > 0
+end
+```
+
+```lua
+    if not isReady() then
+        player:sendMessage("§cThe arena is not set up yet.")
+```
+
+## Protecting the blocks
+
+`block.break` and `block.place` are **cancellable** events: a handler that calls `e:cancel()` stops the
+action. `e.pos` is the block and `e.player` the player:
+
+```lua
+local function isProtected(player, pos)
+    return region ~= nil and region:contains(pos) and not player:hasPermission(ADMIN)
+end
+
+mc.on("block.break", function(e)
+    if isProtected(e.player, e.pos) then e:cancel() end
+end, { priority = "high" })
+
+mc.on("block.place", function(e)
+    if isProtected(e.player, e.pos) then e:cancel() end
+end, { priority = "high" })
+```
+
+Admins keep building rights, so they can still fix the arena.
+
+`priority = "high"` makes these handlers run before handlers with the default priority. Once an event is
+cancelled, later handlers are not called at all, so a script elsewhere that pays players for mined blocks
+never pays for a block the arena refused. See [Events](/reference/events#cancelling) for the details.
+
+:::tip
+If a handler of a cancellable event throws an error, the event is cancelled too. A bug in protection code
+blocks too much instead of letting everything through.
+:::
+
+## Try it
+
+1. Stand in one corner of your arena (on the floor), run `/arena pos1`; in the opposite corner, one block
+   above the highest point players should reach, run `/arena pos2`.
+2. Ask a player who is not an operator to break a block inside the arena and one outside it. (Alone? Run
+   `/deop <you>` from the server console and `/op <you>` afterwards.)
+3. `/ignis eval #me.world.regions` shows how many regions the world has. It stays at 1 however often you
+   reload.
+
+## Checkpoint
+
+<details>
+<summary>config/ignis/arena.lua after chapter 2</summary>
+
+<Code code={checkpoint} lang="lua" title="config/ignis/arena.lua" />
+
+</details>
+
+**Exercise:** show the arena borders: after `/arena pos2`, spawn `minecraft:end_rod` particles at the four
+bottom corners with `world:particle`.

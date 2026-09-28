@@ -77,3 +77,9 @@ Errors in event handlers, commands and scheduled tasks, and warnings such as an 
 the server log and also sent to online players with the `px.ignis.prompt_errors` permission (operators level 4 by
 default), in the form `event 'block.break': shop.lua:12: attempt to index a nil value`. The same error is repeated in
 chat at most once every 10 seconds, so a handler failing every tick does not flood it.
+
+## Next steps
+
+- [1. Your first command](/guide/01-your-first-command) and [2. Events and storage](/guide/02-events-and-storage):
+  short recipes for the basics.
+- [Tutorial: an arena minigame](/tutorial): build a complete minigame step by step.

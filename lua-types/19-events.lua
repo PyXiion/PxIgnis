@@ -99,8 +99,14 @@ function Event:cancel(reason) end
 ---@param handler fun(...)
 ---@param opts? EventOptions
 ---@return integer
----@overload fun(event: '"init"'|'"uninit"'|'"server_start"'|'"server_stop"'|'"tick"', handler: fun(e: Event), opts?: EventOptions): integer
----@overload fun(event: '"player.login"'|'"player.join"'|'"player.leave"', handler: fun(e: PlayerEvent), opts?: EventOptions): integer
+---@overload fun(event: '"init"', handler: fun(e: Event), opts?: EventOptions): integer
+---@overload fun(event: '"uninit"', handler: fun(e: Event), opts?: EventOptions): integer
+---@overload fun(event: '"server_start"', handler: fun(e: Event), opts?: EventOptions): integer
+---@overload fun(event: '"server_stop"', handler: fun(e: Event), opts?: EventOptions): integer
+---@overload fun(event: '"tick"', handler: fun(e: Event), opts?: EventOptions): integer
+---@overload fun(event: '"player.login"', handler: fun(e: PlayerEvent), opts?: EventOptions): integer
+---@overload fun(event: '"player.join"', handler: fun(e: PlayerEvent), opts?: EventOptions): integer
+---@overload fun(event: '"player.leave"', handler: fun(e: PlayerEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.respawn"', handler: fun(e: PlayerRespawnEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.chat"', handler: fun(e: PlayerChatEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.move"', handler: fun(e: PlayerMoveEvent), opts?: EventOptions): integer
@@ -109,10 +115,14 @@ function Event:cancel(reason) end
 ---@overload fun(event: '"player.interact"', handler: fun(e: PlayerInteractEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.kill"', handler: fun(e: PlayerKillEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.consume"', handler: fun(e: PlayerItemEvent), opts?: EventOptions): integer
----@overload fun(event: '"player.pickup"'|'"player.drop"', handler: fun(e: PlayerItemCountEvent), opts?: EventOptions): integer
----@overload fun(event: '"block.break"'|'"block.place"', handler: fun(e: BlockEvent), opts?: EventOptions): integer
----@overload fun(event: '"entity.spawn"'|'"entity.despawn"', handler: fun(e: EntityEvent), opts?: EventOptions): integer
----@overload fun(event: '"entity.hurt"'|'"entity.death"', handler: fun(e: EntityDamageEvent), opts?: EventOptions): integer
+---@overload fun(event: '"player.pickup"', handler: fun(e: PlayerItemCountEvent), opts?: EventOptions): integer
+---@overload fun(event: '"player.drop"', handler: fun(e: PlayerItemCountEvent), opts?: EventOptions): integer
+---@overload fun(event: '"block.break"', handler: fun(e: BlockEvent), opts?: EventOptions): integer
+---@overload fun(event: '"block.place"', handler: fun(e: BlockEvent), opts?: EventOptions): integer
+---@overload fun(event: '"entity.spawn"', handler: fun(e: EntityEvent), opts?: EventOptions): integer
+---@overload fun(event: '"entity.despawn"', handler: fun(e: EntityEvent), opts?: EventOptions): integer
+---@overload fun(event: '"entity.hurt"', handler: fun(e: EntityDamageEvent), opts?: EventOptions): integer
+---@overload fun(event: '"entity.death"', handler: fun(e: EntityDamageEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"entity.damaged"', handler: fun(e: EntityDamagedEvent), opts?: EventOptions): integer
 ---@overload fun(event: PxIgnisEventName|string, opts: EventOptions, handler: fun(e: Event)): integer  -- Nova trailing block order
 function mc.on(event, handler, opts) end

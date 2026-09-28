@@ -28,6 +28,7 @@ import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.SidebarManager
 import ru.pyxiion.ignis.api.util.metaTable
+import ru.pyxiion.ignis.SCRIPT_PERMISSION_LEVEL
 import ru.pyxiion.ignis.unwrap
 
 object PlayerWrap {
@@ -145,7 +146,8 @@ object PlayerWrap {
 
         method("hasPermission") { args ->
             val self = args.arg(1).checktable()
-            LuaValue.valueOf(Permissions.check(self.unwrap<ServerPlayerEntity>(), args.arg(2).checkjstring()))
+            val player = self.unwrap<ServerPlayerEntity>()
+            LuaValue.valueOf(Permissions.check(player, args.arg(2).checkjstring(), SCRIPT_PERMISSION_LEVEL))
         }
 
         method("sendMessage") { args ->

@@ -18,9 +18,8 @@ function Format.format(template, args) end
 function Format.broadcastFormat(template, args) end
 
 ---@class SimpleLib
-local Simple = {}
-
 ---@field defaultOverlay integer  -- ticks; default 140 (7s)
+local Simple = {}
 
 ---Concise command registration. The template is rendered with `args.ctx` set
 ---to the command context (so `{ctx.player.name}` works), and `args.x` etc.
@@ -31,43 +30,63 @@ local Simple = {}
 ---@param overlay? boolean|integer  -- true = default overlay; integer = ticks
 function Simple.register(syntax, template, range, overlay) end
 
+---`require "core:chestgui"`.
 ---@class ChestGui
 local ChestGui = {}
 
----Creates a new chest GUI. Returns an object with a grid API.
+---Click callback. Return `false` to cancel the click (items in an open GUI are locked
+---either way, but a cancelled click is also not shown to the player as a pickup).
+---@alias ChestGuiCallback fun(player: Player, slot: integer, clickType: string, slotItem: Item|nil, cursorItem: Item|nil): boolean|nil
+
+---Creates a new chest GUI.
 ---@param rows integer  -- 1..6
 ---@param title? string
 ---@return ChestGuiInstance
 function ChestGui.create(rows, title) end
 
 ---@class ChestGuiInstance
+---@field inventory Inventory
+---@field title string
 ---@field rows integer
----@field cols integer  -- always 9
----@field onClick? fun(player: Player, slot: integer, clickType: string, slotItem: Item|nil, cursorItem: Item|nil):boolean|nil
+---@field slots integer  -- rows * 9
 local ChestGuiInstance = {}
 
----Opens the GUI for the given player.
+---Puts an item at a grid position (1-based) with a click callback.
+---@param row integer
+---@param col integer
+---@param item Item
+---@param callback? ChestGuiCallback
+function ChestGuiInstance:set(row, col, item, callback) end
+
+---Puts an item at a raw slot (1-based) with a click callback.
+---@param slot integer
+---@param item Item
+---@param callback? ChestGuiCallback
+function ChestGuiInstance:button(slot, item, callback) end
+
+---Puts an item without a callback; clicks on it are cancelled.
+---@param row integer
+---@param col integer
+---@param item Item
+function ChestGuiInstance:decorate(row, col, item) end
+
+---Puts `item` into every slot (callbacks stay; call it before `set`/`button`).
+---@param item? Item
+function ChestGuiInstance:fill(item) end
+
+function ChestGuiInstance:clear() end
+
+---Opens the GUI for the player.
 ---@param player Player
----@return Container
+---@return Container|nil
 function ChestGuiInstance:open(player) end
 
 ---@param player Player
 function ChestGuiInstance:close(player) end
 
----Sets the item in a slot.
----@param row integer
----@param col integer
----@param item? Item
-function ChestGuiInstance:setItem(row, col, item) end
-
----@param row integer
----@param col integer
----@return Item|nil
-function ChestGuiInstance:getItem(row, col) end
-
-function ChestGuiInstance:fill(item) end
-
-function ChestGuiInstance:clear() end
+---Changes the title used by the next `open`.
+---@param title string
+function ChestGuiInstance:setTitle(title) end
 
 ---`require "async"`. Only `sleep` and `fetch` are typed here; see
 ---https://ignis.pyxiion.ru/reference/async-api for tasks, promises and mutexes.

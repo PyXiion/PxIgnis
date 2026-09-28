@@ -67,6 +67,12 @@ JUnit 5 via `kotlin-test-junit5`. Pure logic, no MC runtime. Two tests have quir
 Loaded libs, `package.path`, globals, lambda syntax, scheduler tick, built-in `require` libs (`format`, `simple`,
 `chestgui`).
 
+## Tutorial
+
+`site/src/content/docs/tutorial/` is a step-by-step arena minigame; its code is in `site/tutorial/arena/`
+(one checkpoint file per chapter) and is checked by `site/tutorial/test.sh` (snippets match checkpoints,
+LuaLS against `lua-types/`, a fake-API game run). API changes that touch it must keep that script green.
+
 ## Design docs → see `docs/`
 
 Changelog (`site/src/content/docs/changelog.md`) says WHAT changed; `docs/` (e.g. `async-suspend-bridge.md`) documents
