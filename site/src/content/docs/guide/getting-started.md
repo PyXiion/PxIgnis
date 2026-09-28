@@ -48,3 +48,32 @@ P.S. `[name:type]` is equal to `[<name:type>]` =D
 ## Configuration
 
 All Lua scripts go in `config/ignis/`. Files are loaded alphabetically.
+
+## Editor setup
+
+On start PxIgnis turns `config/ignis/` into a workspace for the
+[Lua Language Server](https://luals.github.io/): it unpacks type definitions of the whole API into
+`config/ignis/.types/` (refreshed on every start, so they match the installed version) and creates
+`config/ignis/.luarc.json` once (edit it freely; it is not overwritten).
+
+Open the `config/ignis` folder in VS Code with the **Lua** extension (by sumneko), or any editor with LuaLS, and you
+get completion for `mc`, `vec`, `register`, wrapper methods and event fields (`mc.on("block.break", function(e)` knows
+that `e.player` is a Player), plus warnings for typos.
+
+## Development commands
+
+All `/ignis` commands need operator level 4 or the `px.ignis` permission.
+
+| Command                   | What it does                                                                                           |
+|---------------------------|--------------------------------------------------------------------------------------------------------|
+| `/ignis reload`           | Reloads all scripts. If a script has a syntax error, nothing is replaced and the old scripts keep running |
+| `/ignis watch on`         | Reloads automatically whenever a `.lua` file in `config/ignis/` is saved; the result goes to chat. `/ignis watch off` stops it. Start the server with `-Dpxignis.watch=true` to have it on from the start |
+| `/ignis eval <lua>`       | Runs Lua in the scripts' environment and prints the result, e.g. `/ignis eval me.pos` or `/ignis eval #mc.players`. `me` is you. Needs `px.ignis.eval` (level 4 by default) |
+| `/ignis status`           | Loaded scripts, event handlers per event, registered commands, scheduled tasks and regions             |
+
+## Script errors in chat
+
+Errors in event handlers, commands and scheduled tasks, and warnings such as an unknown event name, are written to
+the server log and also sent to online players with the `px.ignis.prompt_errors` permission (operators level 4 by
+default), in the form `event 'block.break': shop.lua:12: attempt to index a nil value`. The same error is repeated in
+chat at most once every 10 seconds, so a handler failing every tick does not flood it.

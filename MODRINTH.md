@@ -43,9 +43,9 @@ The API reflects what the project itself needed.
 local async = require "async"
 local arena = world:createRegion(vec(-50, 64, -50), vec(50, 80, 50))
 
-arena:on("entity_enter", function(entity)
-    if entity:isPlayer() then
-        mc.broadcast(entity.name .. " entered the arena")
+arena:on("enter", function(e)
+    if e.player then
+        mc.broadcast(e.player.name .. " entered the arena")
 
         -- event handlers run as coroutines, so they can wait on async calls directly
         local res = async.fetch("https://api.example.com/arena/log")
@@ -67,9 +67,9 @@ mc.registerBehaviour("zombie_chase", function(self, mob)
     end
 end)
 
-mc.on("entity_spawn", function(entity)
-    if entity.isMob and entity.type == "minecraft:zombie" then
-        entity:setAI("zombie_chase")
+mc.on("entity.spawn", function(e)
+    if e.entity.isMob and e.entity.type == "minecraft:zombie" then
+        e.entity:setAI("zombie_chase")
     end
 end)
 ```

@@ -141,19 +141,7 @@ function mc.createItem(idOrSpec, count) end
 
 -- === Event methods =========================================================
 
----Subscribes a handler to an event. Returns a handler id (pass to `mc.off`).
----@param event PxIgnisEventName|string
----@param handler fun(...):boolean|nil  -- return false to cancel (cancellable events only)
----@return integer
-function mc.on(event, handler) end
-
----@param id integer
----@return boolean
-function mc.off(id) end
-
----Fires an event synchronously. Useful for cross-script communication.
----@param event string
-function mc.emit(event, ...) end
+-- mc.on / mc.off / mc.emit: see 19-events.lua
 
 -- === Properties ============================================================
 

@@ -3,10 +3,13 @@ package ru.pyxiion.ignis.runtime
 import net.fabricmc.loader.api.FabricLoader
 import ru.pyxiion.ignis.PxIgnis
 import java.io.FileOutputStream
+import java.nio.file.Path
 
 class ScriptLoader {
+    val dir: Path = FabricLoader.getInstance().configDir.resolve("ignis")
+
     fun loadAll(): List<Pair<String, String>> {
-        val ignisDir = FabricLoader.getInstance().configDir.resolve("ignis")
+        val ignisDir = dir
 
         if (ignisDir.toFile().isDirectory) {
             val files = ignisDir.toFile()

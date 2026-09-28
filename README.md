@@ -23,17 +23,18 @@ end)
 ```
 
 ```lua
-mc.on("player_join", function(player)
-    player.data.joins = (player.data.joins or 0) + 1
-    player:sendMessage("Welcome back! (#" .. player.data.joins .. ")")
+mc.on("player.join", function(e)
+    local data = e.player.data
+    data.joins = (data.joins or 0) + 1
+    e.player:sendMessage("Welcome back! (#" .. data.joins .. ")")
 end)
 ```
 
 ```lua
-mc.on("player_block_break", function(player, pos, blockId)
-    if blockId == "minecraft:diamond_ore" then
-        player:sendTitle({ title = "Lucky!" })
-        player.world:particle("minecraft:totem_of_undying", pos)
+mc.on("block.break", function(e)
+    if e.block == "minecraft:diamond_ore" then
+        e.player:sendTitle({ title = "Lucky!" })
+        e.player.world:particle("minecraft:totem_of_undying", e.pos)
     end
 end)
 ```

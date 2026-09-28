@@ -464,8 +464,9 @@ class LuaMcApi(
             "execute" to this::luaExecute.asVarArgFunction(),
         )
 
-        table.set("on", luaFunction { eventName, handler ->
-            eventBus.on(eventName.checkjstring(), handler.checkfunction()).toLua()
+        table.set("on", luaFunction { eventName, a, b ->
+            val (handler, opts) = HandlerOptions.handlerAndOptions(a, b, "mc.on")
+            eventBus.on(eventName.checkjstring(), handler, opts).toLua()
         })
 
         table.set("off", luaFunction { id ->
@@ -474,12 +475,7 @@ class LuaMcApi(
 
         table.set("emit", luaVarFunction { args ->
             require(args.narg() >= 1) { "emit(event, ...) requires at least 1 argument" }
-            val eventName = args.checkjstring(1)
-            val eventArgs = if (args.narg() >= 2) {
-                (2..args.narg()).map { args.arg(it) }.toTypedArray()
-            } else emptyArray<LuaValue>()
-            eventBus.fire(eventName, *eventArgs)
-            LuaValue.NIL
+            LuaValue.valueOf(eventBus.emit(args.checkjstring(1), args.subargs(2)))
         })
 
         table.set("createItem", luaVarFunction { args ->
