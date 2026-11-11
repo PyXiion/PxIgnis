@@ -72,7 +72,7 @@ object WorldWrap {
     }
 
     private val BUILT = metaTable<ServerLevel> {
-        prop("name") { LuaValue.valueOf(registryKey.value.path) }
+        prop("name") { LuaValue.valueOf(dimension().identifier().path) }
         prop(
             "time",
             get = { LuaValue.valueOf(dayTime.toDouble()) },
@@ -97,7 +97,7 @@ object WorldWrap {
         propWithTable("players") { self ->
             val data = self.rawget("__pxrp_data").checkuserdata() as InstanceData
             PlayerListWrapper(
-                source = { players },
+                source = { players() },
                 playerCache = data.playerCache,
                 tickProvider = data.tickProvider,
             ).toLua()
@@ -115,16 +115,16 @@ object WorldWrap {
             val overrides = if (args.narg() >= 4) args.arg(4).checktable() else null
 
             val id = resolveBlockId(entityId)
-            val entityType = BuiltInRegistries.ENTITY_TYPE.get(Identifier.of(id))
+            val entityType = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse(id))
                 ?: throw LuaError("Сущность '$entityId' не найдена")
 
             val entity = entityType.create(w, EntitySpawnReason.COMMAND)
                 ?: throw LuaError("Не удалось создать сущность '$entityId'")
 
-            entity.setPosition(pos.x, pos.y, pos.z)
+            entity.setPos(pos.x, pos.y, pos.z)
             overrides?.let { applyOverrides(entity, it) }
 
-            if (!w.spawnEntity(entity)) return@method LuaValue.NIL
+            if (!w.addFreshEntity(entity)) return@method LuaValue.NIL
 
             EntityFactory.wrap(entity)
         }
@@ -137,16 +137,16 @@ object WorldWrap {
             val text = args.arg(3).checkjstring()
             val opts = if (args.narg() >= 4) args.arg(4).checktable() else null
 
-            val entityType = BuiltInRegistries.ENTITY_TYPE.get(Identifier.of("minecraft:text_display"))
+            val entityType = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse("minecraft:text_display"))
                 ?: throw LuaError("Сущность 'minecraft:text_display' не найдена")
 
-            val entity = entityType.create(w, EntitySpawnReason.COMMAND) as? Display.TextDisplayEntity
+            val entity = entityType.create(w, EntitySpawnReason.COMMAND) as? Display.TextDisplay
                 ?: throw LuaError("Не удалось создать text_display")
 
-            entity.setPosition(pos.x, pos.y, pos.z)
+            entity.setPos(pos.x, pos.y, pos.z)
             entity.text = Component.literal(text)
-            entity.billboardConstraints = Display.billboardConstraints.CENTER
-            entity.background = HologramDefaults.BACKGROUND
+            entity.billboardConstraints = Display.BillboardConstraints.CENTER
+            entity.backgroundColor = HologramDefaults.BACKGROUND
             entity.lineWidth = HologramDefaults.LINE_WIDTH
 
             opts?.let { o ->
@@ -157,26 +157,26 @@ object WorldWrap {
                     entity.billboardConstraints = HologramWrapper.parseBillboardFromLua(it.tojstring())
                 }
                 o.get("lineWidth").takeIf { it.isnumber() }?.let { entity.lineWidth = it.toint() }
-                o.get("background").takeIf { it.isnumber() }?.let { entity.background = it.toint() }
+                o.get("background").takeIf { it.isnumber() }?.let { entity.backgroundColor = it.toint() }
                 o.get("opacity").takeIf { it.isnumber() }?.let { entity.textOpacity = it.toint().toByte() }
                 o.get("shadow").takeIf { it.isboolean() }?.let {
                     HologramWrapper.applyFlagFromLua(
                         entity,
-                        Display.TextDisplayEntity.SHADOW_FLAG,
+                        Display.TextDisplay.FLAG_SHADOW,
                         it.toboolean()
                     )
                 }
                 o.get("seeThrough").takeIf { it.isboolean() }?.let {
                     HologramWrapper.applyFlagFromLua(
                         entity,
-                        Display.TextDisplayEntity.SEE_THROUGH_FLAG,
+                        Display.TextDisplay.FLAG_SEE_THROUGH,
                         it.toboolean()
                     )
                 }
-                o.get("glowing").takeIf { it.isboolean() }?.let { entity.isGlowing = it.toboolean() }
+                o.get("glowing").takeIf { it.isboolean() }?.let { entity.setGlowingTag(it.toboolean()) }
             }
 
-            if (!w.spawnEntity(entity)) return@method LuaValue.NIL
+            if (!w.addFreshEntity(entity)) return@method LuaValue.NIL
 
             HologramManager.create(entity, w).toLuaValue()
         }
@@ -188,10 +188,10 @@ object WorldWrap {
             val pos = args.arg(2).toBlockPos()
             val blockId = resolveBlockId(args.arg(3).checkjstring())
 
-            val block = BuiltInRegistries.BLOCK.get(Identifier.of(blockId))
+            val block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))
                 ?: throw LuaError("Блок '$blockId' не найден")
 
-            w.setBlockState(pos, block.defaultState, 0x03)
+            w.setBlock(pos, block.defaultBlockState(), 0x03)
             LuaValue.NIL
         }
 
@@ -201,7 +201,7 @@ object WorldWrap {
             val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toBlockPos()
             val block = w.getBlockState(pos).block
-            LuaValue.valueOf(BuiltInRegistries.BLOCK.getId(block).toString())
+            LuaValue.valueOf(BuiltInRegistries.BLOCK.getKey(block).toString())
         }
 
         // world:getBlockState(pos) -> { id, properties }
@@ -222,16 +222,16 @@ object WorldWrap {
 
             val id = tbl.get("id").checkjstring()
             val blockId = resolveBlockId(id)
-            val block = BuiltInRegistries.BLOCK.get(Identifier.of(blockId))
+            val block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))
                 ?: throw LuaError("Блок '$blockId' не найден")
 
             val state = if (tbl.get("properties").istable()) {
                 BlockStateCodec.applyProperties(block, tbl.get("properties").checktable())
             } else {
-                block.defaultState
+                block.defaultBlockState()
             }
 
-            w.setBlockState(pos, state, 0x03)
+            w.setBlock(pos, state, 0x03)
             LuaValue.NIL
         }
 
@@ -243,7 +243,7 @@ object WorldWrap {
             val pos2 = args.arg(3).toBlockPos()
             val blockId = resolveBlockId(args.arg(4).checkjstring())
 
-            val block = BuiltInRegistries.BLOCK.get(Identifier.of(blockId))
+            val block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))
                 ?: throw LuaError("Блок '$blockId' не найден")
 
             val minX = Math.min(pos1.x, pos2.x)
@@ -258,9 +258,9 @@ object WorldWrap {
                 throw LuaError("fill: объём ($volume) превышает максимум (32768)")
             }
 
-            val state = block.defaultState
-            for (pos in BlockPos.iterate(BlockPos(minX, minY, minZ), BlockPos(maxX, maxY, maxZ))) {
-                w.setBlockState(pos, state, 0x02)
+            val state = block.defaultBlockState()
+            for (pos in BlockPos.betweenClosed(BlockPos(minX, minY, minZ), BlockPos(maxX, maxY, maxZ))) {
+                w.setBlock(pos, state, 0x02)
             }
             LuaValue.NIL
         }
@@ -271,8 +271,8 @@ object WorldWrap {
             val w = self.unwrap<ServerLevel>()
             val id = args.arg(2).checkjstring()
             val resolvedId = if (id.contains(':')) id else "minecraft:$id"
-            val key = ResourceKey.of(Registries.PARTICLE_TYPE, Identifier.of(resolvedId))
-            val particleType = BuiltInRegistries.PARTICLE_TYPE.get(key)
+            val key = ResourceKey.create(Registries.PARTICLE_TYPE, Identifier.parse(resolvedId))
+            val particleType = BuiltInRegistries.PARTICLE_TYPE.getValue(key)
                 ?: throw LuaError("Частица '$id' не найдена")
 
             val (x, y, z) = resolveOperand(args.arg(3))
@@ -302,7 +302,7 @@ object WorldWrap {
 
             val effect = buildParticleEffect(particleType, data, w, resolvedId)
 
-            w.spawnParticles(effect, true, false, x, y, z, count, deltaX, deltaY, deltaZ, speed)
+            w.sendParticles(effect, true, false, x, y, z, count, deltaX, deltaY, deltaZ, speed)
             LuaValue.NIL
         }
 
@@ -315,8 +315,8 @@ object WorldWrap {
             val volume = args.arg(4).optdouble(1.0).toFloat()
             val pitch = args.arg(5).optdouble(1.0).toFloat()
 
-            val key = ResourceKey.of(Registries.SOUND_EVENT, Identifier.of(id))
-            val sound = BuiltInRegistries.SOUND_EVENT.get(key)
+            val key = ResourceKey.create(Registries.SOUND_EVENT, Identifier.parse(id))
+            val sound = BuiltInRegistries.SOUND_EVENT.getValue(key)
                 ?: throw LuaError("Звук '$id' не найден")
 
             w.playSound(null, pos.x, pos.y, pos.z, sound, SoundSource.PLAYERS, volume, pitch)
@@ -339,7 +339,7 @@ object WorldWrap {
             val nearby = w.getEntities(null, box)
 
             val entities = if (typeFilter != null) {
-                val targetType = BuiltInRegistries.ENTITY_TYPE.get(Identifier.of(typeFilter))
+                val targetType = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse(typeFilter))
                     ?: throw LuaError("Тип сущности '$typeFilter' не найден")
                 nearby.filter { it.type == targetType }
             } else {
@@ -383,17 +383,17 @@ object WorldWrap {
             val overlay = if (args.narg() >= 5 && args.arg(5).isint()) args.arg(5).toint() else null
 
             val rangeSquare = range * range
-            val players = w.players.filter { it.squaredDistanceTo(pos) < rangeSquare }
+            val players = w.players().filter { it.distanceToSqr(pos) < rangeSquare }
 
             if (overlay == null) {
-                players.forEach { it.sendMessage(Component.literal(text)) }
+                players.forEach { it.sendSystemMessage(Component.literal(text)) }
             } else {
                 val timing = ClientboundSetTitlesAnimationPacket(20, overlay, 20)
                 val title = ClientboundSetActionBarTextPacket(Component.literal(text))
                 players.forEach {
                     with(it.connection) {
-                        sendPacket(timing)
-                        sendPacket(title)
+                        send(timing)
+                        send(title)
                     }
                 }
             }
@@ -406,7 +406,7 @@ object WorldWrap {
             val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toBlockPos()
             val biome = w.getBiome(pos)
-            val biomeId = biome.key.flatMap { java.util.Optional.of(it.value.toString()) }.orElse(null)
+            val biomeId = biome.unwrapKey().map { it.identifier().toString() }.orElse(null)
             if (biomeId != null) LuaValue.valueOf(biomeId) else LuaValue.NIL
         }
 
@@ -481,9 +481,9 @@ object WorldWrap {
             val fire = opts?.get("fire")?.optboolean(false) ?: false
             val destruction = opts?.get("destruction")?.optjstring("break") ?: "break"
             val sourceType = try {
-                Level.ExplosionSourceType.valueOf(destruction.uppercase())
+                Level.ExplosionInteraction.valueOf(destruction.uppercase())
             } catch (_: Exception) {
-                Level.ExplosionSourceType.BLOCK
+                Level.ExplosionInteraction.BLOCK
             }
 
             w.explode(null, pos.x, pos.y, pos.z, power, fire, sourceType)
@@ -499,9 +499,9 @@ object WorldWrap {
 
             val bolt = EntityType.LIGHTNING_BOLT.create(w, EntitySpawnReason.COMMAND)
                 ?: throw LuaError("Не удалось создать молнию")
-            bolt.setPosition(pos.x, pos.y, pos.z)
+            bolt.setPos(pos.x, pos.y, pos.z)
             bolt.setVisualOnly(opts?.get("effect")?.optboolean(false) ?: false)
-            w.spawnEntity(bolt)
+            w.addFreshEntity(bolt)
             LuaValue.NIL
         }
 
@@ -552,18 +552,18 @@ object WorldWrap {
             }
 
             val parsed = try {
-                EntitySelectorParser(StringReader(selector), true).read()
+                EntitySelectorParser(StringReader(selector), true).parse()
             } catch (e: CommandSyntaxException) {
                 throw LuaError("Неверный селектор '$selector': ${e.message}")
             }
 
             val server = w.server ?: throw LuaError("Мировой сервер недоступен")
-            val base = server.commandSource.withWorld(w)
+            val base = server.createCommandSourceStack().withLevel(w)
             val withPos = if (center != null) base.withPosition(center) else base
             val source = if (sourceEntity != null) withPos.withEntity(sourceEntity) else withPos
 
             val entities = try {
-                parsed.getEntities(source)
+                parsed.findEntities(source)
             } catch (e: CommandSyntaxException) {
                 throw LuaError("Ошибка селектора '$selector': ${e.message}")
             }
@@ -587,7 +587,7 @@ object WorldWrap {
                 if (maxAttr != null) {
                     val desired = v.todouble()
                     if (desired > maxAttr.value) {
-                        maxAttr.amount = desired
+                        maxAttr.baseValue = desired
                     }
                 }
                 entity.health = v.tofloat()
@@ -610,8 +610,8 @@ object WorldWrap {
         if (type is ParticleOptions) return type
 
         val nbt = buildParticleDataNbt(type, data, world, id)
-        val ops = world.registryManager.getOps(NbtOps.INSTANCE)
-        return (type as ParticleType<ParticleOptions>).codec.codec()
+        val ops = world.registryAccess().createSerializationContext(NbtOps.INSTANCE)
+        return (type as ParticleType<ParticleOptions>).codec().codec()
             .parse(ops, nbt)
             .getOrThrow { msg: String -> LuaError("Частица '$id': $msg") }
     }
@@ -731,7 +731,7 @@ object WorldWrap {
             }
 
             else -> {
-                val name = BuiltInRegistries.PARTICLE_TYPE.getId(type)?.toString() ?: id
+                val name = BuiltInRegistries.PARTICLE_TYPE.getKey(type)?.toString() ?: id
                 throw LuaError("Частица '$name' не поддерживается в data")
             }
         }

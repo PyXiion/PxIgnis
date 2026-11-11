@@ -1,7 +1,7 @@
 # PxIgnis
 
-![version](https://img.shields.io/badge/MC-1.21.10-green)
 ![version](https://img.shields.io/badge/MC-1.21.11-green)
+![version](https://img.shields.io/badge/MC-26.3-green)
 
 Lua scripting for Minecraft Fabric servers. Custom commands, event hooks,
 persistent state, and the full MC APIs.

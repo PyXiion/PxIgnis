@@ -8,7 +8,7 @@ import java.util.UUID
 object HologramManager {
     private val holograms = mutableMapOf<UUID, HologramWrapper>()
 
-    fun create(entity: Display.TextDisplayEntity, world: ServerLevel): HologramWrapper {
+    fun create(entity: Display.TextDisplay, world: ServerLevel): HologramWrapper {
         val wrapper = HologramWrapper(entity, world)
         holograms[entity.uuid] = wrapper
         return wrapper

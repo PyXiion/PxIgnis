@@ -9,7 +9,7 @@ import net.minecraft.world.phys.AABB
 
 data class RegionEntry(val id: Int, val box: AABB)
 
-private val boxCodec: StreamCodec<FriendlyByteBuf, AABB> = StreamCodec.ofStatic(
+private val boxCodec: StreamCodec<FriendlyByteBuf, AABB> = StreamCodec.of(
     { buf, box ->
         buf.writeDouble(box.minX)
         buf.writeDouble(box.minY)
@@ -20,89 +20,89 @@ private val boxCodec: StreamCodec<FriendlyByteBuf, AABB> = StreamCodec.ofStatic(
     },
     { buf ->
         AABB(
-            buf.readAccounted(),
-            buf.readAccounted(),
-            buf.readAccounted(),
-            buf.readAccounted(),
-            buf.readAccounted(),
-            buf.readAccounted()
+            buf.readDouble(),
+            buf.readDouble(),
+            buf.readDouble(),
+            buf.readDouble(),
+            buf.readDouble(),
+            buf.readDouble()
         )
     }
 )
 
 private val regionEntryCodec: StreamCodec<FriendlyByteBuf, RegionEntry> = StreamCodec.composite(
-    ByteBufCodecs.INTEGER, RegionEntry::id,
+    ByteBufCodecs.INT, RegionEntry::id,
     boxCodec, RegionEntry::box,
     ::RegionEntry
 )
 
 data class RegionSyncPayload(val entries: List<RegionEntry>) : CustomPacketPayload {
     companion object {
-        val ID: CustomPacketPayload.Id<RegionSyncPayload> =
-            CustomPacketPayload.Id(Identifier.of("pxignis", "regions_sync"))
+        val ID: CustomPacketPayload.Type<RegionSyncPayload> =
+            CustomPacketPayload.Type(Identifier.fromNamespaceAndPath("pxignis", "regions_sync"))
         val CODEC: StreamCodec<FriendlyByteBuf, RegionSyncPayload> =
-            regionEntryCodec.collect(ByteBufCodecs.toList()).xmap(
+            regionEntryCodec.apply(ByteBufCodecs.list()).map(
                 ::RegionSyncPayload,
                 RegionSyncPayload::entries
             )
     }
 
-    override fun getId(): CustomPacketPayload.Id<out CustomPacketPayload> = ID
+    override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = ID
 }
 
 data class RegionUpsertPayload(val id: Int, val region: AABB) : CustomPacketPayload {
     companion object {
-        val ID: CustomPacketPayload.Id<RegionUpsertPayload> =
-            CustomPacketPayload.Id(Identifier.of("pxignis", "regions_upsert"))
+        val ID: CustomPacketPayload.Type<RegionUpsertPayload> =
+            CustomPacketPayload.Type(Identifier.fromNamespaceAndPath("pxignis", "regions_upsert"))
         val CODEC: StreamCodec<FriendlyByteBuf, RegionUpsertPayload> =
             StreamCodec.composite(
-                ByteBufCodecs.INTEGER, RegionUpsertPayload::id,
+                ByteBufCodecs.INT, RegionUpsertPayload::id,
                 boxCodec, RegionUpsertPayload::region,
                 ::RegionUpsertPayload
             )
     }
 
-    override fun getId(): CustomPacketPayload.Id<out CustomPacketPayload> = ID
+    override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = ID
 }
 
 data class RegionRemovePayload(val id: Int) : CustomPacketPayload {
     companion object {
-        val ID: CustomPacketPayload.Id<RegionRemovePayload> =
-            CustomPacketPayload.Id(Identifier.of("pxignis", "regions_remove"))
+        val ID: CustomPacketPayload.Type<RegionRemovePayload> =
+            CustomPacketPayload.Type(Identifier.fromNamespaceAndPath("pxignis", "regions_remove"))
         val CODEC: StreamCodec<FriendlyByteBuf, RegionRemovePayload> =
             StreamCodec.composite(
-                ByteBufCodecs.INTEGER, RegionRemovePayload::id,
+                ByteBufCodecs.INT, RegionRemovePayload::id,
                 ::RegionRemovePayload
             )
     }
 
-    override fun getId(): CustomPacketPayload.Id<out CustomPacketPayload> = ID
+    override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = ID
 }
 
 data class RegionCapWarningPayload(val cap: Int) : CustomPacketPayload {
     companion object {
-        val ID: CustomPacketPayload.Id<RegionCapWarningPayload> =
-            CustomPacketPayload.Id(Identifier.of("pxignis", "regions_cap_warning"))
+        val ID: CustomPacketPayload.Type<RegionCapWarningPayload> =
+            CustomPacketPayload.Type(Identifier.fromNamespaceAndPath("pxignis", "regions_cap_warning"))
         val CODEC: StreamCodec<FriendlyByteBuf, RegionCapWarningPayload> =
             StreamCodec.composite(
-                ByteBufCodecs.INTEGER, RegionCapWarningPayload::cap,
+                ByteBufCodecs.INT, RegionCapWarningPayload::cap,
                 ::RegionCapWarningPayload
             )
     }
 
-    override fun getId(): CustomPacketPayload.Id<out CustomPacketPayload> = ID
+    override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = ID
 }
 
 data class RegionInterestPayload(val enabled: Boolean) : CustomPacketPayload {
     companion object {
-        val ID: CustomPacketPayload.Id<RegionInterestPayload> =
-            CustomPacketPayload.Id(Identifier.of("pxignis", "regions_interest"))
+        val ID: CustomPacketPayload.Type<RegionInterestPayload> =
+            CustomPacketPayload.Type(Identifier.fromNamespaceAndPath("pxignis", "regions_interest"))
         val CODEC: StreamCodec<FriendlyByteBuf, RegionInterestPayload> =
             StreamCodec.composite(
-                ByteBufCodecs.BOOLEAN, RegionInterestPayload::enabled,
+                ByteBufCodecs.BOOL, RegionInterestPayload::enabled,
                 ::RegionInterestPayload
             )
     }
 
-    override fun getId(): CustomPacketPayload.Id<out CustomPacketPayload> = ID
+    override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = ID
 }

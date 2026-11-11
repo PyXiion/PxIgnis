@@ -26,13 +26,13 @@ public abstract class ServerPlayNetworkHandlerMixin {
     public ServerPlayer player;
 
     // player_drop_item — intercept DROP_ITEM / DROP_ALL_ITEMS (hotbar Q)
-    @Inject(method = "onPlayerAction", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "handlePlayerAction", at = @At("HEAD"), cancellable = true)
     private void pxrp$onDropItem(ServerboundPlayerActionPacket packet, CallbackInfo ci) {
         var action = packet.getAction();
         if (action == ServerboundPlayerActionPacket.Action.DROP_ITEM
             || action == ServerboundPlayerActionPacket.Action.DROP_ALL_ITEMS) {
 
-            ItemStack mainStack = player.getMainHandStack();
+            ItemStack mainStack = player.getMainHandItem();
             if (mainStack.isEmpty()) return;
 
             int count = action == ServerboundPlayerActionPacket.Action.DROP_ALL_ITEMS
@@ -41,11 +41,11 @@ public abstract class ServerPlayNetworkHandlerMixin {
             if (fireDropEvent(mainStack, count)) {
                 ci.cancel();
                 var inventory = player.getInventory();
-                var stack = inventory.getSelectedStack().copy();
-                var handler = player.currentScreenHandler;
-                player.networkHandler.sendPacket(
+                var stack = inventory.getSelectedItem().copy();
+                var handler = player.containerMenu;
+                player.connection.send(
                     new ClientboundContainerSetSlotPacket(
-                        handler.syncId, handler.nextRevision(), 36 + inventory.getSelectedSlot(), stack
+                        handler.containerId, handler.incrementStateId(), 36 + inventory.getSelectedSlot(), stack
                     )
                 );
             }
@@ -53,41 +53,41 @@ public abstract class ServerPlayNetworkHandlerMixin {
     }
 
     // player_drop_item — intercept THROW + PICKUP(outside) from inventory (inventory Q)
-    @Inject(method = "onClickSlot", at = @At(value = "INVOKE", target = "Lnet/minecraft/screen/ScreenHandler;getRevision()I"), cancellable = true)
+    @Inject(method = "handleContainerClick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/inventory/AbstractContainerMenu;getStateId()I"), cancellable = true)
     private void pxrp$onClickSlotDrop(ServerboundContainerClickPacket packet, CallbackInfo ci) {
-        var handler = player.currentScreenHandler;
+        var handler = player.containerMenu;
         int syncSlot;
 
-        if (packet.actionType() == ClickType.THROW) {
-            int slot = packet.slot();
+        if (packet.clickType() == ClickType.THROW) {
+            int slot = packet.slotNum();
             if (slot == -1) {
                 syncSlot = -1;
             } else {
                 if (slot < 0 || slot >= handler.slots.size()) return;
-                if (handler.getSlot(slot).getStack().isEmpty()) return;
+                if (handler.getSlot(slot).getItem().isEmpty()) return;
                 syncSlot = slot;
             }
-        } else if (packet.actionType() == ClickType.PICKUP && packet.slot() == -999) {
+        } else if (packet.clickType() == ClickType.PICKUP && packet.slotNum() == -999) {
             syncSlot = -1;
         } else {
             return;
         }
 
         ItemStack dropStack = syncSlot == -1
-            ? handler.getCursorStack()
-            : handler.getSlot(syncSlot).getStack();
+            ? handler.getCarried()
+            : handler.getSlot(syncSlot).getItem();
         if (dropStack.isEmpty()) return;
-        int count = packet.button() == 1 ? dropStack.getCount() : 1;
+        int count = packet.buttonNum() == 1 ? dropStack.getCount() : 1;
 
             if (fireDropEvent(dropStack, count)) {
                 ci.cancel();
                 if (syncSlot == -1) {
-                    player.networkHandler.sendPacket(
-                        new ClientboundSetCursorItemPacket(handler.getCursorStack().copy())
+                    player.connection.send(
+                        new ClientboundSetCursorItemPacket(handler.getCarried().copy())
                     );
                 } else {
-                    player.networkHandler.sendPacket(
-                        new ClientboundContainerSetSlotPacket(handler.syncId, handler.nextRevision(), syncSlot, handler.getSlot(syncSlot).getStack().copy())
+                    player.connection.send(
+                        new ClientboundContainerSetSlotPacket(handler.containerId, handler.incrementStateId(), syncSlot, handler.getSlot(syncSlot).getItem().copy())
                     );
                 }
             }

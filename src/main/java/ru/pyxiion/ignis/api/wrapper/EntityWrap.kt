@@ -79,15 +79,15 @@ object EntityWrap {
 
         prop(
             "pos",
-            get = { Vector.fromMc(entityPos).toLuaValue() },
+            get = { Vector.fromMc(position()).toLuaValue() },
             set = { v ->
                 val vec = v.toVec3d()
-                setPosition(vec.x, vec.y, vec.z)
+                setPos(vec.x, vec.y, vec.z)
             }
         )
 
-        prop("dir") { Vector.fromMc(rotationVector).toLuaValue() }
-        prop("bodyDir") { Vector.fromRotation(bodyYaw, 0.0f).toLuaValue() }
+        prop("dir") { Vector.fromMc(lookAngle).toLuaValue() }
+        prop("bodyDir") { Vector.fromRotation(visualRotationYInDegrees, 0.0f).toLuaValue() }
 
         prop(
             "fallDistance",
@@ -101,8 +101,8 @@ object EntityWrap {
         )
         prop(
             "glowing",
-            get = { if (isGlowing) LuaValue.TRUE else LuaValue.FALSE },
-            set = { v -> isGlowing = v.toboolean() }
+            get = { if (isCurrentlyGlowing) LuaValue.TRUE else LuaValue.FALSE },
+            set = { v -> setGlowingTag(v.toboolean()) }
         )
         prop(
             "invulnerable",
@@ -111,8 +111,8 @@ object EntityWrap {
         )
         prop(
             "isSneaking",
-            get = { if (isSneaking) LuaValue.TRUE else LuaValue.FALSE },
-            set = { v -> isSneaking = v.toboolean() }
+            get = { if (isShiftKeyDown) LuaValue.TRUE else LuaValue.FALSE },
+            set = { v -> isShiftKeyDown = v.toboolean() }
         )
         prop(
             "isSprinting",
@@ -144,7 +144,7 @@ object EntityWrap {
             set = { v ->
                 (this as? LivingEntity)?.let { liv ->
                     liv.getAttribute(Attributes.MAX_HEALTH)?.let { attr ->
-                        attr.amount = v.todouble()
+                        attr.baseValue = v.todouble()
                         liv.health = Math.min(liv.health, attr.value.toFloat())
                     }
                 }
@@ -165,7 +165,7 @@ object EntityWrap {
         map(
             equipmentSlots,
             getter = { e, slot ->
-                val stack = (e as? LivingEntity)?.getEquippedStack(slot)
+                val stack = (e as? LivingEntity)?.getItemBySlot(slot)
                 if (stack != null && !stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
             setter = { e, slot, v ->
@@ -221,11 +221,11 @@ object EntityWrap {
                 if (uuid.isstring()) world.getEntity(UUID.fromString(uuid.tojstring())) else null
             } else null
             val damageSource = when (sourceEntity) {
-                is Player -> world.damageSources.playerAttack(sourceEntity)
-                is LivingEntity -> world.damageSources.mobAttack(sourceEntity)
-                else -> world.damageSources.generic()
+                is Player -> world.damageSources().playerAttack(sourceEntity)
+                is LivingEntity -> world.damageSources().mobAttack(sourceEntity)
+                else -> world.damageSources().generic()
             }
-            e.damage(world, damageSource, amount)
+            e.hurtServer(world, damageSource, amount)
             LuaValue.NIL
         }
 
@@ -237,7 +237,7 @@ object EntityWrap {
             val includeEntities = args.arg(4).optboolean(true)
 
             val start = e.eyePosition
-            val dir = e.rotationVector.normalize()
+            val dir = e.lookAngle.normalize()
             val end = Vec3(start.x + dir.x * range, start.y + dir.y * range, start.z + dir.z * range)
 
             performRaycast(start, end, range, includeFluids, includeEntities, e.level(), e)
@@ -253,7 +253,7 @@ object EntityWrap {
             val particles = args.arg(5).optboolean(true)
             val icon = args.arg(6).optboolean(true)
 
-            val effect = BuiltInRegistries.MOB_EFFECT.getEntry(Identifier.of(effectId))
+            val effect = BuiltInRegistries.MOB_EFFECT.get(Identifier.parse(effectId))
                 .orElseThrow { LuaError("Эффект '$effectId' не найден") }
             val instance = MobEffectInstance(effect, duration, amplifier, false, particles, icon)
             LuaValue.valueOf(liv.addEffect(instance))
@@ -264,7 +264,7 @@ object EntityWrap {
             val e = self.unwrap<Entity>()
             val liv = e as? LivingEntity ?: return@method LuaValue.NIL
             val effectId = args.arg(2).checkjstring()
-            val effect = BuiltInRegistries.MOB_EFFECT.getEntry(Identifier.of(effectId))
+            val effect = BuiltInRegistries.MOB_EFFECT.get(Identifier.parse(effectId))
                 .orElseThrow { LuaError("Эффект '$effectId' не найден") }
             LuaValue.valueOf(liv.removeEffect(effect))
         }
@@ -274,7 +274,7 @@ object EntityWrap {
             val e = self.unwrap<Entity>()
             val liv = e as? LivingEntity ?: return@method LuaValue.FALSE
             val effectId = args.arg(2).checkjstring()
-            val effect = BuiltInRegistries.MOB_EFFECT.getEntry(Identifier.of(effectId))
+            val effect = BuiltInRegistries.MOB_EFFECT.get(Identifier.parse(effectId))
                 .orElseThrow { LuaError("Эффект '$effectId' не найден") }
             LuaValue.valueOf(liv.hasEffect(effect))
         }
@@ -284,7 +284,7 @@ object EntityWrap {
             val e = self.unwrap<Entity>()
             val ticks = args.arg(2).checkint()
             e.remainingFireTicks = ticks
-            e.isOnFire = true
+            e.setSharedFlagOnFire(true)
             LuaValue.NIL
         }
 

@@ -17,7 +17,7 @@ import ru.pyxiion.ignis.unwrapOrNull
 
 object ItemStackWrap {
     private val BUILT = metaTable<ItemStack> {
-        prop("id") { LuaValue.valueOf(BuiltInRegistries.ITEM.getId(item).toString()) }
+        prop("id") { LuaValue.valueOf(BuiltInRegistries.ITEM.getKey(item).toString()) }
 
         prop(
             "count",
@@ -42,7 +42,7 @@ object ItemStackWrap {
 
         prop(
             "unbreakable",
-            get = { LuaValue.valueOf(contains(DataComponents.UNBREAKABLE)) },
+            get = { LuaValue.valueOf(has(DataComponents.UNBREAKABLE)) },
             set = { v ->
                 if (v.toboolean()) {
                     set(DataComponents.UNBREAKABLE, Unit.INSTANCE)
@@ -97,7 +97,7 @@ object ItemStackWrap {
         )
 
 
-        toString { "ItemStack{${BuiltInRegistries.ITEM.getId(item)} x$count}" }
+        toString { "ItemStack{${BuiltInRegistries.ITEM.getKey(item)} x$count}" }
     }
 
     fun wrap(stack: ItemStack): LuaValue {

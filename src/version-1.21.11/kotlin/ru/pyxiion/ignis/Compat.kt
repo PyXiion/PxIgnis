@@ -14,7 +14,7 @@ object Compat {
     fun fastCos(v: Double): Double = Mth.cos(v).toDouble()
     fun fastSin(v: Double): Double = Mth.sin(v).toDouble()
     fun isAdmin(player: ServerPlayer): Boolean =
-        player.permissions().hasPermission(Permissions.ADMINS)
+        player.permissions().hasPermission(Permissions.COMMANDS_ADMIN)
     fun loadEntities(nbt: CompoundTag, world: ServerLevel, reason: EntitySpawnReason): Entity? =
-        EntityType.loadEntityRecursive(nbt, world, reason, EntityProcessor.NOOP)
+        EntityType.loadEntityRecursive(nbt, world, reason, EntityProcessor.NOP)
 }

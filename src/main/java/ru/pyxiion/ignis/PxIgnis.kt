@@ -187,7 +187,7 @@ class PxIgnis : ModInitializer {
         ServerLivingEntityEvents.ALLOW_DEATH.register { entity, source, amount ->
             if (::runtime.isInitialized) {
                 val entityW = EntityFactory.wrap(entity)
-                val name = LuaValue.valueOf(source.name)
+                val name = LuaValue.valueOf(source.msgId)
                 val damage = LuaValue.valueOf(amount.toDouble())
 
                 val results = runtime.eventManager.fireWithResults(
@@ -301,17 +301,17 @@ class PxIgnis : ModInitializer {
                     val results = runtime.eventManager.fireWithResults(
                         "player_hurt",
                         luaPlayer,
-                        LuaValue.valueOf(source.name.substringAfterLast(".")),
+                        LuaValue.valueOf(source.msgId.substringAfterLast(".")),
                         LuaValue.valueOf(amount.toDouble())
                     )
                     if (results.any { it.isboolean() && !it.toboolean() }) return@register false
                 } else {
                     val luaEntity = EntityFactory.wrap(entity)
-                    val sourceEntity = source.attacker?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL
+                    val sourceEntity = source.entity?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL
                     val results = runtime.eventManager.fireWithResults(
                         "entity_hurt",
                         luaEntity,
-                        LuaValue.valueOf(source.name.substringAfterLast(".")),
+                        LuaValue.valueOf(source.msgId.substringAfterLast(".")),
                         LuaValue.valueOf(amount.toDouble()),
                         sourceEntity
                     )
@@ -327,16 +327,16 @@ class PxIgnis : ModInitializer {
                     val luaPlayer = PlayerWrap.wrap(entity)
                     runtime.eventManager.fire(
                         "player_damage", luaPlayer,
-                        LuaValue.valueOf(source.name.substringAfterLast(".")),
+                        LuaValue.valueOf(source.msgId.substringAfterLast(".")),
                         LuaValue.valueOf(damageTaken.toDouble()),
                         LuaValue.valueOf(blocked)
                     )
                 } else {
                     val luaEntity = EntityFactory.wrap(entity)
-                    val sourceEntity = source.attacker?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL
+                    val sourceEntity = source.entity?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL
                     runtime.eventManager.fire(
                         "entity_damage", luaEntity,
-                        LuaValue.valueOf(source.name.substringAfterLast(".")),
+                        LuaValue.valueOf(source.msgId.substringAfterLast(".")),
                         LuaValue.valueOf(damageTaken.toDouble()),
                         sourceEntity,
                         LuaValue.valueOf(blocked)
@@ -353,7 +353,7 @@ class PxIgnis : ModInitializer {
                     "player_kill",
                     luaPlayer,
                     luaKilled,
-                    LuaValue.valueOf(damageSource.name.substringAfterLast("."))
+                    LuaValue.valueOf(damageSource.msgId.substringAfterLast("."))
                 )
             }
         }
@@ -366,18 +366,18 @@ class PxIgnis : ModInitializer {
                         Commands.literal("reload").executes { ctx ->
                             try {
                                 runtime.reload()
-                                ctx.source.sendFeedback({
+                                ctx.source.sendSuccess({
                                     Component.literal("Перезагрузилось")
                                 }, false)
                                 return@executes 1
                             } catch (e: LuaError) {
                                 logger.error("Ошибка при перезагрузке PxIgnis: ${e.message}")
-                                ctx.source.sendFeedback({
+                                ctx.source.sendSuccess({
                                     Component.literal("Ошибка при перезагрузке PxIgnis: ${e.message}")
                                 }, false)
                             } catch (e: Throwable) {
                                 logger.error("Ошибка при перезагрузке PxIgnis: ${e.message}", e)
-                                ctx.source.sendFeedback({
+                                ctx.source.sendSuccess({
                                     Component.literal("Ошибка при перезагрузке PxIgnis: ${e.message}")
                                 }, false)
                             }

@@ -12,7 +12,7 @@ import ru.pyxiion.ignis.api.manager.ContainerManager;
 
 @Mixin(AbstractContainerMenu.class)
 public abstract class ScreenHandlerMixin {
-    @Inject(method = "onSlotClick", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "clicked", at = @At("HEAD"), cancellable = true)
     private void pxrp$onSlotClick(int slot, int button, ClickType action, Player player, CallbackInfo ci) {
         if (player instanceof ServerPlayer sp) {
             if (!ContainerManager.INSTANCE.shouldAllowClick((AbstractContainerMenu) (Object) this, slot, button, action, sp)) {
@@ -21,7 +21,7 @@ public abstract class ScreenHandlerMixin {
         }
     }
 
-    @Inject(method = "onClosed", at = @At("HEAD"))
+    @Inject(method = "removed", at = @At("HEAD"))
     private void pxrp$onClosed(Player player, CallbackInfo ci) {
         if (player instanceof ServerPlayer) {
             ContainerManager.INSTANCE.onScreenClosed((AbstractContainerMenu) (Object) this);

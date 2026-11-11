@@ -48,13 +48,13 @@ object MobWrap {
                 }
             }
         )
-        prop("age") { LuaValue.valueOf(age) }
+        prop("age") { LuaValue.valueOf(tickCount) }
         prop("pathRemaining") {
             val nav = navigation
-            if (!nav.isIdle) {
-                val path = nav.currentPath
+            if (!nav.isDone) {
+                val path = nav.path
                 if (path != null) {
-                    val len = path.length
+                    val len = path.nodeCount
                     if (len > 0) {
                         val nodeIdx = path.nextNodeIndex
                         val progress = 1.0 - (nodeIdx.toDouble() / len.toDouble())
@@ -63,7 +63,7 @@ object MobWrap {
                 } else LuaValue.valueOf(0.0)
             } else LuaValue.valueOf(0.0)
         }
-        prop("pathFound") { LuaValue.valueOf(!navigation.isIdle) }
+        prop("pathFound") { LuaValue.valueOf(!navigation.isDone) }
 
         method("setAI") { args ->
             val self = args.arg(1).checktable()
@@ -86,13 +86,13 @@ object MobWrap {
                 val uuidStr = entityTable.get("uuid").optjstring(null) ?: return@method LuaValue.FALSE
                 val target = m.level().getEntity(UUID.fromString(uuidStr)) ?: return@method LuaValue.FALSE
                 val speed = args.arg(3).optdouble(1.0)
-                m.navigation.startMovingTo(target, speed)
+                m.navigation.moveTo(target, speed)
             } else {
                 val x = args.arg(2).checkdouble()
                 val y = args.arg(3).checkdouble()
                 val z = args.arg(4).checkdouble()
                 val speed = args.arg(5).optdouble(1.0)
-                m.navigation.startMovingTo(x, y, z, speed)
+                m.navigation.moveTo(x, y, z, speed)
             }
             LuaValue.valueOf(result)
         }
@@ -110,12 +110,12 @@ object MobWrap {
                 val entityTable = args.arg(2).checktable()
                 val uuidStr = entityTable.get("uuid").optjstring(null) ?: return@method LuaValue.NIL
                 val target = m.level().getEntity(UUID.fromString(uuidStr)) ?: return@method LuaValue.NIL
-                m.lookControl.lookAt(target)
+                m.lookControl.setLookAt(target)
             } else {
                 val x = args.arg(2).checkdouble()
                 val y = args.arg(3).checkdouble()
                 val z = args.arg(4).checkdouble()
-                m.lookControl.lookAt(x, y, z)
+                m.lookControl.setLookAt(x, y, z)
             }
             LuaValue.NIL
         }
@@ -126,12 +126,12 @@ object MobWrap {
             val pos = args.arg(2).toVec3d()
             val speed = args.arg(3).optdouble(1.0)
             m.navigation.stop()
-            m.moveControl.moveTo(pos.x, pos.y, pos.z, speed)
+            m.moveControl.setWantedPosition(pos.x, pos.y, pos.z, speed)
             LuaValue.NIL
         }
 
         method("jump") { args ->
-            args.arg(1).checktable().unwrap<Mob>().jumpControl.setActive()
+            args.arg(1).checktable().unwrap<Mob>().jumpControl.jump()
             LuaValue.NIL
         }
 
@@ -139,7 +139,7 @@ object MobWrap {
             val self = args.arg(1).checktable()
             val m = self.unwrap<Mob>()
             val target = args.arg(2).unwrap<Entity>()
-            LuaValue.valueOf(m.tryAttack(m.level() as ServerLevel, target))
+            LuaValue.valueOf(m.doHurtTarget(m.level() as ServerLevel, target))
         }
 
         method("canSee") { args ->
@@ -147,7 +147,7 @@ object MobWrap {
             val m = self.unwrap<Mob>()
             val targetEntity = args.arg(2).unwrapOrNull<Entity>()
             if (targetEntity == null) return@method LuaValue.FALSE
-            LuaValue.valueOf(m.canSee(targetEntity))
+            LuaValue.valueOf(m.hasLineOfSight(targetEntity))
         }
 
         method("distanceTo") { args ->
@@ -155,8 +155,8 @@ object MobWrap {
             val m = self.unwrap<Mob>()
             val targetArg = args.arg(2)
             val result: Double = if (targetArg.istable()) {
-                targetArg.unwrapOrNull<Entity>()?.let { m.squaredDistanceTo(it) }
-                    ?: m.squaredDistanceTo(targetArg.toVec3d())
+                targetArg.unwrapOrNull<Entity>()?.let { m.distanceToSqr(it) }
+                    ?: m.distanceToSqr(targetArg.toVec3d())
             } else {
                 throw LuaError("distanceTo: ожидается entity или позиция")
             }

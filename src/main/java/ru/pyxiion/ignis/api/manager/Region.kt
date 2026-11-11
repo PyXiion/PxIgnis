@@ -84,7 +84,7 @@ class Region internal constructor(
                 toLeave.add(uuid)
                 continue
             }
-            if (!bounds.contains(e.entityPos)) toLeave.add(uuid)
+            if (!bounds.contains(e.position())) toLeave.add(uuid)
         }
         for (uuid in toLeave) {
             contained.remove(uuid)
@@ -94,9 +94,9 @@ class Region internal constructor(
                 if (e is ServerPlayer) fire("player_leave", regionWrapperFor(e))
             }
         }
-        for (e in world.players) {
+        for (e in world.players()) {
             if (e.uuid in contained) continue
-            if (bounds.contains(e.entityPos)) {
+            if (bounds.contains(e.position())) {
                 contained.add(e.uuid)
                 toEnter.add(e.uuid)
             }
@@ -104,7 +104,7 @@ class Region internal constructor(
         for (e in world.getAllEntities()) {
             if (e is ServerPlayer) continue
             if (e.uuid in contained) continue
-            if (bounds.contains(e.entityPos)) {
+            if (bounds.contains(e.position())) {
                 contained.add(e.uuid)
                 toEnter.add(e.uuid)
             }
@@ -216,7 +216,7 @@ object RegionManager {
 
     fun tickClientSync(server: MinecraftServer) {
         if (optInPlayers.isEmpty()) return
-        for (player in server.playerList.playerList) {
+        for (player in server.playerList.players) {
             val uuid = player.uuid
             if (uuid !in optInPlayers) continue
             if (!ServerPlayNetworking.canSend(player, RegionInterestPayload.ID)) continue
@@ -252,7 +252,7 @@ object RegionManager {
     private fun computeVisibleRegions(player: ServerPlayer): Map<Int, AABB> {
         val world = player.level() as? ServerLevel ?: return emptyMap()
         val chunkMap = regionsByChunk[world] ?: return emptyMap()
-        val pc = ChunkPos(player.chunkPos.x, player.chunkPos.z)
+        val pc = ChunkPos(player.chunkPosition().x, player.chunkPosition().z)
         val r = REGION_INTEREST_RADIUS_CHUNKS
         val out = LinkedHashMap<Int, AABB>()
         for (cx in (pc.x - r)..(pc.x + r)) {
@@ -342,7 +342,7 @@ object RegionManager {
 
     fun onEntityChunkLoad(entity: Entity) {
         val world = entity.level() as? ServerLevel ?: return
-        val pos = entity.entityPos
+        val pos = entity.position()
         val chunk = chunkPosFor(pos)
         val chunkMap = regionsByChunk[world] ?: return
         val candidates = chunkMap[chunk] ?: return
@@ -359,7 +359,7 @@ object RegionManager {
 
     fun onEntityChunkUnload(entity: Entity) {
         val world = entity.level() as? ServerLevel ?: return
-        val pos = entity.entityPos
+        val pos = entity.position()
         val chunk = chunkPosFor(pos)
         val chunkMap = regionsByChunk[world] ?: return
         val candidates = chunkMap[chunk] ?: return
@@ -376,7 +376,7 @@ object RegionManager {
 
     fun onEntityDeath(entity: Entity, sourceName: String, amount: Double) {
         val world = entity.level() as? ServerLevel ?: return
-        val pos = entity.entityPos
+        val pos = entity.position()
         val chunk = chunkPosFor(pos)
         val chunkMap = regionsByChunk[world] ?: return
         val candidates = chunkMap[chunk] ?: return

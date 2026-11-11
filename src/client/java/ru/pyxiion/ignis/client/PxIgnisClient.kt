@@ -30,7 +30,7 @@ class PxIgnisClient : ClientModInitializer {
         }
         ClientPlayNetworking.registerGlobalReceiver(RegionCapWarningPayload.ID) { payload, ctx ->
             val player = ctx.client().player ?: return@registerGlobalReceiver
-            player.sendMessage(
+            player.displayClientMessage(
                 Component.literal("Region cap (${payload.cap}) reached; some regions are not rendered."),
                 false
             )

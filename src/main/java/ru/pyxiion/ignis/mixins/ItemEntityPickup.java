@@ -17,17 +17,17 @@ import ru.pyxiion.ignis.api.wrapper.ItemStackWrap;
 public abstract class ItemEntityPickup {
 
     @Shadow
-    public abstract ItemStack getStack();
+    public abstract ItemStack getItem();
 
     // player_pickup_item — intercept item pickup
-    @Inject(method = "onPlayerCollision", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/ItemEntity;getStack()Lnet/minecraft/item/ItemStack;"), cancellable = true)
+    @Inject(method = "playerTouch", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/item/ItemEntity;getItem()Lnet/minecraft/world/item/ItemStack;"), cancellable = true)
     private void pxrp$onPlayerCollision(Player player, CallbackInfo ci) {
 
         var results = PxIgnis.instance.runtime.getEventManager()
             .fireWithResults("player_pickup_item",
                 EntityFactory.INSTANCE.wrap(player),
-                ItemStackWrap.INSTANCE.wrap(this.getStack()),
-                LuaValue.valueOf(this.getStack().getCount()));
+                ItemStackWrap.INSTANCE.wrap(this.getItem()),
+                LuaValue.valueOf(this.getItem().getCount()));
 
         if (results.stream().anyMatch(r -> r.isboolean() && !r.toboolean())) {
             ci.cancel();

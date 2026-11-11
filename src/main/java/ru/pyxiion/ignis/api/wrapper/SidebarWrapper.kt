@@ -53,7 +53,7 @@ class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
         title = text
         objective.displayName = Component.literal(text)
         if (visible) {
-            player.connection.sendPacket(
+            player.connection.send(
                 ClientboundSetObjectivePacket(objective, ClientboundSetObjectivePacket.METHOD_CHANGE)
             )
         }
@@ -81,11 +81,11 @@ class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
     fun show() {
         if (visible) return
         visible = true
-        player.connection.sendPacket(
+        player.connection.send(
             ClientboundSetObjectivePacket(objective, ClientboundSetObjectivePacket.METHOD_ADD)
         )
         resendLines()
-        player.connection.sendPacket(
+        player.connection.send(
             ClientboundSetDisplayObjectivePacket(DisplaySlot.SIDEBAR, objective)
         )
     }
@@ -93,7 +93,7 @@ class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
     fun hide() {
         if (!visible) return
         visible = false
-        player.connection.sendPacket(
+        player.connection.send(
             ClientboundSetDisplayObjectivePacket(DisplaySlot.SIDEBAR, null as Objective?)
         )
     }
@@ -105,11 +105,11 @@ class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
 
     internal fun destroyInternals() {
         if (visible) {
-            player.connection.sendPacket(
+            player.connection.send(
                 ClientboundSetDisplayObjectivePacket(DisplaySlot.SIDEBAR, null as Objective?)
             )
         }
-        player.connection.sendPacket(
+        player.connection.send(
             ClientboundSetObjectivePacket(objective, ClientboundSetObjectivePacket.METHOD_REMOVE)
         )
     }
@@ -118,7 +118,7 @@ class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
 
     private fun resetAllSlots() {
         for (slot in lastSentSlots) {
-            player.connection.sendPacket(
+            player.connection.send(
                 ClientboundResetScorePacket(slotName(slot), objectiveName)
             )
         }
@@ -132,7 +132,7 @@ class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
         for ((idx, entry) in sorted.withIndex()) {
             val (lineNum, text) = entry
             val score = size - idx
-            player.connection.sendPacket(
+            player.connection.send(
                 ClientboundSetScorePacket(
                     slotName(lineNum),
                     objectiveName,

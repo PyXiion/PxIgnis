@@ -7,22 +7,22 @@ import java.util.EnumSet
 
 class LuaGoal(private val mob: Mob) : Goal() {
     init {
-        flags = EnumSet.of(Control.MOVE, Control.LOOK, Control.JUMP)
+        flags = EnumSet.of(Flag.MOVE, Flag.LOOK, Flag.JUMP)
     }
 
     private val alive: Boolean get() = mob.isAlive && !mob.isRemoved
 
-    override fun canStart(): Boolean = alive
-    override fun shouldContinue(): Boolean = alive
+    override fun canUse(): Boolean = alive
+    override fun canContinueToUse(): Boolean = alive
     override fun stop() = MobAIManager.onGoalStopped(mob)
     override fun tick() = MobAIManager.tickMob(mob)
 
     class Target(private val mob: Mob) : Goal() {
         init {
-            flags = EnumSet.of(Control.TARGET)
+            flags = EnumSet.of(Flag.TARGET)
         }
 
-        override fun canStart(): Boolean = mob.isAlive && !mob.isRemoved
-        override fun shouldContinue(): Boolean = mob.isAlive && !mob.isRemoved
+        override fun canUse(): Boolean = mob.isAlive && !mob.isRemoved
+        override fun canContinueToUse(): Boolean = mob.isAlive && !mob.isRemoved
     }
 }

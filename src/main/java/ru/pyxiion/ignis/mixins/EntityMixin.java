@@ -19,8 +19,8 @@ public class EntityMixin {
     @Inject(method = "baseTick", at = @At("TAIL"))
     private void pxrp$capturePos(CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
-        if (self.getEntityWorld().isClient()) return;
-        Vec3 cur = self.getEntityPos();
+        if (self.level().isClientSide()) return;
+        Vec3 cur = self.position();
         if (pxrp$lastPos == null) {
             pxrp$lastPos = cur;
             return;

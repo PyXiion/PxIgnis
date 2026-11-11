@@ -14,6 +14,6 @@ public interface MobEntityMixin {
     @Accessor("targetSelector")
     GoalSelector getTargetSelector();
 
-    @Invoker("initGoals")
+    @Invoker("registerGoals")
     void invokeInitGoals();
 }

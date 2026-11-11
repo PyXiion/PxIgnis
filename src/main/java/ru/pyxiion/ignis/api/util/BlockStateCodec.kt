@@ -15,15 +15,15 @@ import ru.pyxiion.ignis.luaTableOf
 @Suppress("UNCHECKED_CAST")
 object BlockStateCodec {
     fun stateToTable(state: BlockState): LuaTable {
-        val blockId = BuiltInRegistries.BLOCK.getId(state.block)
+        val blockId = BuiltInRegistries.BLOCK.getKey(state.block)
         val propsTable = LuaTable()
 
         for (prop in state.properties) {
-            val value: Any = state.get(prop)
+            val value: Any = state.getValue(prop)
             val luaValue = when (prop) {
                 is BooleanProperty -> LuaValue.valueOf(value as Boolean)
                 is IntegerProperty -> LuaValue.valueOf((value as Int).toDouble())
-                else -> LuaValue.valueOf((prop as Property<Comparable<Any>>).name(value as Comparable<Any>))
+                else -> LuaValue.valueOf((prop as Property<Comparable<Any>>).getName(value as Comparable<Any>))
             }
             propsTable.set(prop.name, luaValue)
         }
@@ -35,8 +35,8 @@ object BlockStateCodec {
     }
 
     fun applyProperties(block: Block, propsTable: LuaTable): BlockState {
-        var state = block.defaultState
-        val stateManager = block.stateManager
+        var state = block.defaultBlockState()
+        val stateManager = block.stateDefinition
 
         val keys = propsTable.keys()
         for (key in keys) {
@@ -44,7 +44,7 @@ object BlockStateCodec {
             if (propName == "id") continue
 
             val prop = stateManager.getProperty(propName)
-                ?: throw LuaError("Блок '${BuiltInRegistries.BLOCK.getId(block)}' не имеет свойства '$propName'")
+                ?: throw LuaError("Блок '${BuiltInRegistries.BLOCK.getKey(block)}' не имеет свойства '$propName'")
 
             val value = propsTable.get(key)
             state = applyProperty(state, prop, value)
@@ -55,19 +55,19 @@ object BlockStateCodec {
 
     @Suppress("UNCHECKED_CAST")
     private fun applyProperty(state: BlockState, prop: Property<*>, value: LuaValue): BlockState {
-        val type = prop.type
+        val type = prop.valueClass
         val p = prop as Property<Comparable<Any>>
 
         if (type == Boolean::class.java) {
-            return state.with(p, value.toboolean() as Comparable<Any>)
+            return state.setValue(p, value.toboolean() as Comparable<Any>)
         }
         if (type == Int::class.javaPrimitiveType || type == Int::class.java) {
-            return state.with(p, value.toint() as Comparable<Any>)
+            return state.setValue(p, value.toint() as Comparable<Any>)
         }
         val strValue = value.tojstring()
-        val parsed = p.parse(strValue).orElseThrow {
+        val parsed = p.getValue(strValue).orElseThrow {
             LuaError("Недопустимое значение '$strValue' для свойства '${p.name}'")
         }
-        return state.with(p, parsed)
+        return state.setValue(p, parsed)
     }
 }

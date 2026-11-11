@@ -33,8 +33,8 @@ class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String
         set(v) { bar.color = parseColor(v) }
 
     var style: String
-        get() = bar.style.name.lowercase()
-        set(v) { bar.style = parseStyle(v) }
+        get() = bar.overlay.name.lowercase()
+        set(v) { bar.overlay = parseStyle(v) }
 
     var visible: Boolean
         get() = bar.isVisible
@@ -119,12 +119,12 @@ class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String
             BUILT.apply(meta)
         }
 
-        private fun parseColor(s: String): BossEvent.Color {
-            return BossEvent.Color.valueOf(s.uppercase())
+        private fun parseColor(s: String): BossEvent.BossBarColor {
+            return BossEvent.BossBarColor.valueOf(s.uppercase())
         }
 
-        private fun parseStyle(s: String): BossEvent.Style {
-            return BossEvent.Style.valueOf(s.uppercase())
+        private fun parseStyle(s: String): BossEvent.BossBarOverlay {
+            return BossEvent.BossBarOverlay.valueOf(s.uppercase())
         }
     }
 }

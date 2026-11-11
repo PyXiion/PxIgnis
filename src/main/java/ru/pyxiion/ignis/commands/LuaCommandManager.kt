@@ -129,7 +129,7 @@ class LuaCommandManager(
                 root.children.remove(k)
                 root.literals.remove(k)
             }
-            dispatcher.root.addOrReplaceChild(v)
+            dispatcher.root.addChild(v)
         }
         updateCommandLists()
     }
@@ -157,8 +157,8 @@ class LuaCommandManager(
 
     private fun updateCommandLists() {
         val cmdManager = server.commands
-        server.playerList.playerList.forEach {
-            cmdManager.sendCommandTree(it)
+        server.playerList.players.forEach {
+            cmdManager.sendCommands(it)
         }
     }
 }

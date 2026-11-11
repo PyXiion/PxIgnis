@@ -1,6 +1,6 @@
 # PxIgnis — Agent instructions
 
-Fabric mod — Lua scripting API for Minecraft server. Kotlin 2.3.21, Fabric Loom 1.16, Java 21.
+Fabric mod — Lua scripting API for Minecraft server. Kotlin 2.3.21, Fabric Loom 1.19, Gradle 9.8, Java 21 (1.21.x) / 25 (26.x).
 Entry points: `PxIgnis.kt` (ModInitializer) → `IgnisRuntime.kt` (orchestrator).
 Subproject `pxluanova/` has its own `AGENTS.md`.
 
@@ -15,14 +15,17 @@ commit and tag.
 ## Build & test
 
 ```
-./gradlew build -PtargetVersion=1.21.10   # build for 1.21.10
 ./gradlew build                           # build for 1.21.11 (default)
+./gradlew build -PtargetVersion=26.3      # build for 26.3 (unobfuscated)
 ./gradlew test                            # unit tests only, no MC runtime
 ./gradlew runServer
 ```
 
-Two MC versions (`-PtargetVersion=1.21.10` / `1.21.11`); version-specific code lives in `src/version-*/kotlin/`.
-CI: `.github/workflows/build.yml` — both versions on push/PR to `main`; auto-publishes to Modrinth on tag push.
+Two MC versions (`-PtargetVersion=1.21.11` / `26.3`, one `gradle/versions/<v>.properties` each). Run Gradle on JDK 25.
+Source is written against **Mojang mappings** for both targets (1.21.11 is remapped by Loom, 26.x ships unobfuscated);
+shared code is `src/main/java` + `src/client/java`, version-specific code lives in `src/version-<v>/{kotlin,client-kotlin,resources}`
+(`Compat`/`ClientCompat`, per-version `pxignis.accesswidener`). Add a new target by adding a properties file and a `src/version-<v>` dir.
+CI: `.github/workflows/build.yml` — both versions on push/PR to `master`; auto-publishes to Modrinth on tag push.
 
 ## Testing quirks → see `agent_docs/testing.md`
 

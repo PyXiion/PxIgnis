@@ -8,6 +8,6 @@ import java.util.List;
 
 @Mixin(StructureTemplate.class)
 public interface StructureTemplateMixin {
-    @Accessor
+    @Accessor("entityInfoList")
     List<StructureTemplate.StructureEntityInfo> getEntities();
 }

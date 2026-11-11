@@ -25,23 +25,23 @@ class LockableInventory(size: Int) : SimpleContainer(size) {
         try { return block() } finally { locked = was }
     }
 
-    override fun removeStack(slot: Int): ItemStack {
+    override fun removeItemNoUpdate(slot: Int): ItemStack {
         if (locked) return ItemStack.EMPTY
-        return super.removeStack(slot)
+        return super.removeItemNoUpdate(slot)
     }
 
-    override fun removeStack(slot: Int, amount: Int): ItemStack {
+    override fun removeItem(slot: Int, amount: Int): ItemStack {
         if (locked) return ItemStack.EMPTY
-        return super.removeStack(slot, amount)
+        return super.removeItem(slot, amount)
     }
 
-    override fun setStack(slot: Int, stack: ItemStack) {
-        super.setStack(slot, stack)
+    override fun setItem(slot: Int, stack: ItemStack) {
+        super.setItem(slot, stack)
     }
 
-    override fun clear() {
+    override fun clearContent() {
         if (locked) return
-        super.clear()
+        super.clearContent()
     }
 }
 
@@ -117,13 +117,13 @@ object ContainerManager {
         val wrapper = containers[sh] ?: return true
         val cb = wrapper.onClickCallback ?: return true
 
-        if (slot < 0 || slot >= wrapper.inventory.size()) return true
+        if (slot < 0 || slot >= wrapper.inventory.containerSize) return true
 
         val luaPlayer = PlayerWrap.wrap(player)
-        val slotStack = wrapper.inventory.getStack(slot)
+        val slotStack = wrapper.inventory.getItem(slot)
         val luaItem = if (slotStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(slotStack)
 
-        val cursorStack = player.containerMenu.cursorStack
+        val cursorStack = player.containerMenu.carried
         val luaCursor = if (cursorStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(cursorStack.copy())
 
         val result = cb.invoke(LuaValue.varargsOf(arrayOf(

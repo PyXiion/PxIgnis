@@ -39,14 +39,14 @@ object InvWrap {
     }
 
     private val BUILT = metaTable<SimpleContainer> {
-        prop("size") { LuaValue.valueOf(size()) }
+        prop("size") { LuaValue.valueOf(containerSize) }
 
         method("getItem") { args ->
             val self = args.arg(1).checktable()
             val inv = self.unwrap<SimpleContainer>()
             val slot = args.arg(2).checkint() - 1
-            if (slot < 0 || slot >= inv.size()) return@method LuaValue.NIL
-            val stack = inv.getStack(slot)
+            if (slot < 0 || slot >= inv.containerSize) return@method LuaValue.NIL
+            val stack = inv.getItem(slot)
             if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
         }
 
@@ -54,14 +54,14 @@ object InvWrap {
             val self = args.arg(1).checktable()
             val inv = self.unwrap<SimpleContainer>()
             val slot = args.arg(2).checkint() - 1
-            if (slot < 0 || slot >= inv.size()) return@method LuaValue.NIL
+            if (slot < 0 || slot >= inv.containerSize) return@method LuaValue.NIL
             unlock(inv) {
                 if (args.arg(3).isnil()) {
-                    inv.setStack(slot, ItemStack.EMPTY)
+                    inv.setItem(slot, ItemStack.EMPTY)
                 } else {
                     val stack = ItemStackWrap.unwrap(args.arg(3))
                         ?: throw LuaError("inv:setItem(): ожидается предмет")
-                    inv.setStack(slot, stack)
+                    inv.setItem(slot, stack)
                 }
             }
             LuaValue.NIL
@@ -77,8 +77,8 @@ object InvWrap {
                     ?: throw LuaError("inv:fill(): ожидается предмет")
             }
             unlock(inv) {
-                for (i in 0 until inv.size()) {
-                    inv.setStack(i, stack.copy())
+                for (i in 0 until inv.containerSize) {
+                    inv.setItem(i, stack.copy())
                 }
             }
             LuaValue.NIL
@@ -87,7 +87,7 @@ object InvWrap {
         method("clear") { args ->
             val self = args.arg(1).checktable()
             val inv = self.unwrap<SimpleContainer>()
-            unlock(inv) { inv.clear() }
+            unlock(inv) { inv.clearContent() }
             LuaValue.NIL
         }
 
@@ -98,8 +98,8 @@ object InvWrap {
             val player = playerArg.unwrap<ServerPlayer>()
             val title = args.arg(3).optjstring("Container")
 
-            val rows = inv.size() / 9
-            if (inv.size() % 9 != 0 || rows !in 1..6) return@method LuaValue.NIL
+            val rows = inv.containerSize / 9
+            if (inv.containerSize % 9 != 0 || rows !in 1..6) return@method LuaValue.NIL
 
             val container = ContainerManager.open(player, inv, rows, Component.literal(title))
             container.toLuaValue()
@@ -110,24 +110,24 @@ object InvWrap {
         BUILT.apply(meta)
     }
 
-    fun serialise(inv: SimpleContainer, lookup: HolderLookup.WrapperLookup): String {
-        val ops = RegistryOps.of(JsonOps.INSTANCE, lookup)
+    fun serialise(inv: SimpleContainer, lookup: HolderLookup.Provider): String {
+        val ops = RegistryOps.create(JsonOps.INSTANCE, lookup)
         val items = JsonArray()
-        for (i in 0 until inv.size()) {
-            val stack = inv.getStack(i)
+        for (i in 0 until inv.containerSize) {
+            val stack = inv.getItem(i)
             val elem = if (stack.isEmpty) JsonNull.INSTANCE
             else ItemStack.CODEC.encodeStart(ops, stack).result()
                 .orElseThrow { LuaError("Не удалось сериализовать слот $i") }
             items.add(elem)
         }
         val root = JsonObject()
-        root.addProperty("size", inv.size())
+        root.addProperty("size", inv.containerSize)
         root.add("items", items)
         return root.toString()
     }
 
-    fun deserialise(json: String, lookup: HolderLookup.WrapperLookup): LockableInventory {
-        val ops = RegistryOps.of(JsonOps.INSTANCE, lookup)
+    fun deserialise(json: String, lookup: HolderLookup.Provider): LockableInventory {
+        val ops = RegistryOps.create(JsonOps.INSTANCE, lookup)
         val root = JsonParser.parseString(json).asJsonObject
         val size = root.get("size").asInt
         val items = root.getAsJsonArray("items")
@@ -137,7 +137,7 @@ object InvWrap {
             if (elem.isJsonNull) continue
             val stack = ItemStack.CODEC.parse(ops, elem).result()
                 .orElseThrow { LuaError("Не удалось десериализовать слот $i") }
-            inv.setStack(i, stack)
+            inv.setItem(i, stack)
         }
         return inv
     }

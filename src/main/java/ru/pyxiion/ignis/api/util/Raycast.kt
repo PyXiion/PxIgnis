@@ -26,15 +26,15 @@ internal fun performRaycast(
 ): LuaValue {
     val shapeCtx = if (source != null) CollisionContext.of(source) else CollisionContext.empty()
 
-    val blockHit = world.raycast(ClipContext(
+    val blockHit = world.clip(ClipContext(
         start, end,
-        ClipContext.ShapeType.OUTLINE,
-        if (includeFluids) ClipContext.FluidHandling.ANY else ClipContext.FluidHandling.NONE,
+        ClipContext.Block.OUTLINE,
+        if (includeFluids) ClipContext.Fluid.ANY else ClipContext.Fluid.NONE,
         shapeCtx
     ))
     var blockDist = range
     if (blockHit.type == HitResult.Type.BLOCK) {
-        blockDist = start.distanceTo(blockHit.pos)
+        blockDist = start.distanceTo(blockHit.location)
     }
 
     var closestEntity: Entity? = null
@@ -45,13 +45,13 @@ internal fun performRaycast(
         val box = AABB(
             min(start.x, end.x), min(start.y, end.y), min(start.z, end.z),
             max(start.x, end.x), max(start.y, end.y), max(start.z, end.z)
-        ).expand(1.0)
+        ).inflate(1.0)
         val nearby = world.getEntities(source, box)
 
         for (target in nearby) {
             if (target == source || target !is LivingEntity) continue
-            val targetBox = target.boundingBox.expand(0.3)
-            val hit = targetBox.raycast(start, end).orElse(null) ?: continue
+            val targetBox = target.boundingBox.inflate(0.3)
+            val hit = targetBox.clip(start, end).orElse(null) ?: continue
             val dist = start.distanceTo(hit)
             if (dist < closestDist) {
                 closestDist = dist
@@ -71,13 +71,13 @@ internal fun performRaycast(
 
     if (blockHit.type == HitResult.Type.BLOCK) {
         val pos = blockHit.blockPos
-        val side = blockHit.side
-        val normal = side.unitVector
+        val side = blockHit.direction
+        val normal = side.unitVec3i
         return luaTableOf(
             "type" to LuaValue.valueOf("block"),
             "blockPos" to vecTable(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()),
-            "hit" to vecTable(blockHit.pos.x, blockHit.pos.y, blockHit.pos.z),
-            "side" to LuaValue.valueOf(side.asString()),
+            "hit" to vecTable(blockHit.location.x, blockHit.location.y, blockHit.location.z),
+            "side" to LuaValue.valueOf(side.serializedName),
             "normal" to vecTable(normal.x.toDouble(), normal.y.toDouble(), normal.z.toDouble()),
         )
     }

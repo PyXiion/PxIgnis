@@ -20,7 +20,7 @@ object ItemBuilder {
         customModelData: Int? = null,
         lore: List<String>? = null,
     ): ItemStack {
-        val item = BuiltInRegistries.ITEM.get(Identifier.of(id))
+        val item = BuiltInRegistries.ITEM.getValue(Identifier.parse(id))
             ?: throw IllegalArgumentException("Item '$id' not found")
         val stack = ItemStack(item, count)
 

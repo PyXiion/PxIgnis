@@ -54,7 +54,7 @@ object MobAIManager {
         try {
             val brainMethod = mob.javaClass.getMethod("getBrain")
             val brain = brainMethod.invoke(mob) as? Brain<*>
-            brain?.clear()
+            brain?.removeAllBehaviors()
         } catch (_: NoSuchMethodException) {
         } catch (_: Throwable) {
             PxIgnis.logger.warn("Не удалось очистить Brain моба: ${mob.type}")
@@ -93,16 +93,16 @@ object MobAIManager {
     private fun applyBehaviour(mob: Mob, id: String?, fn: LuaFunction) {
         val mixin = mob as MobEntityMixin
 
-        mixin.goalSelector.availableGoals.toList().forEach { mixin.goalSelector.remove(it.goal) }
-        mixin.targetSelector.availableGoals.toList().forEach { mixin.targetSelector.remove(it.goal) }
+        mixin.goalSelector.availableGoals.toList().forEach { mixin.goalSelector.removeGoal(it.goal) }
+        mixin.targetSelector.availableGoals.toList().forEach { mixin.targetSelector.removeGoal(it.goal) }
 
         tryClearBrain(mob)
 
         val goal = LuaGoal(mob)
         val targetGoal = LuaGoal.Target(mob)
 
-        mixin.goalSelector.add(0, goal)
-        mixin.targetSelector.add(0, targetGoal)
+        mixin.goalSelector.addGoal(0, goal)
+        mixin.targetSelector.addGoal(0, targetGoal)
 
         val state = LuaTable()
         mobWrappers[mob.uuid] = MobWrap.wrap(mob)
@@ -114,8 +114,8 @@ object MobAIManager {
         val entry = activeMobs.remove(mob.uuid) ?: return false
 
         val mixin = mob as MobEntityMixin
-        mixin.goalSelector.remove(entry.goal)
-        mixin.targetSelector.remove(entry.targetGoal)
+        mixin.goalSelector.removeGoal(entry.goal)
+        mixin.targetSelector.removeGoal(entry.targetGoal)
         mixin.invokeInitGoals()
 
         mob.tags.filter { it.startsWith("pxrp_behaviour:") }.forEach {
@@ -134,7 +134,7 @@ object MobAIManager {
         val entry = activeMobs[mob.uuid] ?: return
 
         @Suppress("DEPRECATION")
-        if (mob.level() is ServerLevel && !mob.level().isChunkLoaded(mob.blockPos)) {
+        if (mob.level() is ServerLevel && !mob.level().hasChunkAt(mob.blockPosition())) {
             return
         }
 
@@ -157,8 +157,8 @@ object MobAIManager {
         val entry = activeMobs[mob.uuid] ?: return
         try {
             val mixin = mob as MobEntityMixin
-            mixin.goalSelector.remove(entry.goal)
-            mixin.targetSelector.remove(entry.targetGoal)
+            mixin.goalSelector.removeGoal(entry.goal)
+            mixin.targetSelector.removeGoal(entry.targetGoal)
         } catch (_: Throwable) {}
         cleanUp(mob.uuid)
     }
@@ -199,8 +199,8 @@ object MobAIManager {
     }
 
     fun scanAndReapply(server: MinecraftServer) {
-        for (world in server.worlds) {
-            for (entity in world.iterateEntities()) {
+        for (world in server.allLevels) {
+            for (entity in world.allEntities) {
                 if (entity is Mob) {
                     val tag = entity.tags.firstOrNull { it.startsWith("pxrp_behaviour:") }
                         ?: continue

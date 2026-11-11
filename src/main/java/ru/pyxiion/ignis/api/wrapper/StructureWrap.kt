@@ -59,14 +59,14 @@ object StructureWrap {
             val data = StructurePlaceSettings()
                 .setRotation(rotation)
                 .setMirror(mirror)
-                .setPosition(pivot)
-                .setUpdateNeighbors(true)
-                .setInitializeMobs(true)
+                .setRotationPivot(pivot)
+                .setKnownShape(true)
+                .setFinalizeEntities(true)
                 .setRandom(world.random)
 
             val result = if (entityCallback != null) {
                 data.setIgnoreEntities(true)
-                val blockResult = template.place(world, pos, pivot, data, world.random, 0x03)
+                val blockResult = template.placeInWorld(world, pos, pivot, data, world.random, 0x03)
 
                 val accessor = template as? StructureTemplateMixin
                     ?: throw LuaError("Не удалось получить доступ к сущностям структуры")
@@ -79,9 +79,9 @@ object StructureWrap {
                     val finalPos = transformedPos.add(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble())
 
                     val posList = ListTag()
-                    posList.add(DoubleTag.of(finalPos.x))
-                    posList.add(DoubleTag.of(finalPos.y))
-                    posList.add(DoubleTag.of(finalPos.z))
+                    posList.add(DoubleTag.valueOf(finalPos.x))
+                    posList.add(DoubleTag.valueOf(finalPos.y))
+                    posList.add(DoubleTag.valueOf(finalPos.z))
                     nbt.put("Pos", posList)
                     nbt.remove("UUID")
 
@@ -91,8 +91,8 @@ object StructureWrap {
                         EntitySpawnReason.STRUCTURE
                     ) ?: continue
 
-                    val yaw = entity.rotate(rotation) + entity.mirror(mirror) - entity.yaw
-                    entity.refreshPositionAndAngles(finalPos.x, finalPos.y, finalPos.z, yaw, entity.pitch)
+                    val yaw = entity.rotate(rotation) + entity.mirror(mirror) - entity.yRot
+                    entity.snapTo(finalPos.x, finalPos.y, finalPos.z, yaw, entity.xRot)
                     entity.setYBodyRot(yaw)
                     entity.setYHeadRot(yaw)
 
@@ -107,7 +107,7 @@ object StructureWrap {
                 blockResult || anySpawned
             } else {
                 data.setIgnoreEntities(false)
-                template.place(world, pos, pivot, data, world.random, 0x03)
+                template.placeInWorld(world, pos, pivot, data, world.random, 0x03)
             }
 
             LuaValue.valueOf(result)

@@ -38,10 +38,10 @@ class CommandRegistrar(
                 } catch (e: CommandSyntaxException) {
                     throw e
                 } catch (e: LuaError) {
-                    ctx.source.sendError(Component.literal("При выполнении команды произошла ошибка в скрипте. Сообщите об этом администратору."))
+                    ctx.source.sendFailure(Component.literal("При выполнении команды произошла ошибка в скрипте. Сообщите об этом администратору."))
                     PxIgnis.logger.error("Ошибка при выполнении команды \"${ctx.command}\": ${e.message}", e)
                 } catch (e: Throwable) {
-                    ctx.source.sendError(Component.literal("При выполнении команды произошла неизвестная ошибка. Сообщите об этом администратору."))
+                    ctx.source.sendFailure(Component.literal("При выполнении команды произошла неизвестная ошибка. Сообщите об этом администратору."))
                     PxIgnis.logger.error("Ошибка при выполнении команды \"${ctx.command}\": ${e.message}", e)
                 }
                 return 0

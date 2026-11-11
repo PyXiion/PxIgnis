@@ -11,7 +11,7 @@ object EntityFactory {
     fun wrap(entity: Entity): LuaValue = when (entity) {
         is ServerPlayer -> PlayerWrap.wrap(entity)
         is Mob -> MobWrap.wrap(entity)
-        is Display.TextDisplayEntity -> HologramWrapper(entity, entity.level() as ServerLevel).toLuaValue()
+        is Display.TextDisplay -> HologramWrapper(entity, entity.level() as ServerLevel).toLuaValue()
         else -> EntityWrap.wrap(entity)
     }
 }

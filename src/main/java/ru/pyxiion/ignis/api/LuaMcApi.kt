@@ -87,12 +87,12 @@ class LuaMcApi(
         playerCache.clear()
     }
 
-    private fun <T> getRegistryKey(registryType: ResourceKey<Registry<T>>, key: String): ResourceKey<T> {
-        return ResourceKey.of(registryType, Identifier.of(key))
+    private fun <T : Any> getRegistryKey(registryType: ResourceKey<Registry<T>>, key: String): ResourceKey<T> {
+        return ResourceKey.create(registryType, Identifier.parse(key))
     }
 
     private fun requireWorld(arg: LuaValue): ServerLevel {
-        return server.getWorld(requireWorldKey(arg))
+        return server.getLevel(requireWorldKey(arg))
             ?: throw IllegalArgumentException("Level ${arg.tostring()} not found.")
     }
 
@@ -103,28 +103,28 @@ class LuaMcApi(
 
 
     private fun doBroadcast(text: String, pos: Vec3?, world: ResourceKey<Level>?, range: Double?, overlay: Int?) {
-        var players = server.playerList.playerList
+        var players = server.playerList.players
 
         range?.let { rng ->
             require(pos != null && world != null)
             val rangeSquare = rng * rng
             players = players.filter {
-                it.level().registryKey == world
-                        && it.squaredDistanceTo(pos) < rangeSquare
+                it.level().dimension() == world
+                        && it.distanceToSqr(pos) < rangeSquare
             }
         }
 
         if (overlay == null) {
             players.forEach {
-                it.sendMessage(Component.literal(text))
+                it.sendSystemMessage(Component.literal(text))
             }
         } else {
             val timingPacket = ClientboundSetTitlesAnimationPacket(20, overlay, 20)
             val titlePacket = ClientboundSetActionBarTextPacket(Component.literal(text))
             players.forEach {
                 with(it.connection) {
-                    sendPacket(timingPacket)
-                    sendPacket(titlePacket)
+                    send(timingPacket)
+                    send(titlePacket)
                 }
             }
         }
@@ -168,16 +168,16 @@ class LuaMcApi(
 
     private fun luaGetWorld(args: Varargs): Varargs {
         val name = args.arg(1).checkjstring()
-        val key = ResourceKey.of(Registries.DIMENSION, Identifier.of(name))
-        val world = server.getWorld(key)
+        val key = ResourceKey.create(Registries.DIMENSION, Identifier.parse(name))
+        val world = server.getLevel(key)
             ?: throw IllegalArgumentException("Level '$name' not found")
         return WorldWrap.wrap(world, playerCache, { scheduler.currentTick })
     }
 
     private fun luaLoadStructure(args: Varargs): Varargs {
         val id = args.arg(1).checkjstring()
-        val manager = server.structureTemplateManager
-        val template = manager.getTemplate(Identifier.of(id))
+        val manager = server.structureManager
+        val template = manager.get(Identifier.parse(id))
             .orElseThrow { LuaError("Структура '$id' не найдена") }
         return StructureWrap.wrap(template)
     }
@@ -185,7 +185,7 @@ class LuaMcApi(
     private fun luaLoadStructureFile(args: Varargs): Varargs {
         val path = args.arg(1).checkjstring()
         val nbt = NbtIo.readCompressed(Path.of(path), NbtAccounter.unlimitedHeap())
-        val template = server.structureTemplateManager.readStructure(nbt)
+        val template = server.structureManager.readStructure(nbt)
         return StructureWrap.wrap(template)
     }
 
@@ -288,7 +288,7 @@ class LuaMcApi(
 
     private fun luaGetEntity(args: Varargs): Varargs {
         val uuid = UUID.fromString(args.arg(1).checkjstring())
-        for (world in server.worlds) {
+        for (world in server.allLevels) {
             world.getEntity(uuid)?.let {
                 return EntityFactory.wrap(it)
             }
@@ -303,12 +303,12 @@ class LuaMcApi(
     }
 
     private fun buildSourceFromOpts(opts: LuaTable): CommandSourceStack {
-        var source = server.commandSource
+        var source = server.createCommandSourceStack()
         opts.get("as").let { asVal ->
             if (asVal.istable()) {
                 val entity = asVal.unwrapOrNull<Entity>()
                 if (entity != null) {
-                    source = source.withEntity(entity).withPosition(entity.entityPos)
+                    source = source.withEntity(entity).withPosition(entity.position())
                 }
             }
         }
@@ -327,7 +327,7 @@ class LuaMcApi(
         val source = if (args.narg() >= 2 && args.arg(2).istable()) {
             buildSourceFromOpts(args.arg(2).checktable())
         } else {
-            server.commandSource
+            server.createCommandSourceStack()
         }
 
         return try {
@@ -355,12 +355,12 @@ class LuaMcApi(
             val k = key.checkjstring()
             when (k) {
                 "onlineCount" -> {
-                    server.playerList.currentPlayerCount.toLua()
+                    server.playerList.playerCount.toLua()
                 }
 
                 "players" -> {
                     PlayerListWrapper(
-                        source = { server.playerList.playerList },
+                        source = { server.playerList.players },
                         playerCache = playerCache,
                         tickProvider = { scheduler.currentTick },
                     ).toLua()
@@ -375,13 +375,13 @@ class LuaMcApi(
         MetaTableRegistry.ITEM.set("serialise", luaFunction { self ->
             val stack = ItemStackWrap.unwrap(self)
                 ?: throw LuaError("item:serialise(): не ItemStack")
-            val json = ItemStackCodec.encode(stack, server.registryManager)
+            val json = ItemStackCodec.encode(stack, server.registryAccess())
             json.toLua()
         })
 
         MetaTableRegistry.INVENTORY.set("serialise", luaFunction { self ->
             val inv = self.unwrap<SimpleContainer>()
-            val json = InvWrap.serialise(inv, server.registryManager)
+            val json = InvWrap.serialise(inv, server.registryAccess())
             json.toLua()
         })
 
@@ -409,13 +409,13 @@ class LuaMcApi(
                     "item" -> {
                         val stack = ItemStackWrap.unwrap(obj)
                             ?: throw LuaError("mc.serialise('item', ...): ожидается ItemStack")
-                        val json = ItemStackCodec.encode(stack, server.registryManager)
+                        val json = ItemStackCodec.encode(stack, server.registryAccess())
                         LuaValue.valueOf(json)
                     }
 
                     "inventory" -> {
                         val inv = obj.unwrap<SimpleContainer>()
-                        val json = InvWrap.serialise(inv, server.registryManager)
+                        val json = InvWrap.serialise(inv, server.registryAccess())
                         LuaValue.valueOf(json)
                     }
 
@@ -427,12 +427,12 @@ class LuaMcApi(
                 val d = data.checkjstring()
                 when (t) {
                     "item" -> {
-                        val stack = ItemStackCodec.decode(d, server.registryManager)
+                        val stack = ItemStackCodec.decode(d, server.registryAccess())
                         if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
                     }
 
                     "inventory" -> {
-                        val inv = InvWrap.deserialise(d, server.registryManager)
+                        val inv = InvWrap.deserialise(d, server.registryAccess())
                         InvWrap.wrap(inv)
                     }
 

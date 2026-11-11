@@ -14,12 +14,12 @@ import ru.pyxiion.ignis.api.wrapper.ItemStackWrap;
 public abstract class LivingEntityConsumeMixin {
 
     // player_consume_item — fires when entity finishes using a consumable item
-    @Inject(method = "consumeItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;getActiveHand()Lnet/minecraft/util/Hand;"), cancellable = true)
+    @Inject(method = "completeUsingItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;getUsedItemHand()Lnet/minecraft/world/InteractionHand;"), cancellable = true)
     private void pxrp$onConsumeItem(CallbackInfo ci) {
         LivingEntity self = (LivingEntity) (Object) this;
-        if (self.getEntityWorld().isClient()) return;
+        if (self.level().isClientSide()) return;
 
-        ItemStack stack = self.getActiveItem();
+        ItemStack stack = self.getUseItem();
         if (stack.isEmpty()) return;
 
         var results = PxIgnis.instance.runtime.getEventManager()

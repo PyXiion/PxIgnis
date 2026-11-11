@@ -16,7 +16,7 @@ import ru.pyxiion.ignis.unwrap
 
 
 class HologramWrapper(
-    internal val entity: Display.TextDisplayEntity,
+    internal val entity: TextDisplay,
     @Suppress("unused") private val world: ServerLevel,
 ) {
 
@@ -29,7 +29,7 @@ class HologramWrapper(
     }
 
     internal fun destroyInternals() {
-        if (!entity.isRemoved) entity.setRemovalReasonIfNotSet()
+        if (!entity.isRemoved) entity.discard()
     }
 
     fun destroy() {
@@ -67,12 +67,12 @@ class HologramWrapper(
                 )
                 prop(
                     "alignment",
-                    get = { LuaValue.valueOf(TextDisplay.getAlign(flags).asString()) },
+                    get = { LuaValue.valueOf(TextDisplay.getAlign(flags).serializedName) },
                     set = { v -> setAlignment(this, parseAlignment(v.tojstring())) }
                 )
                 prop(
                     "billboard",
-                    get = { LuaValue.valueOf(billboardConstraints.asString()) },
+                    get = { LuaValue.valueOf(billboardConstraints.serializedName) },
                     set = { v -> billboardConstraints = parseBillboard(v.tojstring()) }
                 )
                 prop(
@@ -82,8 +82,8 @@ class HologramWrapper(
                 )
                 prop(
                     "background",
-                    get = { LuaValue.valueOf(background) },
-                    set = { v -> background = v.checkint() }
+                    get = { LuaValue.valueOf(backgroundColor) },
+                    set = { v -> backgroundColor = v.checkint() }
                 )
                 prop(
                     "opacity",
@@ -106,8 +106,8 @@ class HologramWrapper(
                 )
                 prop(
                     "glowing",
-                    get = { LuaValue.valueOf(isGlowing) },
-                    set = { v -> isGlowing = v.toboolean() }
+                    get = { LuaValue.valueOf(isCurrentlyGlowing) },
+                    set = { v -> setGlowingTag(v.toboolean()) }
                 )
 
                 method("setLine") { args ->
@@ -137,10 +137,10 @@ class HologramWrapper(
             BUILT.apply(meta)
         }
 
-        private fun parseAlignment(s: String): TextDisplay.TextAlignment = when (s) {
-            "left" -> TextDisplay.TextAlignment.LEFT
-            "right" -> TextDisplay.TextAlignment.RIGHT
-            "center" -> TextDisplay.TextAlignment.CENTER
+        private fun parseAlignment(s: String): TextDisplay.Align = when (s) {
+            "left" -> TextDisplay.Align.LEFT
+            "right" -> TextDisplay.Align.RIGHT
+            "center" -> TextDisplay.Align.CENTER
             else -> throw LuaError("Неизвестное выравнивание '$s' (допустимо: left, center, right)")
         }
 
@@ -153,13 +153,13 @@ class HologramWrapper(
         }
 
         internal fun parseBillboardFromLua(s: String): BillboardConstraints = parseBillboard(s)
-        internal fun applyAlignmentFromLua(e: Display.TextDisplayEntity, s: String) =
+        internal fun applyAlignmentFromLua(e: TextDisplay, s: String) =
             setAlignment(e, parseAlignment(s))
 
-        internal fun applyFlagFromLua(e: Display.TextDisplayEntity, flag: Byte, value: Boolean) =
+        internal fun applyFlagFromLua(e: TextDisplay, flag: Byte, value: Boolean) =
             setFlag(e, flag, value)
 
-        private fun setFlag(e: Display.TextDisplayEntity, flag: Byte, value: Boolean) {
+        private fun setFlag(e: TextDisplay, flag: Byte, value: Boolean) {
             val current = e.flags.toInt()
             val newFlags = if (value) {
                 current or flag.toInt()
@@ -169,19 +169,19 @@ class HologramWrapper(
             e.flags = newFlags.toByte()
         }
 
-        private fun setAlignment(e: Display.TextDisplayEntity, alignment: TextDisplay.TextAlignment) {
+        private fun setAlignment(e: TextDisplay, alignment: TextDisplay.Align) {
             val current = e.flags.toInt()
             val cleared = current and
                     (TextDisplay.FLAG_ALIGN_LEFT.toInt().inv()) and
                     (TextDisplay.FLAG_ALIGN_RIGHT.toInt().inv())
             val updated = when (alignment) {
-                TextDisplay.TextAlignment.LEFT ->
+                TextDisplay.Align.LEFT ->
                     cleared or TextDisplay.FLAG_ALIGN_LEFT.toInt()
 
-                TextDisplay.TextAlignment.RIGHT ->
+                TextDisplay.Align.RIGHT ->
                     cleared or TextDisplay.FLAG_ALIGN_RIGHT.toInt()
 
-                TextDisplay.TextAlignment.CENTER -> cleared
+                TextDisplay.Align.CENTER -> cleared
             }
             e.flags = updated.toByte()
         }
