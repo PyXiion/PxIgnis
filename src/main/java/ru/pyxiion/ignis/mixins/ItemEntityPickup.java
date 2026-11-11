@@ -1,8 +1,8 @@
 package ru.pyxiion.ignis.mixins;
 
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import org.luaj.vm2.LuaValue;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -21,7 +21,7 @@ public abstract class ItemEntityPickup {
 
     // player_pickup_item — intercept item pickup
     @Inject(method = "onPlayerCollision", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/ItemEntity;getStack()Lnet/minecraft/item/ItemStack;"), cancellable = true)
-    private void pxrp$onPlayerCollision(PlayerEntity player, CallbackInfo ci) {
+    private void pxrp$onPlayerCollision(Player player, CallbackInfo ci) {
 
         var results = PxIgnis.instance.runtime.getEventManager()
             .fireWithResults("player_pickup_item",

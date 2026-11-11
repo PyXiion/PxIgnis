@@ -1,12 +1,12 @@
 package ru.pyxiion.ignis.mixins;
 
-import net.minecraft.entity.ai.goal.GoalSelector;
-import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.world.entity.ai.goal.GoalSelector;
+import net.minecraft.world.entity.Mob;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-@Mixin(MobEntity.class)
+@Mixin(Mob.class)
 public interface MobEntityMixin {
     @Accessor("goalSelector")
     GoalSelector getGoalSelector();

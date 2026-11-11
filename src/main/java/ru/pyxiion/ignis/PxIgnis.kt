@@ -16,12 +16,12 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.item.BlockItem
-import net.minecraft.registry.Registries
-import net.minecraft.server.command.CommandManager
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.text.Text
-import net.minecraft.util.Hand
+import net.minecraft.world.item.BlockItem
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.commands.Commands
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.network.chat.Component
+import net.minecraft.world.InteractionHand
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaValue
 import org.slf4j.Logger
@@ -153,7 +153,7 @@ class PxIgnis : ModInitializer {
                 val luaPlayer = PlayerWrap.wrap(handler.player)
                 val results = runtime.eventManager.fireWithResults("player_join_init", luaPlayer)
                 if (results.any { it.isboolean() && !it.toboolean() }) {
-                    handler.disconnect(Text.literal("You are not allowed to join this server"))
+                    handler.disconnect(Component.literal("You are not allowed to join this server"))
                 }
             }
         })
@@ -198,7 +198,7 @@ class PxIgnis : ModInitializer {
                 )
                 if (results.any { it.isboolean() && !it.toboolean() }) return@register false
 
-                if (entity is ServerPlayerEntity) {
+                if (entity is ServerPlayer) {
                     val results = runtime.eventManager.fireWithResults(
                         "player_death",
                         entityW,
@@ -223,10 +223,10 @@ class PxIgnis : ModInitializer {
         })
 
         PlayerBlockBreakEvents.BEFORE.register { world, player, pos, state, _ ->
-            if (storageManager != null && player is ServerPlayerEntity) {
+            if (storageManager != null && player is ServerPlayer) {
                 val luaPlayer = PlayerWrap.wrap(player)
                 val posTable = Vector.of(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
-                val blockId = LuaValue.valueOf(Registries.BLOCK.getId(state.block).toString())
+                val blockId = LuaValue.valueOf(BuiltInRegistries.BLOCK.getId(state.block).toString())
                 val results = runtime.eventManager.fireWithResults("player_block_break", luaPlayer, posTable, blockId)
                 if (results.any { it.isboolean() && !it.toboolean() }) return@register false
             }
@@ -234,28 +234,28 @@ class PxIgnis : ModInitializer {
         }
 
         UseBlockCallback.EVENT.register { player, world, hand, hitResult ->
-            if (storageManager != null && player is ServerPlayerEntity && !world.isClient) {
-                val stack = player.getStackInHand(hand)
+            if (storageManager != null && player is ServerPlayer && !world.isClientSide) {
+                val stack = player.getItemInHand(hand)
                 if (stack.item is BlockItem) {
                     val luaPlayer = PlayerWrap.wrap(player)
                     val pos = hitResult.blockPos
                     val posTable = Vector.of(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
-                    val blockId = LuaValue.valueOf(Registries.BLOCK.getId((stack.item as BlockItem).block).toString())
+                    val blockId = LuaValue.valueOf(BuiltInRegistries.BLOCK.getId((stack.item as BlockItem).block).toString())
                     val results =
                         runtime.eventManager.fireWithResults("player_block_place", luaPlayer, posTable, blockId)
-                    if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
+                    if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.world.InteractionResult.FAIL
                 }
             }
-            net.minecraft.util.ActionResult.PASS
+            net.minecraft.world.InteractionResult.PASS
         }
 
         UseItemCallback.EVENT.register { player, world, hand ->
-            if (storageManager != null && player is ServerPlayerEntity && !world.isClient) {
+            if (storageManager != null && player is ServerPlayer && !world.isClientSide) {
                 val luaPlayer = PlayerWrap.wrap(player)
-                val handStr = if (hand == Hand.MAIN_HAND) "main" else "off"
-                val itemStack = player.getStackInHand(hand)
+                val handStr = if (hand == InteractionHand.MAIN_HAND) "main" else "off"
+                val itemStack = player.getItemInHand(hand)
                 val itemWrapper = if (itemStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(itemStack)
-                val itemId = LuaValue.valueOf(Registries.ITEM.getId(itemStack.item).toString())
+                val itemId = LuaValue.valueOf(BuiltInRegistries.ITEM.getId(itemStack.item).toString())
                 val results = runtime.eventManager.fireWithResults(
                     "player_use_item",
                     luaPlayer,
@@ -263,40 +263,40 @@ class PxIgnis : ModInitializer {
                     itemWrapper,
                     itemId
                 )
-                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
+                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.world.InteractionResult.FAIL
             }
-            net.minecraft.util.ActionResult.PASS
+            net.minecraft.world.InteractionResult.PASS
         }
 
         AttackEntityCallback.EVENT.register { player, world, hand, entity, hitResult ->
-            if (storageManager != null && player is ServerPlayerEntity && !world.isClient) {
+            if (storageManager != null && player is ServerPlayer && !world.isClientSide) {
                 val luaPlayer = PlayerWrap.wrap(player)
                 val luaEntity = EntityFactory.wrap(entity)
                 val results = runtime.eventManager.fireWithResults("player_attack_entity", luaPlayer, luaEntity)
-                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
+                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.world.InteractionResult.FAIL
             }
-            net.minecraft.util.ActionResult.PASS
+            net.minecraft.world.InteractionResult.PASS
         }
 
         UseEntityCallback.EVENT.register { player, world, hand, entity, hitResult ->
-            if (storageManager != null && player is ServerPlayerEntity && !world.isClient) {
+            if (storageManager != null && player is ServerPlayer && !world.isClientSide) {
                 val luaPlayer = PlayerWrap.wrap(player)
                 val luaEntity = EntityFactory.wrap(entity)
-                val handStr = if (hand == Hand.MAIN_HAND) "main" else "off"
+                val handStr = if (hand == InteractionHand.MAIN_HAND) "main" else "off"
                 val results = runtime.eventManager.fireWithResults(
                     "player_interact_entity",
                     luaPlayer,
                     luaEntity,
                     LuaValue.valueOf(handStr)
                 )
-                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.util.ActionResult.FAIL
+                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.world.InteractionResult.FAIL
             }
-            net.minecraft.util.ActionResult.PASS
+            net.minecraft.world.InteractionResult.PASS
         }
 
         ServerLivingEntityEvents.ALLOW_DAMAGE.register { entity, source, amount ->
             if (storageManager != null) {
-                if (entity is ServerPlayerEntity) {
+                if (entity is ServerPlayer) {
                     val luaPlayer = PlayerWrap.wrap(entity)
                     val results = runtime.eventManager.fireWithResults(
                         "player_hurt",
@@ -323,7 +323,7 @@ class PxIgnis : ModInitializer {
 
         ServerLivingEntityEvents.AFTER_DAMAGE.register { entity, source, _, damageTaken, blocked ->
             if (storageManager != null) {
-                if (entity is ServerPlayerEntity) {
+                if (entity is ServerPlayer) {
                     val luaPlayer = PlayerWrap.wrap(entity)
                     runtime.eventManager.fire(
                         "player_damage", luaPlayer,
@@ -346,7 +346,7 @@ class PxIgnis : ModInitializer {
         }
 
         ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register { world, entity, killedEntity, damageSource ->
-            if (storageManager != null && entity is ServerPlayerEntity) {
+            if (storageManager != null && entity is ServerPlayer) {
                 val luaPlayer = PlayerWrap.wrap(entity)
                 val luaKilled = EntityFactory.wrap(killedEntity)
                 runtime.eventManager.fire(
@@ -360,25 +360,25 @@ class PxIgnis : ModInitializer {
 
         CommandRegistrationCallback.EVENT.register(fun(dispatcher, reg, env) {
             dispatcher.register(
-                CommandManager.literal("ignis")
+                Commands.literal("ignis")
                     .requires(Permissions.require("px.ignis", 4))
                     .then(
-                        CommandManager.literal("reload").executes { ctx ->
+                        Commands.literal("reload").executes { ctx ->
                             try {
                                 runtime.reload()
                                 ctx.source.sendFeedback({
-                                    Text.literal("Перезагрузилось")
+                                    Component.literal("Перезагрузилось")
                                 }, false)
                                 return@executes 1
                             } catch (e: LuaError) {
                                 logger.error("Ошибка при перезагрузке PxIgnis: ${e.message}")
                                 ctx.source.sendFeedback({
-                                    Text.literal("Ошибка при перезагрузке PxIgnis: ${e.message}")
+                                    Component.literal("Ошибка при перезагрузке PxIgnis: ${e.message}")
                                 }, false)
                             } catch (e: Throwable) {
                                 logger.error("Ошибка при перезагрузке PxIgnis: ${e.message}", e)
                                 ctx.source.sendFeedback({
-                                    Text.literal("Ошибка при перезагрузке PxIgnis: ${e.message}")
+                                    Component.literal("Ошибка при перезагрузке PxIgnis: ${e.message}")
                                 }, false)
                             }
                             0

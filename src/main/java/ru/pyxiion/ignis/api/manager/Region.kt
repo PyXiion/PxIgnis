@@ -1,13 +1,13 @@
 package ru.pyxiion.ignis.api.manager
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
-import net.minecraft.entity.Entity
+import net.minecraft.world.entity.Entity
 import net.minecraft.server.MinecraftServer
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.server.world.ServerWorld
-import net.minecraft.util.math.Box
-import net.minecraft.util.math.ChunkPos
-import net.minecraft.util.math.Vec3d
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.world.phys.AABB
+import net.minecraft.world.level.ChunkPos
+import net.minecraft.world.phys.Vec3
 import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaValue
@@ -35,13 +35,13 @@ data class RegionDiff(
 
 class Region internal constructor(
     val id: Int,
-    val world: ServerWorld,
-    @Volatile var bounds: Box,
+    val world: ServerLevel,
+    @Volatile var bounds: AABB,
 ) {
     internal val bus = EventBus(" region #$id", PxIgnis.logger) { RegionManager.sharedStateProvider() }
     private val contained = mutableSetOf<UUID>()
 
-    fun contains(pos: Vec3d): Boolean = bounds.contains(pos)
+    fun contains(pos: Vec3): Boolean = bounds.contains(pos)
 
     fun on(event: String, callback: LuaFunction, throttle: Int = 0): Int {
         val handlerId = bus.on(event, callback, throttle)
@@ -71,11 +71,11 @@ class Region internal constructor(
         RegionManager.unregisterTickSubscriber(this)
     }
 
-    fun setCorners(a: Vec3d, b: Vec3d) {
+    fun setCorners(a: Vec3, b: Vec3) {
         val old = bounds
-        val min = Vec3d(minOf(a.x, b.x), minOf(a.y, b.y), minOf(a.z, b.z))
-        val max = Vec3d(maxOf(a.x, b.x), maxOf(a.y, b.y), maxOf(a.z, b.z))
-        bounds = Box(min, max)
+        val min = Vec3(minOf(a.x, b.x), minOf(a.y, b.y), minOf(a.z, b.z))
+        val max = Vec3(maxOf(a.x, b.x), maxOf(a.y, b.y), maxOf(a.z, b.z))
+        bounds = AABB(min, max)
         RegionManager.reindexChunks(this, old)
         val toLeave = mutableListOf<UUID>()
         val toEnter = mutableListOf<UUID>()
@@ -91,7 +91,7 @@ class Region internal constructor(
             val e = world.getEntity(uuid)
             if (e != null) {
                 fire("entity_leave", regionWrapperFor(e))
-                if (e is ServerPlayerEntity) fire("player_leave", regionWrapperFor(e))
+                if (e is ServerPlayer) fire("player_leave", regionWrapperFor(e))
             }
         }
         for (e in world.players) {
@@ -101,8 +101,8 @@ class Region internal constructor(
                 toEnter.add(e.uuid)
             }
         }
-        for (e in world.iterateEntities()) {
-            if (e is ServerPlayerEntity) continue
+        for (e in world.getAllEntities()) {
+            if (e is ServerPlayer) continue
             if (e.uuid in contained) continue
             if (bounds.contains(e.entityPos)) {
                 contained.add(e.uuid)
@@ -112,7 +112,7 @@ class Region internal constructor(
         for (uuid in toEnter) {
             val e = world.getEntity(uuid) ?: continue
             fire("entity_enter", regionWrapperFor(e))
-            if (e is ServerPlayerEntity) fire("player_enter", regionWrapperFor(e))
+            if (e is ServerPlayer) fire("player_enter", regionWrapperFor(e))
         }
     }
 
@@ -121,9 +121,9 @@ class Region internal constructor(
         return contained.mapNotNull { world.getEntity(it) }
     }
 
-    fun livePlayers(): List<ServerPlayerEntity> {
+    fun livePlayers(): List<ServerPlayer> {
         val world = this.world
-        return contained.mapNotNull { world.getEntity(it) as? ServerPlayerEntity }
+        return contained.mapNotNull { world.getEntity(it) as? ServerPlayer }
     }
 
     internal fun addContained(uuid: UUID) { contained.add(uuid) }
@@ -133,15 +133,15 @@ class Region internal constructor(
 }
 
 object RegionManager {
-    private val regionsByWorld = mutableMapOf<ServerWorld, MutableList<Region>>()
-    private val regionsByChunk = mutableMapOf<ServerWorld, MutableMap<ChunkPos, MutableList<Region>>>()
+    private val regionsByWorld = mutableMapOf<ServerLevel, MutableList<Region>>()
+    private val regionsByChunk = mutableMapOf<ServerLevel, MutableMap<ChunkPos, MutableList<Region>>>()
     private val regionsById = mutableMapOf<Int, Region>()
     private val tickSubscribers = mutableSetOf<Region>()
     private var nextId = 0
 
     var sharedStateProvider: () -> LuaState? = { null }
 
-    internal fun create(world: ServerWorld, bounds: Box): Region {
+    internal fun create(world: ServerLevel, bounds: AABB): Region {
         val region = Region(nextId++, world, bounds)
         regionsByWorld.getOrPut(world) { mutableListOf() }.add(region)
         regionsById[region.id] = region
@@ -149,11 +149,11 @@ object RegionManager {
         return region
     }
 
-    fun all(world: ServerWorld): List<Region> = regionsByWorld[world]?.toList() ?: emptyList()
+    fun all(world: ServerLevel): List<Region> = regionsByWorld[world]?.toList() ?: emptyList()
 
     fun get(id: Int): Region? = regionsById[id]
 
-    fun getAt(world: ServerWorld, pos: Vec3d): List<Region> {
+    fun getAt(world: ServerLevel, pos: Vec3): List<Region> {
         val chunk = chunkPosFor(pos)
         val chunkMap = regionsByChunk[world] ?: return emptyList()
         val candidates = chunkMap[chunk] ?: return emptyList()
@@ -191,7 +191,7 @@ object RegionManager {
     }
 
     private val optInPlayers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
-    private val lastSnapshots: MutableMap<UUID, Map<Int, Box>> = ConcurrentHashMap()
+    private val lastSnapshots: MutableMap<UUID, Map<Int, AABB>> = ConcurrentHashMap()
     private val warnedPlayers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
 
     fun isOptedIn(uuid: UUID): Boolean = uuid in optInPlayers
@@ -216,7 +216,7 @@ object RegionManager {
 
     fun tickClientSync(server: MinecraftServer) {
         if (optInPlayers.isEmpty()) return
-        for (player in server.playerManager.playerList) {
+        for (player in server.playerList.playerList) {
             val uuid = player.uuid
             if (uuid !in optInPlayers) continue
             if (!ServerPlayNetworking.canSend(player, RegionInterestPayload.ID)) continue
@@ -244,17 +244,17 @@ object RegionManager {
         lastSnapshots.clear()
         warnedPlayers.clear()
         for (uuid in uuids) {
-            val player = server.playerManager.getPlayer(uuid) ?: continue
+            val player = server.playerList.getPlayer(uuid) ?: continue
             ServerPlayNetworking.send(player, RegionSyncPayload(emptyList()))
         }
     }
 
-    private fun computeVisibleRegions(player: ServerPlayerEntity): Map<Int, Box> {
-        val world = player.entityWorld as? ServerWorld ?: return emptyMap()
+    private fun computeVisibleRegions(player: ServerPlayer): Map<Int, AABB> {
+        val world = player.level() as? ServerLevel ?: return emptyMap()
         val chunkMap = regionsByChunk[world] ?: return emptyMap()
         val pc = ChunkPos(player.chunkPos.x, player.chunkPos.z)
         val r = REGION_INTEREST_RADIUS_CHUNKS
-        val out = LinkedHashMap<Int, Box>()
+        val out = LinkedHashMap<Int, AABB>()
         for (cx in (pc.x - r)..(pc.x + r)) {
             for (cz in (pc.z - r)..(pc.z + r)) {
                 val list = chunkMap[ChunkPos(cx, cz)] ?: continue
@@ -269,15 +269,15 @@ object RegionManager {
         return out
     }
 
-    private fun chunkBox(cx: Int, cz: Int): Box {
+    private fun chunkBox(cx: Int, cz: Int): AABB {
         val minX = (cx shl 4).toDouble()
         val minZ = (cz shl 4).toDouble()
-        return Box(minX, Double.NEGATIVE_INFINITY, minZ, minX + 16.0, Double.POSITIVE_INFINITY, minZ + 16.0)
+        return AABB(minX, Double.NEGATIVE_INFINITY, minZ, minX + 16.0, Double.POSITIVE_INFINITY, minZ + 16.0)
     }
 
     fun diffRegionSnapshots(
-        prev: Map<Int, Box>,
-        next: Map<Int, Box>,
+        prev: Map<Int, AABB>,
+        next: Map<Int, AABB>,
         cap: Int
     ): RegionDiff {
         val additions = mutableListOf<RegionEntry>()
@@ -306,8 +306,8 @@ object RegionManager {
         tickSubscribers.remove(region)
     }
 
-    fun onEntityMoved(entity: Entity, from: Vec3d, to: Vec3d) {
-        val world = entity.entityWorld as? ServerWorld ?: return
+    fun onEntityMoved(entity: Entity, from: Vec3, to: Vec3) {
+        val world = entity.level() as? ServerLevel ?: return
         val fromChunk = chunkPosFor(from)
         val toChunk = chunkPosFor(to)
         val chunkMap = regionsByChunk[world] ?: return
@@ -317,7 +317,7 @@ object RegionManager {
         chunkMap[toChunk]?.let { candidates.addAll(it) }
 
         val uuid = entity.uuid
-        val isPlayer = entity is ServerPlayerEntity
+        val isPlayer = entity is ServerPlayer
 
         for (region in candidates) {
             val wasIn = region.contains(from)
@@ -341,13 +341,13 @@ object RegionManager {
     }
 
     fun onEntityChunkLoad(entity: Entity) {
-        val world = entity.entityWorld as? ServerWorld ?: return
+        val world = entity.level() as? ServerLevel ?: return
         val pos = entity.entityPos
         val chunk = chunkPosFor(pos)
         val chunkMap = regionsByChunk[world] ?: return
         val candidates = chunkMap[chunk] ?: return
         val uuid = entity.uuid
-        val isPlayer = entity is ServerPlayerEntity
+        val isPlayer = entity is ServerPlayer
         for (region in candidates) {
             if (region.contains(pos) && !region.isContained(uuid)) {
                 region.addContained(uuid)
@@ -358,13 +358,13 @@ object RegionManager {
     }
 
     fun onEntityChunkUnload(entity: Entity) {
-        val world = entity.entityWorld as? ServerWorld ?: return
+        val world = entity.level() as? ServerLevel ?: return
         val pos = entity.entityPos
         val chunk = chunkPosFor(pos)
         val chunkMap = regionsByChunk[world] ?: return
         val candidates = chunkMap[chunk] ?: return
         val uuid = entity.uuid
-        val isPlayer = entity is ServerPlayerEntity
+        val isPlayer = entity is ServerPlayer
         for (region in candidates) {
             if (region.isContained(uuid)) {
                 region.removeContained(uuid)
@@ -375,13 +375,13 @@ object RegionManager {
     }
 
     fun onEntityDeath(entity: Entity, sourceName: String, amount: Double) {
-        val world = entity.entityWorld as? ServerWorld ?: return
+        val world = entity.level() as? ServerLevel ?: return
         val pos = entity.entityPos
         val chunk = chunkPosFor(pos)
         val chunkMap = regionsByChunk[world] ?: return
         val candidates = chunkMap[chunk] ?: return
         val uuid = entity.uuid
-        val isPlayer = entity is ServerPlayerEntity
+        val isPlayer = entity is ServerPlayer
         val w = regionWrapperFor(entity)
         val src = LuaValue.valueOf(sourceName)
         val amt = LuaValue.valueOf(amount)
@@ -393,7 +393,7 @@ object RegionManager {
         }
     }
 
-    fun onPlayerDeath(player: ServerPlayerEntity, sourceName: String) {
+    fun onPlayerDeath(player: ServerPlayer, sourceName: String) {
         onEntityDeath(player, sourceName, 0.0)
     }
 
@@ -405,12 +405,12 @@ object RegionManager {
         }
     }
 
-    internal fun reindexChunks(region: Region, oldBounds: Box) {
+    internal fun reindexChunks(region: Region, oldBounds: AABB) {
         deindexChunks(region, oldBounds)
         indexChunks(region)
     }
 
-    private fun deindexChunks(region: Region, bounds: Box) {
+    private fun deindexChunks(region: Region, bounds: AABB) {
         val world = region.world
         val map = regionsByChunk[world] ?: return
         val toRemove = mutableListOf<ChunkPos>()
@@ -423,7 +423,7 @@ object RegionManager {
         if (map.isEmpty()) regionsByChunk.remove(world)
     }
 
-    private inline fun forChunkRange(bounds: Box, action: (ChunkPos) -> Unit) {
+    private inline fun forChunkRange(bounds: AABB, action: (ChunkPos) -> Unit) {
         val minCx = Math.floorDiv(bounds.minX.toInt(), 16)
         val minCz = Math.floorDiv(bounds.minZ.toInt(), 16)
         val maxCx = Math.floorDiv(bounds.maxX.toInt(), 16)
@@ -435,7 +435,7 @@ object RegionManager {
         }
     }
 
-    private fun chunkPosFor(pos: Vec3d): ChunkPos {
+    private fun chunkPosFor(pos: Vec3): ChunkPos {
         return ChunkPos(Math.floorDiv(pos.x.toInt(), 16), Math.floorDiv(pos.z.toInt(), 16))
     }
 }

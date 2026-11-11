@@ -1,12 +1,12 @@
 package ru.pyxiion.ignis.api.util
 
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.component.type.CustomModelDataComponent
-import net.minecraft.component.type.LoreComponent
-import net.minecraft.item.ItemStack
-import net.minecraft.registry.Registries
-import net.minecraft.text.Text
-import net.minecraft.util.Identifier
+import net.minecraft.core.component.DataComponents
+import net.minecraft.world.item.component.CustomModelData
+import net.minecraft.world.item.component.ItemLore
+import net.minecraft.world.item.ItemStack
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.network.chat.Component
+import net.minecraft.resources.Identifier
 import net.minecraft.util.Unit
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
@@ -20,19 +20,19 @@ object ItemBuilder {
         customModelData: Int? = null,
         lore: List<String>? = null,
     ): ItemStack {
-        val item = Registries.ITEM.get(Identifier.of(id))
+        val item = BuiltInRegistries.ITEM.get(Identifier.of(id))
             ?: throw IllegalArgumentException("Item '$id' not found")
         val stack = ItemStack(item, count)
 
-        if (name != null) stack.set(DataComponentTypes.CUSTOM_NAME, Text.literal(name))
-        if (unbreakable) stack.set(DataComponentTypes.UNBREAKABLE, Unit.INSTANCE)
+        if (name != null) stack.set(DataComponents.CUSTOM_NAME, Component.literal(name))
+        if (unbreakable) stack.set(DataComponents.UNBREAKABLE, Unit.INSTANCE)
         if (customModelData != null) {
             stack.set(
-                DataComponentTypes.CUSTOM_MODEL_DATA,
-                CustomModelDataComponent(listOf(customModelData.toFloat()), emptyList(), emptyList(), emptyList())
+                DataComponents.CUSTOM_MODEL_DATA,
+                CustomModelData(listOf(customModelData.toFloat()), emptyList(), emptyList(), emptyList())
             )
         }
-        if (lore != null) stack.set(DataComponentTypes.LORE, LoreComponent(lore.map { Text.literal(it) }))
+        if (lore != null) stack.set(DataComponents.LORE, ItemLore(lore.map { Component.literal(it) }))
 
         return stack
     }

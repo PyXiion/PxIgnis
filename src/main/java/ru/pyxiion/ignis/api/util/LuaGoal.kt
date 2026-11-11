@@ -1,13 +1,13 @@
 package ru.pyxiion.ignis.api.util
 
-import net.minecraft.entity.ai.goal.Goal
-import net.minecraft.entity.mob.MobEntity
+import net.minecraft.world.entity.ai.goal.Goal
+import net.minecraft.world.entity.Mob
 import ru.pyxiion.ignis.api.manager.MobAIManager
 import java.util.EnumSet
 
-class LuaGoal(private val mob: MobEntity) : Goal() {
+class LuaGoal(private val mob: Mob) : Goal() {
     init {
-        controls = EnumSet.of(Control.MOVE, Control.LOOK, Control.JUMP)
+        flags = EnumSet.of(Control.MOVE, Control.LOOK, Control.JUMP)
     }
 
     private val alive: Boolean get() = mob.isAlive && !mob.isRemoved
@@ -17,9 +17,9 @@ class LuaGoal(private val mob: MobEntity) : Goal() {
     override fun stop() = MobAIManager.onGoalStopped(mob)
     override fun tick() = MobAIManager.tickMob(mob)
 
-    class Target(private val mob: MobEntity) : Goal() {
+    class Target(private val mob: Mob) : Goal() {
         init {
-            controls = EnumSet.of(Control.TARGET)
+            flags = EnumSet.of(Control.TARGET)
         }
 
         override fun canStart(): Boolean = mob.isAlive && !mob.isRemoved

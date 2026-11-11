@@ -1,9 +1,9 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.entity.Entity
-import net.minecraft.entity.LivingEntity
-import net.minecraft.entity.mob.MobEntity
-import net.minecraft.server.world.ServerWorld
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.entity.Mob
+import net.minecraft.server.level.ServerLevel
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -17,7 +17,7 @@ import java.util.UUID
 
 object MobWrap {
 
-    fun wrap(mob: MobEntity): LuaValue {
+    fun wrap(mob: Mob): LuaValue {
         val t = LuaTable()
         t.setmetatable(MetaTableRegistry.MOB)
         t.rawset("__pxrp_type", LuaValue.valueOf("mob"))
@@ -25,7 +25,7 @@ object MobWrap {
         return t
     }
 
-    private val BUILT = metaTable<MobEntity> {
+    private val BUILT = metaTable<Mob> {
         inherit { MetaTableRegistry.ENTITY }
 
         prop("isMob") { LuaValue.TRUE }
@@ -42,7 +42,7 @@ object MobWrap {
                     val uuidStr = v.checktable().get("uuid")
                     if (uuidStr.isstring()) {
                         val uuid = UUID.fromString(uuidStr.tojstring())
-                        val entity = entityWorld.getEntity(uuid)
+                        val entity = level().getEntity(uuid)
                         target = entity as? LivingEntity
                     }
                 }
@@ -56,7 +56,7 @@ object MobWrap {
                 if (path != null) {
                     val len = path.length
                     if (len > 0) {
-                        val nodeIdx = path.currentNodeIndex
+                        val nodeIdx = path.nextNodeIndex
                         val progress = 1.0 - (nodeIdx.toDouble() / len.toDouble())
                         LuaValue.valueOf(progress.coerceIn(0.0, 1.0))
                     } else LuaValue.valueOf(0.0)
@@ -67,24 +67,24 @@ object MobWrap {
 
         method("setAI") { args ->
             val self = args.arg(1).checktable()
-            MobAIManager.setAI(self.unwrap<MobEntity>(), args.arg(2))
+            MobAIManager.setAI(self.unwrap<Mob>(), args.arg(2))
             LuaValue.NIL
         }
 
         method("clearAI") { args ->
-            args.arg(1).checktable().unwrap<MobEntity>()
+            args.arg(1).checktable().unwrap<Mob>()
                 .let { MobAIManager.clearAI(it) }
             LuaValue.NIL
         }
 
         method("navigateTo") { args ->
             val self = args.arg(1).checktable()
-            val m = self.unwrap<MobEntity>()
+            val m = self.unwrap<Mob>()
 
             val result: Boolean = if (args.arg(2).istable()) {
                 val entityTable = args.arg(2).checktable()
                 val uuidStr = entityTable.get("uuid").optjstring(null) ?: return@method LuaValue.FALSE
-                val target = m.entityWorld.getEntity(UUID.fromString(uuidStr)) ?: return@method LuaValue.FALSE
+                val target = m.level().getEntity(UUID.fromString(uuidStr)) ?: return@method LuaValue.FALSE
                 val speed = args.arg(3).optdouble(1.0)
                 m.navigation.startMovingTo(target, speed)
             } else {
@@ -98,18 +98,18 @@ object MobWrap {
         }
 
         method("stopNavigation") { args ->
-            args.arg(1).checktable().unwrap<MobEntity>().navigation.stop()
+            args.arg(1).checktable().unwrap<Mob>().navigation.stop()
             LuaValue.NIL
         }
 
         method("lookAt") { args ->
             val self = args.arg(1).checktable()
-            val m = self.unwrap<MobEntity>()
+            val m = self.unwrap<Mob>()
 
             if (args.arg(3).isnil() && args.arg(2).istable()) {
                 val entityTable = args.arg(2).checktable()
                 val uuidStr = entityTable.get("uuid").optjstring(null) ?: return@method LuaValue.NIL
-                val target = m.entityWorld.getEntity(UUID.fromString(uuidStr)) ?: return@method LuaValue.NIL
+                val target = m.level().getEntity(UUID.fromString(uuidStr)) ?: return@method LuaValue.NIL
                 m.lookControl.lookAt(target)
             } else {
                 val x = args.arg(2).checkdouble()
@@ -122,7 +122,7 @@ object MobWrap {
 
         method("moveToward") { args ->
             val self = args.arg(1).checktable()
-            val m = self.unwrap<MobEntity>()
+            val m = self.unwrap<Mob>()
             val pos = args.arg(2).toVec3d()
             val speed = args.arg(3).optdouble(1.0)
             m.navigation.stop()
@@ -131,20 +131,20 @@ object MobWrap {
         }
 
         method("jump") { args ->
-            args.arg(1).checktable().unwrap<MobEntity>().jumpControl.setActive()
+            args.arg(1).checktable().unwrap<Mob>().jumpControl.setActive()
             LuaValue.NIL
         }
 
         method("tryAttack") { args ->
             val self = args.arg(1).checktable()
-            val m = self.unwrap<MobEntity>()
+            val m = self.unwrap<Mob>()
             val target = args.arg(2).unwrap<Entity>()
-            LuaValue.valueOf(m.tryAttack(m.entityWorld as ServerWorld, target))
+            LuaValue.valueOf(m.tryAttack(m.level() as ServerLevel, target))
         }
 
         method("canSee") { args ->
             val self = args.arg(1).checktable()
-            val m = self.unwrap<MobEntity>()
+            val m = self.unwrap<Mob>()
             val targetEntity = args.arg(2).unwrapOrNull<Entity>()
             if (targetEntity == null) return@method LuaValue.FALSE
             LuaValue.valueOf(m.canSee(targetEntity))
@@ -152,7 +152,7 @@ object MobWrap {
 
         method("distanceTo") { args ->
             val self = args.arg(1).checktable()
-            val m = self.unwrap<MobEntity>()
+            val m = self.unwrap<Mob>()
             val targetArg = args.arg(2)
             val result: Double = if (targetArg.istable()) {
                 targetArg.unwrapOrNull<Entity>()?.let { m.squaredDistanceTo(it) }

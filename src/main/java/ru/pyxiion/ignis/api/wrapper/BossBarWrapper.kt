@@ -1,9 +1,9 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.entity.boss.BossBar
-import net.minecraft.entity.boss.ServerBossBar
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.text.Text
+import net.minecraft.world.BossEvent
+import net.minecraft.server.level.ServerBossEvent
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.network.chat.Component
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
@@ -14,19 +14,19 @@ import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.unwrap
 
 class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String = "progress") {
-    private val bar = ServerBossBar(
-        Text.literal(title),
+    private val bar = ServerBossEvent(
+        Component.literal(title),
         parseColor(colorStr),
         parseStyle(styleStr),
     )
 
     var title: String
         get() = bar.name.string
-        set(v) { bar.name = Text.literal(v) }
+        set(v) { bar.name = Component.literal(v) }
 
     var progress: Float
-        get() = bar.percent
-        set(v) { bar.percent = v.coerceIn(0f, 1f) }
+        get() = bar.progress
+        set(v) { bar.progress = v.coerceIn(0f, 1f) }
 
     var color: String
         get() = bar.color.name.lowercase()
@@ -40,21 +40,21 @@ class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String
         get() = bar.isVisible
         set(v) { bar.isVisible = v }
 
-    fun addPlayer(player: ServerPlayerEntity) {
+    fun addPlayer(player: ServerPlayer) {
         bar.addPlayer(player)
     }
 
-    fun removePlayer(player: ServerPlayerEntity) {
+    fun removePlayer(player: ServerPlayer) {
         bar.removePlayer(player)
     }
 
     fun destroy() {
-        bar.clearPlayers()
+        bar.removeAllPlayers()
         BossBarManager.unregister(this)
     }
 
     internal fun destroyInternals() {
-        bar.clearPlayers()
+        bar.removeAllPlayers()
     }
 
     fun toLuaValue(): LuaValue {
@@ -96,7 +96,7 @@ class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String
             method("addPlayer") { args: Varargs ->
                 val self = args.arg(1).checktable()
                 val wrapper = self.unwrap<BossBarWrapper>()
-                val player = args.arg(2).checktable().unwrap<ServerPlayerEntity>()
+                val player = args.arg(2).checktable().unwrap<ServerPlayer>()
                 wrapper.addPlayer(player)
                 LuaValue.NIL
             }
@@ -104,7 +104,7 @@ class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String
             method("removePlayer") { args: Varargs ->
                 val self = args.arg(1).checktable()
                 val wrapper = self.unwrap<BossBarWrapper>()
-                val player = args.arg(2).checktable().unwrap<ServerPlayerEntity>()
+                val player = args.arg(2).checktable().unwrap<ServerPlayer>()
                 wrapper.removePlayer(player)
                 LuaValue.NIL
             }
@@ -119,12 +119,12 @@ class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String
             BUILT.apply(meta)
         }
 
-        private fun parseColor(s: String): BossBar.Color {
-            return BossBar.Color.valueOf(s.uppercase())
+        private fun parseColor(s: String): BossEvent.Color {
+            return BossEvent.Color.valueOf(s.uppercase())
         }
 
-        private fun parseStyle(s: String): BossBar.Style {
-            return BossBar.Style.valueOf(s.uppercase())
+        private fun parseStyle(s: String): BossEvent.Style {
+            return BossEvent.Style.valueOf(s.uppercase())
         }
     }
 }

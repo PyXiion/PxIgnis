@@ -1,10 +1,10 @@
 package ru.pyxiion.ignis.api.manager
 
-import net.minecraft.entity.Entity
-import net.minecraft.entity.ai.brain.Brain
-import net.minecraft.entity.mob.MobEntity
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.ai.Brain
+import net.minecraft.world.entity.Mob
 import net.minecraft.server.MinecraftServer
-import net.minecraft.server.world.ServerWorld
+import net.minecraft.server.level.ServerLevel
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaTable
@@ -22,12 +22,12 @@ object MobAIManager {
         val state: LuaTable,
         val goal: LuaGoal,
         val targetGoal: LuaGoal.Target,
-        val mob: MobEntity,
+        val mob: Mob,
     )
 
     data class PendingAttach(
         val behaviourId: String,
-        val mob: MobEntity,
+        val mob: Mob,
     )
 
     val behaviours = mutableMapOf<String, LuaFunction>()
@@ -50,7 +50,7 @@ object MobAIManager {
         }
     }
 
-    private fun tryClearBrain(mob: MobEntity) {
+    private fun tryClearBrain(mob: Mob) {
         try {
             val brainMethod = mob.javaClass.getMethod("getBrain")
             val brain = brainMethod.invoke(mob) as? Brain<*>
@@ -61,7 +61,7 @@ object MobAIManager {
         }
     }
 
-    fun setAI(mob: MobEntity, idOrFn: LuaValue) {
+    fun setAI(mob: Mob, idOrFn: LuaValue) {
         clearAI(mob)
 
         val id: String?
@@ -84,17 +84,17 @@ object MobAIManager {
 
         applyBehaviour(mob, id, fn)
 
-        mob.commandTags.filter { it.startsWith("pxrp_behaviour:") }.forEach {
-            mob.removeCommandTag(it)
+        mob.tags.filter { it.startsWith("pxrp_behaviour:") }.forEach {
+            mob.removeTag(it)
         }
-        tag?.let { mob.addCommandTag(it) }
+        tag?.let { mob.addTag(it) }
     }
 
-    private fun applyBehaviour(mob: MobEntity, id: String?, fn: LuaFunction) {
+    private fun applyBehaviour(mob: Mob, id: String?, fn: LuaFunction) {
         val mixin = mob as MobEntityMixin
 
-        mixin.goalSelector.goals.toList().forEach { mixin.goalSelector.remove(it.goal) }
-        mixin.targetSelector.goals.toList().forEach { mixin.targetSelector.remove(it.goal) }
+        mixin.goalSelector.availableGoals.toList().forEach { mixin.goalSelector.remove(it.goal) }
+        mixin.targetSelector.availableGoals.toList().forEach { mixin.targetSelector.remove(it.goal) }
 
         tryClearBrain(mob)
 
@@ -110,7 +110,7 @@ object MobAIManager {
         activeMobs[mob.uuid] = ActiveMobAI(id, fn, state, goal, targetGoal, mob)
     }
 
-    fun clearAI(mob: MobEntity): Boolean {
+    fun clearAI(mob: Mob): Boolean {
         val entry = activeMobs.remove(mob.uuid) ?: return false
 
         val mixin = mob as MobEntityMixin
@@ -118,23 +118,23 @@ object MobAIManager {
         mixin.targetSelector.remove(entry.targetGoal)
         mixin.invokeInitGoals()
 
-        mob.commandTags.filter { it.startsWith("pxrp_behaviour:") }.forEach {
-            mob.removeCommandTag(it)
+        mob.tags.filter { it.startsWith("pxrp_behaviour:") }.forEach {
+            mob.removeTag(it)
         }
         mobWrappers.remove(mob.uuid)
 
         return true
     }
 
-    fun hasAI(mob: MobEntity): Boolean = mob.uuid in activeMobs
+    fun hasAI(mob: Mob): Boolean = mob.uuid in activeMobs
 
-    fun getBehaviourId(mob: MobEntity): String? = activeMobs[mob.uuid]?.behaviourId
+    fun getBehaviourId(mob: Mob): String? = activeMobs[mob.uuid]?.behaviourId
 
-    internal fun tickMob(mob: MobEntity) {
+    internal fun tickMob(mob: Mob) {
         val entry = activeMobs[mob.uuid] ?: return
 
         @Suppress("DEPRECATION")
-        if (mob.entityWorld is ServerWorld && !mob.entityWorld.isChunkLoaded(mob.blockPos)) {
+        if (mob.level() is ServerLevel && !mob.level().isChunkLoaded(mob.blockPos)) {
             return
         }
 
@@ -149,11 +149,11 @@ object MobAIManager {
         }
     }
 
-    fun onGoalStopped(mob: MobEntity) {
+    fun onGoalStopped(mob: Mob) {
         cleanUp(mob.uuid)
     }
 
-    fun onEntityRemove(mob: MobEntity) {
+    fun onEntityRemove(mob: Mob) {
         val entry = activeMobs[mob.uuid] ?: return
         try {
             val mixin = mob as MobEntityMixin
@@ -163,10 +163,10 @@ object MobAIManager {
         cleanUp(mob.uuid)
     }
 
-    fun onEntityLoad(entity: Entity, world: ServerWorld) {
-        if (entity !is MobEntity) return
+    fun onEntityLoad(entity: Entity, world: ServerLevel) {
+        if (entity !is Mob) return
 
-        val behaviourTag = entity.commandTags.firstOrNull { it.startsWith("pxrp_behaviour:") }
+        val behaviourTag = entity.tags.firstOrNull { it.startsWith("pxrp_behaviour:") }
             ?: return
 
         val id = behaviourTag.removePrefix("pxrp_behaviour:")
@@ -201,8 +201,8 @@ object MobAIManager {
     fun scanAndReapply(server: MinecraftServer) {
         for (world in server.worlds) {
             for (entity in world.iterateEntities()) {
-                if (entity is MobEntity) {
-                    val tag = entity.commandTags.firstOrNull { it.startsWith("pxrp_behaviour:") }
+                if (entity is Mob) {
+                    val tag = entity.tags.firstOrNull { it.startsWith("pxrp_behaviour:") }
                         ?: continue
                     val id = tag.removePrefix("pxrp_behaviour:")
                     val fn = behaviours[id] ?: continue

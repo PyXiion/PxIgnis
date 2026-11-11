@@ -7,11 +7,11 @@ import com.mojang.brigadier.arguments.IntegerArgumentType
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import com.mojang.brigadier.tree.ArgumentCommandNode
-import net.minecraft.command.argument.BlockPosArgumentType
-import net.minecraft.command.argument.EntityArgumentType
-import net.minecraft.command.argument.MessageArgumentType
-import net.minecraft.server.command.CommandManager
-import net.minecraft.server.command.ServerCommandSource
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument
+import net.minecraft.commands.arguments.EntityArgument
+import net.minecraft.commands.arguments.MessageArgument
+import net.minecraft.commands.Commands
+import net.minecraft.commands.CommandSourceStack
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.types.ChoiceArgumentType
@@ -22,90 +22,90 @@ import ru.pyxiion.ignis.api.wrapper.EntityFactory
 object ArgumentTypes {
     val builtins: Map<String, LuaArgumentType> = mapOf(
         "text" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
-                val msg = MessageArgumentType.getMessage(ctx, name)
-                return msg.literalString ?: msg.string
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
+                val msg = MessageArgument.getMessage(ctx, name)
+                return msg.tryCollapseToString() ?: msg.string
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, MessageArgumentType.message()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, MessageArgument.message()).build()
             }
         },
         "word" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
                 return StringArgumentType.getString(ctx, name)
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, StringArgumentType.word()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, StringArgumentType.word()).build()
             }
         },
         "player" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
-                return PlayerWrap.wrap(EntityArgumentType.getPlayer(ctx, name)!!)
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
+                return PlayerWrap.wrap(EntityArgument.getPlayer(ctx, name)!!)
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, EntityArgumentType.player()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, EntityArgument.player()).build()
             }
         },
         "target" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
-                return PlayerWrap.wrap(EntityArgumentType.getPlayer(ctx, name)!!)
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
+                return PlayerWrap.wrap(EntityArgument.getPlayer(ctx, name)!!)
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, EntityArgumentType.player()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, EntityArgument.player()).build()
             }
         },
         "entity" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
-                return EntityFactory.wrap(EntityArgumentType.getEntity(ctx, name)!!)
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
+                return EntityFactory.wrap(EntityArgument.getEntity(ctx, name)!!)
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, EntityArgumentType.entity()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, EntityArgument.entity()).build()
             }
         },
         "int" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
                 return IntegerArgumentType.getInteger(ctx, name)
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, IntegerArgumentType.integer()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, IntegerArgumentType.integer()).build()
             }
         },
         "double" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
                 return DoubleArgumentType.getDouble(ctx, name)
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, DoubleArgumentType.doubleArg()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, DoubleArgumentType.doubleArg()).build()
             }
         },
         "float" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
                 return FloatArgumentType.getFloat(ctx, name)
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, FloatArgumentType.floatArg()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, FloatArgumentType.floatArg()).build()
             }
         },
         "bool" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
                 return BoolArgumentType.getBool(ctx, name)
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, BoolArgumentType.bool()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, BoolArgumentType.bool()).build()
             }
         },
         "block_pos" to object : LuaArgumentType {
-            override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
-                val pos = BlockPosArgumentType.getBlockPos(ctx, name)
+            override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
+                val pos = BlockPosArgument.getBlockPos(ctx, name)
                 return luaTableOf(
                     "x" to LuaValue.valueOf(pos.x),
                     "y" to LuaValue.valueOf(pos.y),
@@ -113,8 +113,8 @@ object ArgumentTypes {
                 )
             }
 
-            override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-                return CommandManager.argument(name, BlockPosArgumentType.blockPos()).build()
+            override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+                return Commands.argument(name, BlockPosArgument.blockPos()).build()
             }
         }
     )

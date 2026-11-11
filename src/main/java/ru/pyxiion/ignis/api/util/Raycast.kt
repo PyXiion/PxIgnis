@@ -1,13 +1,13 @@
 package ru.pyxiion.ignis.api.util
 
-import net.minecraft.block.ShapeContext
-import net.minecraft.entity.Entity
-import net.minecraft.entity.LivingEntity
-import net.minecraft.util.hit.HitResult
-import net.minecraft.util.math.Box
-import net.minecraft.util.math.Vec3d
-import net.minecraft.world.RaycastContext
-import net.minecraft.world.World
+import net.minecraft.world.phys.shapes.CollisionContext
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.phys.HitResult
+import net.minecraft.world.phys.AABB
+import net.minecraft.world.phys.Vec3
+import net.minecraft.world.level.ClipContext
+import net.minecraft.world.level.Level
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
@@ -16,20 +16,20 @@ import kotlin.math.max
 import kotlin.math.min
 
 internal fun performRaycast(
-    start: Vec3d,
-    end: Vec3d,
+    start: Vec3,
+    end: Vec3,
     range: Double,
     includeFluids: Boolean,
     includeEntities: Boolean,
-    world: World,
+    world: Level,
     source: Entity?,
 ): LuaValue {
-    val shapeCtx = if (source != null) ShapeContext.of(source) else ShapeContext.absent()
+    val shapeCtx = if (source != null) CollisionContext.of(source) else CollisionContext.empty()
 
-    val blockHit = world.raycast(RaycastContext(
+    val blockHit = world.raycast(ClipContext(
         start, end,
-        RaycastContext.ShapeType.OUTLINE,
-        if (includeFluids) RaycastContext.FluidHandling.ANY else RaycastContext.FluidHandling.NONE,
+        ClipContext.ShapeType.OUTLINE,
+        if (includeFluids) ClipContext.FluidHandling.ANY else ClipContext.FluidHandling.NONE,
         shapeCtx
     ))
     var blockDist = range
@@ -38,15 +38,15 @@ internal fun performRaycast(
     }
 
     var closestEntity: Entity? = null
-    var closestEntityHit: Vec3d? = null
+    var closestEntityHit: Vec3? = null
     var closestDist = blockDist
 
     if (includeEntities) {
-        val box = Box(
+        val box = AABB(
             min(start.x, end.x), min(start.y, end.y), min(start.z, end.z),
             max(start.x, end.x), max(start.y, end.y), max(start.z, end.z)
         ).expand(1.0)
-        val nearby = world.getOtherEntities(source, box)
+        val nearby = world.getEntities(source, box)
 
         for (target in nearby) {
             if (target == source || target !is LivingEntity) continue

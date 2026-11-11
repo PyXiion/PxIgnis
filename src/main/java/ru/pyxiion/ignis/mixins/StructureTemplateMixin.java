@@ -1,6 +1,6 @@
 package ru.pyxiion.ignis.mixins;
 
-import net.minecraft.structure.StructureTemplate;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 

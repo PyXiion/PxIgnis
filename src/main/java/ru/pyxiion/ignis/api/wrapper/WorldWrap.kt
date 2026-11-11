@@ -2,34 +2,34 @@ package ru.pyxiion.ignis.api.wrapper
 
 import com.mojang.brigadier.StringReader
 import com.mojang.brigadier.exceptions.CommandSyntaxException
-import net.minecraft.command.EntitySelectorReader
-import net.minecraft.entity.Entity
-import net.minecraft.entity.EntityType
-import net.minecraft.entity.LivingEntity
-import net.minecraft.entity.SpawnReason
-import net.minecraft.entity.attribute.EntityAttributes
-import net.minecraft.entity.decoration.DisplayEntity
-import net.minecraft.entity.mob.MobEntity
-import net.minecraft.nbt.NbtCompound
+import net.minecraft.commands.arguments.selector.EntitySelectorParser
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.EntityType
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.entity.EntitySpawnReason
+import net.minecraft.world.entity.ai.attributes.Attributes
+import net.minecraft.world.entity.Display
+import net.minecraft.world.entity.Mob
+import net.minecraft.nbt.CompoundTag
 import net.minecraft.nbt.NbtOps
-import net.minecraft.particle.ParticleTypes
-import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket
-import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket
-import net.minecraft.particle.ParticleEffect
-import net.minecraft.particle.ParticleType
-import net.minecraft.registry.Registries
-import net.minecraft.registry.RegistryKey
-import net.minecraft.registry.RegistryKeys
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.server.world.ServerWorld
-import net.minecraft.sound.SoundCategory
-import net.minecraft.text.Text
-import net.minecraft.util.Identifier
-import net.minecraft.util.math.BlockPos
-import net.minecraft.util.math.Box
-import net.minecraft.util.math.Vec3d
-import net.minecraft.world.World
-import net.minecraft.world.border.WorldBorder
+import net.minecraft.core.particles.ParticleTypes
+import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket
+import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
+import net.minecraft.core.particles.ParticleOptions
+import net.minecraft.core.particles.ParticleType
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.resources.ResourceKey
+import net.minecraft.core.registries.Registries
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.sounds.SoundSource
+import net.minecraft.network.chat.Component
+import net.minecraft.resources.Identifier
+import net.minecraft.core.BlockPos
+import net.minecraft.world.phys.AABB
+import net.minecraft.world.phys.Vec3
+import net.minecraft.world.level.Level
+import net.minecraft.world.level.border.WorldBorder
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -59,7 +59,7 @@ object WorldWrap {
     )
 
     fun wrap(
-        world: ServerWorld,
+        world: ServerLevel,
         playerCache: MutableMap<UUID, LuaValue> = mutableMapOf(),
         tickProvider: () -> Long = { 0L }
     ): LuaValue {
@@ -71,27 +71,27 @@ object WorldWrap {
         return t
     }
 
-    private val BUILT = metaTable<ServerWorld> {
+    private val BUILT = metaTable<ServerLevel> {
         prop("name") { LuaValue.valueOf(registryKey.value.path) }
         prop(
             "time",
-            get = { LuaValue.valueOf(timeOfDay.toDouble()) },
-            set = { v -> timeOfDay = v.tolong() }
+            get = { LuaValue.valueOf(dayTime.toDouble()) },
+            set = { v -> dayTime = v.tolong() }
         )
         prop(
             "raining",
             get = { if (isRaining) LuaValue.TRUE else LuaValue.FALSE },
             set = { v ->
-                if (v.toboolean()) setWeather(0, 6000, true, isThundering)
-                else setWeather(0, 0, false, isThundering)
+                if (v.toboolean()) setWeatherParameters(0, 6000, true, isThundering)
+                else setWeatherParameters(0, 0, false, isThundering)
             }
         )
         prop(
             "thundering",
             get = { if (isThundering) LuaValue.TRUE else LuaValue.FALSE },
             set = { v ->
-                if (v.toboolean()) setWeather(0, 6000, isRaining, true)
-                else setWeather(0, 0, isRaining, false)
+                if (v.toboolean()) setWeatherParameters(0, 6000, isRaining, true)
+                else setWeatherParameters(0, 0, isRaining, false)
             }
         )
         propWithTable("players") { self ->
@@ -109,16 +109,16 @@ object WorldWrap {
         // world:spawn(entityId, pos, overrides?)
         method("spawn") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val entityId = args.arg(2).checkjstring()
             val pos = args.arg(3).toVec3d()
             val overrides = if (args.narg() >= 4) args.arg(4).checktable() else null
 
             val id = resolveBlockId(entityId)
-            val entityType = Registries.ENTITY_TYPE.get(Identifier.of(id))
+            val entityType = BuiltInRegistries.ENTITY_TYPE.get(Identifier.of(id))
                 ?: throw LuaError("Сущность '$entityId' не найдена")
 
-            val entity = entityType.create(w, SpawnReason.COMMAND)
+            val entity = entityType.create(w, EntitySpawnReason.COMMAND)
                 ?: throw LuaError("Не удалось создать сущность '$entityId'")
 
             entity.setPosition(pos.x, pos.y, pos.z)
@@ -132,20 +132,20 @@ object WorldWrap {
         // world:spawnHologram(pos, text, opts?)
         method("spawnHologram") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toVec3d()
             val text = args.arg(3).checkjstring()
             val opts = if (args.narg() >= 4) args.arg(4).checktable() else null
 
-            val entityType = Registries.ENTITY_TYPE.get(Identifier.of("minecraft:text_display"))
+            val entityType = BuiltInRegistries.ENTITY_TYPE.get(Identifier.of("minecraft:text_display"))
                 ?: throw LuaError("Сущность 'minecraft:text_display' не найдена")
 
-            val entity = entityType.create(w, SpawnReason.COMMAND) as? DisplayEntity.TextDisplayEntity
+            val entity = entityType.create(w, EntitySpawnReason.COMMAND) as? Display.TextDisplayEntity
                 ?: throw LuaError("Не удалось создать text_display")
 
             entity.setPosition(pos.x, pos.y, pos.z)
-            entity.text = Text.literal(text)
-            entity.billboardMode = DisplayEntity.BillboardMode.CENTER
+            entity.text = Component.literal(text)
+            entity.billboardConstraints = Display.billboardConstraints.CENTER
             entity.background = HologramDefaults.BACKGROUND
             entity.lineWidth = HologramDefaults.LINE_WIDTH
 
@@ -154,7 +154,7 @@ object WorldWrap {
                     HologramWrapper.applyAlignmentFromLua(entity, it.tojstring())
                 }
                 o.get("billboard").takeIf { it.isstring() }?.let {
-                    entity.billboardMode = HologramWrapper.parseBillboardFromLua(it.tojstring())
+                    entity.billboardConstraints = HologramWrapper.parseBillboardFromLua(it.tojstring())
                 }
                 o.get("lineWidth").takeIf { it.isnumber() }?.let { entity.lineWidth = it.toint() }
                 o.get("background").takeIf { it.isnumber() }?.let { entity.background = it.toint() }
@@ -162,14 +162,14 @@ object WorldWrap {
                 o.get("shadow").takeIf { it.isboolean() }?.let {
                     HologramWrapper.applyFlagFromLua(
                         entity,
-                        DisplayEntity.TextDisplayEntity.SHADOW_FLAG,
+                        Display.TextDisplayEntity.SHADOW_FLAG,
                         it.toboolean()
                     )
                 }
                 o.get("seeThrough").takeIf { it.isboolean() }?.let {
                     HologramWrapper.applyFlagFromLua(
                         entity,
-                        DisplayEntity.TextDisplayEntity.SEE_THROUGH_FLAG,
+                        Display.TextDisplayEntity.SEE_THROUGH_FLAG,
                         it.toboolean()
                     )
                 }
@@ -184,11 +184,11 @@ object WorldWrap {
         // world:setBlock(pos, blockId)
         method("setBlock") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toBlockPos()
             val blockId = resolveBlockId(args.arg(3).checkjstring())
 
-            val block = Registries.BLOCK.get(Identifier.of(blockId))
+            val block = BuiltInRegistries.BLOCK.get(Identifier.of(blockId))
                 ?: throw LuaError("Блок '$blockId' не найден")
 
             w.setBlockState(pos, block.defaultState, 0x03)
@@ -198,16 +198,16 @@ object WorldWrap {
         // world:getBlock(pos) -> blockId
         method("getBlock") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toBlockPos()
             val block = w.getBlockState(pos).block
-            LuaValue.valueOf(Registries.BLOCK.getId(block).toString())
+            LuaValue.valueOf(BuiltInRegistries.BLOCK.getId(block).toString())
         }
 
         // world:getBlockState(pos) -> { id, properties }
         method("getBlockState") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toBlockPos()
             val state = w.getBlockState(pos)
             BlockStateCodec.stateToTable(state)
@@ -216,13 +216,13 @@ object WorldWrap {
         // world:setBlockState(pos, { id, properties })
         method("setBlockState") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toBlockPos()
             val tbl = args.arg(3).checktable()
 
             val id = tbl.get("id").checkjstring()
             val blockId = resolveBlockId(id)
-            val block = Registries.BLOCK.get(Identifier.of(blockId))
+            val block = BuiltInRegistries.BLOCK.get(Identifier.of(blockId))
                 ?: throw LuaError("Блок '$blockId' не найден")
 
             val state = if (tbl.get("properties").istable()) {
@@ -238,12 +238,12 @@ object WorldWrap {
         // world:fill(posA, posB, blockId)
         method("fill") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos1 = args.arg(2).toBlockPos()
             val pos2 = args.arg(3).toBlockPos()
             val blockId = resolveBlockId(args.arg(4).checkjstring())
 
-            val block = Registries.BLOCK.get(Identifier.of(blockId))
+            val block = BuiltInRegistries.BLOCK.get(Identifier.of(blockId))
                 ?: throw LuaError("Блок '$blockId' не найден")
 
             val minX = Math.min(pos1.x, pos2.x)
@@ -268,11 +268,11 @@ object WorldWrap {
         // world:particle(particleId, pos, opts?)
         method("particle") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val id = args.arg(2).checkjstring()
             val resolvedId = if (id.contains(':')) id else "minecraft:$id"
-            val key = RegistryKey.of(RegistryKeys.PARTICLE_TYPE, Identifier.of(resolvedId))
-            val particleType = Registries.PARTICLE_TYPE.get(key)
+            val key = ResourceKey.of(Registries.PARTICLE_TYPE, Identifier.of(resolvedId))
+            val particleType = BuiltInRegistries.PARTICLE_TYPE.get(key)
                 ?: throw LuaError("Частица '$id' не найдена")
 
             val (x, y, z) = resolveOperand(args.arg(3))
@@ -309,37 +309,37 @@ object WorldWrap {
         // world:playSound(soundId, pos, voulme?, pitch?)
         method("playSound") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val id = args.arg(2).checkjstring()
             val pos = args.arg(3).toVec3d()
             val volume = args.arg(4).optdouble(1.0).toFloat()
             val pitch = args.arg(5).optdouble(1.0).toFloat()
 
-            val key = RegistryKey.of(RegistryKeys.SOUND_EVENT, Identifier.of(id))
-            val sound = Registries.SOUND_EVENT.get(key)
+            val key = ResourceKey.of(Registries.SOUND_EVENT, Identifier.of(id))
+            val sound = BuiltInRegistries.SOUND_EVENT.get(key)
                 ?: throw LuaError("Звук '$id' не найден")
 
-            w.playSound(null, pos.x, pos.y, pos.z, sound, SoundCategory.PLAYERS, volume, pitch)
+            w.playSound(null, pos.x, pos.y, pos.z, sound, SoundSource.PLAYERS, volume, pitch)
             LuaValue.NIL
         }
 
         // world:getEntities(pos, radius, type?) -> {entity,...}
         method("getEntities") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toVec3d()
             val radius = args.arg(3).checkdouble()
             val typeFilter = if (args.narg() >= 4 && args.arg(4).isstring()) args.arg(4).tojstring() else null
 
-            val box = Box(
+            val box = AABB(
                 pos.x - radius, pos.y - radius, pos.z - radius,
                 pos.x + radius, pos.y + radius, pos.z + radius
             )
 
-            val nearby = w.getOtherEntities(null, box)
+            val nearby = w.getEntities(null, box)
 
             val entities = if (typeFilter != null) {
-                val targetType = Registries.ENTITY_TYPE.get(Identifier.of(typeFilter))
+                val targetType = BuiltInRegistries.ENTITY_TYPE.get(Identifier.of(typeFilter))
                     ?: throw LuaError("Тип сущности '$typeFilter' не найден")
                 nearby.filter { it.type == targetType }
             } else {
@@ -352,7 +352,7 @@ object WorldWrap {
         // world:raycast(start, dir, range, fluids?, entities?)
         method("raycast") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val start = args.arg(2).toVec3d()
             val dir = args.arg(3).toVec3d()
             val range = args.arg(4).checkdouble()
@@ -360,7 +360,7 @@ object WorldWrap {
             val includeEntities = args.arg(6).optboolean(true)
 
             val dirNorm = dir.normalize()
-            val end = Vec3d(start.x + dirNorm.x * range, start.y + dirNorm.y * range, start.z + dirNorm.z * range)
+            val end = Vec3(start.x + dirNorm.x * range, start.y + dirNorm.y * range, start.z + dirNorm.z * range)
 
             performRaycast(
                 start,
@@ -376,7 +376,7 @@ object WorldWrap {
         // world:broadcastInRange(text, pos, range, overlay?)
         method("broadcastInRange") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val text = args.arg(2).checkjstring()
             val pos = args.arg(3).toVec3d()
             val range = args.arg(4).checkdouble()
@@ -386,12 +386,12 @@ object WorldWrap {
             val players = w.players.filter { it.squaredDistanceTo(pos) < rangeSquare }
 
             if (overlay == null) {
-                players.forEach { it.sendMessage(Text.literal(text)) }
+                players.forEach { it.sendMessage(Component.literal(text)) }
             } else {
-                val timing = TitleFadeS2CPacket(20, overlay, 20)
-                val title = OverlayMessageS2CPacket(Text.literal(text))
+                val timing = ClientboundSetTitlesAnimationPacket(20, overlay, 20)
+                val title = ClientboundSetActionBarTextPacket(Component.literal(text))
                 players.forEach {
-                    with(it.networkHandler) {
+                    with(it.connection) {
                         sendPacket(timing)
                         sendPacket(title)
                     }
@@ -403,7 +403,7 @@ object WorldWrap {
         // world:getBiome(pos) -> string?
         method("getBiome") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toBlockPos()
             val biome = w.getBiome(pos)
             val biomeId = biome.key.flatMap { java.util.Optional.of(it.value.toString()) }.orElse(null)
@@ -413,7 +413,7 @@ object WorldWrap {
         // world:getBorder() -> { center, size, damage, ... }
         method("getBorder") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val border = w.worldBorder
 
             val meta = LuaTable()
@@ -473,7 +473,7 @@ object WorldWrap {
         // world:explode(pos, power, opts?)
         method("explode") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toVec3d()
             val power = args.arg(3).checkdouble().toFloat()
             val opts = if (args.narg() >= 4 && args.arg(4).istable()) args.arg(4).checktable() else null
@@ -481,26 +481,26 @@ object WorldWrap {
             val fire = opts?.get("fire")?.optboolean(false) ?: false
             val destruction = opts?.get("destruction")?.optjstring("break") ?: "break"
             val sourceType = try {
-                World.ExplosionSourceType.valueOf(destruction.uppercase())
+                Level.ExplosionSourceType.valueOf(destruction.uppercase())
             } catch (_: Exception) {
-                World.ExplosionSourceType.BLOCK
+                Level.ExplosionSourceType.BLOCK
             }
 
-            w.createExplosion(null, pos.x, pos.y, pos.z, power, fire, sourceType)
+            w.explode(null, pos.x, pos.y, pos.z, power, fire, sourceType)
             LuaValue.NIL
         }
 
         // world:strike(pos, opts?)
         method("strike") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toVec3d()
             val opts = if (args.narg() >= 3 && args.arg(3).istable()) args.arg(3).checktable() else null
 
-            val bolt = EntityType.LIGHTNING_BOLT.create(w, SpawnReason.COMMAND)
+            val bolt = EntityType.LIGHTNING_BOLT.create(w, EntitySpawnReason.COMMAND)
                 ?: throw LuaError("Не удалось создать молнию")
             bolt.setPosition(pos.x, pos.y, pos.z)
-            bolt.setCosmetic(opts?.get("effect")?.optboolean(false) ?: false)
+            bolt.setVisualOnly(opts?.get("effect")?.optboolean(false) ?: false)
             w.spawnEntity(bolt)
             LuaValue.NIL
         }
@@ -508,20 +508,20 @@ object WorldWrap {
         // world:createRegion(posA, posB) -> region
         method("createRegion") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             if (args.narg() < 3) throw LuaError("createRegion: ожидается (posA, posB)")
             val a = args.arg(2).toVec3d()
             val b = args.arg(3).toVec3d()
-            val min = Vec3d(minOf(a.x, b.x), minOf(a.y, b.y), minOf(a.z, b.z))
-            val max = Vec3d(maxOf(a.x, b.x), maxOf(a.y, b.y), maxOf(a.z, b.z))
-            val region = RegionManager.create(w, Box(min, max))
+            val min = Vec3(minOf(a.x, b.x), minOf(a.y, b.y), minOf(a.z, b.z))
+            val max = Vec3(maxOf(a.x, b.x), maxOf(a.y, b.y), maxOf(a.z, b.z))
+            val region = RegionManager.create(w, AABB(min, max))
             RegionWrap.wrap(region)
         }
 
         // world:getRegion(id) -> region?
         method("getRegion") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             require(args.narg() == 2) { "getRegion(id) requires 1 argument" }
             val id = args.arg(2).checkint()
             val r = RegionManager.get(id)
@@ -531,7 +531,7 @@ object WorldWrap {
         // world:getRegionsAt(pos) -> {region,...}
         method("getRegionsAt") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             require(args.narg() == 2) { "getRegionsAt(pos) requires 1 argument" }
             val pos = args.arg(2).toVec3d()
             RegionManager.getAt(w, pos).map(RegionWrap::wrap).toLuaArray()
@@ -540,7 +540,7 @@ object WorldWrap {
         // world:getEntitiesBySelector(selector, opts?) -> {entity,...}
         method("getEntitiesBySelector") { args ->
             val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerWorld>()
+            val w = self.unwrap<ServerLevel>()
             val selector = args.arg(2).checkjstring()
             val opts = if (args.narg() >= 3 && args.arg(3).istable()) args.arg(3).checktable() else null
 
@@ -552,7 +552,7 @@ object WorldWrap {
             }
 
             val parsed = try {
-                EntitySelectorReader(StringReader(selector), true).read()
+                EntitySelectorParser(StringReader(selector), true).read()
             } catch (e: CommandSyntaxException) {
                 throw LuaError("Неверный селектор '$selector': ${e.message}")
             }
@@ -583,11 +583,11 @@ object WorldWrap {
     private fun applyOverrides(entity: Entity, overrides: LuaTable) {
         overrides.get("health").let { v ->
             if (v.isnumber() && entity is LivingEntity) {
-                val maxAttr = entity.getAttributeInstance(EntityAttributes.MAX_HEALTH)
+                val maxAttr = entity.getAttribute(Attributes.MAX_HEALTH)
                 if (maxAttr != null) {
                     val desired = v.todouble()
                     if (desired > maxAttr.value) {
-                        maxAttr.baseValue = desired
+                        maxAttr.amount = desired
                     }
                 }
                 entity.health = v.tofloat()
@@ -595,7 +595,7 @@ object WorldWrap {
         }
         overrides.get("custom_name").let { v ->
             if (v.isstring()) {
-                entity.customName = Text.literal(v.tojstring())
+                entity.customName = Component.literal(v.tojstring())
             }
         }
     }
@@ -604,14 +604,14 @@ object WorldWrap {
     private fun buildParticleEffect(
         type: ParticleType<*>,
         data: LuaTable?,
-        world: ServerWorld,
+        world: ServerLevel,
         id: String
-    ): ParticleEffect {
-        if (type is ParticleEffect) return type
+    ): ParticleOptions {
+        if (type is ParticleOptions) return type
 
         val nbt = buildParticleDataNbt(type, data, world, id)
         val ops = world.registryManager.getOps(NbtOps.INSTANCE)
-        return (type as ParticleType<ParticleEffect>).codec.codec()
+        return (type as ParticleType<ParticleOptions>).codec.codec()
             .parse(ops, nbt)
             .getOrThrow { msg: String -> LuaError("Частица '$id': $msg") }
     }
@@ -619,9 +619,9 @@ object WorldWrap {
     private fun buildParticleDataNbt(
         type: ParticleType<*>,
         data: LuaTable?,
-        world: ServerWorld,
+        world: ServerLevel,
         id: String,
-    ): NbtCompound {
+    ): CompoundTag {
         fun tbl(): LuaTable = data ?: throw LuaError("Частица '$id': data required for this particle type")
 
         fun rgb(v: LuaValue): Int {
@@ -649,7 +649,7 @@ object WorldWrap {
             return (ai shl 24) or (ri shl 16) or (gi shl 8) or bi
         }
 
-        val c = NbtCompound()
+        val c = CompoundTag()
         when (type) {
             ParticleTypes.BLOCK,
             ParticleTypes.BLOCK_MARKER,
@@ -692,7 +692,7 @@ object WorldWrap {
 
             ParticleTypes.ITEM -> {
                 val t = tbl()
-                val itemCompound = NbtCompound()
+                val itemCompound = CompoundTag()
                 itemCompound.putString("id", resolveBlockId(t.get("item").checkjstring()))
                 itemCompound.putInt("count", t.get("count").optint(1))
                 c.put("item", itemCompound)
@@ -709,7 +709,7 @@ object WorldWrap {
             ParticleTypes.TRAIL -> {
                 val t = tbl()
                 val target = t.get("target").toVec3d()
-                val targetCompound = NbtCompound()
+                val targetCompound = CompoundTag()
                 targetCompound.putDouble("x", target.x)
                 targetCompound.putDouble("y", target.y)
                 targetCompound.putDouble("z", target.z)
@@ -721,7 +721,7 @@ object WorldWrap {
             ParticleTypes.VIBRATION -> {
                 val t = tbl()
                 val from = t.get("from").toVec3d()
-                val dest = NbtCompound()
+                val dest = CompoundTag()
                 dest.putString("type", "minecraft:block")
                 dest.putInt("x", from.x.toInt())
                 dest.putInt("y", from.y.toInt())
@@ -731,7 +731,7 @@ object WorldWrap {
             }
 
             else -> {
-                val name = Registries.PARTICLE_TYPE.getId(type)?.toString() ?: id
+                val name = BuiltInRegistries.PARTICLE_TYPE.getId(type)?.toString() ?: id
                 throw LuaError("Частица '$name' не поддерживается в data")
             }
         }

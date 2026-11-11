@@ -3,7 +3,7 @@ package ru.pyxiion.ignis.client
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents
-import net.minecraft.text.Text
+import net.minecraft.network.chat.Component
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import ru.pyxiion.ignis.network.RegionCapWarningPayload
@@ -31,7 +31,7 @@ class PxIgnisClient : ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(RegionCapWarningPayload.ID) { payload, ctx ->
             val player = ctx.client().player ?: return@registerGlobalReceiver
             player.sendMessage(
-                Text.literal("Region cap (${payload.cap}) reached; some regions are not rendered."),
+                Component.literal("Region cap (${payload.cap}) reached; some regions are not rendered."),
                 false
             )
         }

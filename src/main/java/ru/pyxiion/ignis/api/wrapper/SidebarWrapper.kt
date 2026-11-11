@@ -1,15 +1,15 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.network.packet.s2c.play.ScoreboardObjectiveUpdateS2CPacket
-import net.minecraft.network.packet.s2c.play.ScoreboardScoreResetS2CPacket
-import net.minecraft.network.packet.s2c.play.ScoreboardScoreUpdateS2CPacket
-import net.minecraft.network.packet.s2c.play.ScoreboardDisplayS2CPacket
-import net.minecraft.scoreboard.Scoreboard
-import net.minecraft.scoreboard.ScoreboardCriterion
-import net.minecraft.scoreboard.ScoreboardDisplaySlot
-import net.minecraft.scoreboard.ScoreboardObjective
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.text.Text
+import net.minecraft.network.protocol.game.ClientboundSetObjectivePacket
+import net.minecraft.network.protocol.game.ClientboundResetScorePacket
+import net.minecraft.network.protocol.game.ClientboundSetScorePacket
+import net.minecraft.network.protocol.game.ClientboundSetDisplayObjectivePacket
+import net.minecraft.world.scores.Scoreboard
+import net.minecraft.world.scores.criteria.ObjectiveCriteria
+import net.minecraft.world.scores.DisplaySlot
+import net.minecraft.world.scores.Objective
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.network.chat.Component
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -19,10 +19,10 @@ import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.unwrap
 import java.util.Optional
 
-class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
+class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
     private val objectiveName = "pxrp_${player.uuid.toString().take(8)}"
     private val localScoreboard = Scoreboard()
-    private val objective: ScoreboardObjective
+    private val objective: Objective
     private val lines = LinkedHashMap<Int, String>()
     private var lastSentSlots = emptySet<Int>()
     var title: String = initialTitle
@@ -33,9 +33,9 @@ class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
     init {
         objective = localScoreboard.addObjective(
             objectiveName,
-            ScoreboardCriterion.DUMMY,
-            Text.literal(initialTitle),
-            ScoreboardCriterion.RenderType.INTEGER,
+            ObjectiveCriteria.DUMMY,
+            Component.literal(initialTitle),
+            ObjectiveCriteria.RenderType.INTEGER,
             false,
             null
         )
@@ -51,10 +51,10 @@ class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
 
     fun setTitle(text: String) {
         title = text
-        objective.displayName = Text.literal(text)
+        objective.displayName = Component.literal(text)
         if (visible) {
-            player.networkHandler.sendPacket(
-                ScoreboardObjectiveUpdateS2CPacket(objective, ScoreboardObjectiveUpdateS2CPacket.UPDATE_MODE)
+            player.connection.sendPacket(
+                ClientboundSetObjectivePacket(objective, ClientboundSetObjectivePacket.METHOD_CHANGE)
             )
         }
     }
@@ -81,20 +81,20 @@ class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
     fun show() {
         if (visible) return
         visible = true
-        player.networkHandler.sendPacket(
-            ScoreboardObjectiveUpdateS2CPacket(objective, ScoreboardObjectiveUpdateS2CPacket.ADD_MODE)
+        player.connection.sendPacket(
+            ClientboundSetObjectivePacket(objective, ClientboundSetObjectivePacket.METHOD_ADD)
         )
         resendLines()
-        player.networkHandler.sendPacket(
-            ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, objective)
+        player.connection.sendPacket(
+            ClientboundSetDisplayObjectivePacket(DisplaySlot.SIDEBAR, objective)
         )
     }
 
     fun hide() {
         if (!visible) return
         visible = false
-        player.networkHandler.sendPacket(
-            ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, null as ScoreboardObjective?)
+        player.connection.sendPacket(
+            ClientboundSetDisplayObjectivePacket(DisplaySlot.SIDEBAR, null as Objective?)
         )
     }
 
@@ -105,12 +105,12 @@ class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
 
     internal fun destroyInternals() {
         if (visible) {
-            player.networkHandler.sendPacket(
-                ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, null as ScoreboardObjective?)
+            player.connection.sendPacket(
+                ClientboundSetDisplayObjectivePacket(DisplaySlot.SIDEBAR, null as Objective?)
             )
         }
-        player.networkHandler.sendPacket(
-            ScoreboardObjectiveUpdateS2CPacket(objective, ScoreboardObjectiveUpdateS2CPacket.REMOVE_MODE)
+        player.connection.sendPacket(
+            ClientboundSetObjectivePacket(objective, ClientboundSetObjectivePacket.METHOD_REMOVE)
         )
     }
 
@@ -118,8 +118,8 @@ class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
 
     private fun resetAllSlots() {
         for (slot in lastSentSlots) {
-            player.networkHandler.sendPacket(
-                ScoreboardScoreResetS2CPacket(slotName(slot), objectiveName)
+            player.connection.sendPacket(
+                ClientboundResetScorePacket(slotName(slot), objectiveName)
             )
         }
     }
@@ -132,12 +132,12 @@ class SidebarWrapper(val player: ServerPlayerEntity, initialTitle: String) {
         for ((idx, entry) in sorted.withIndex()) {
             val (lineNum, text) = entry
             val score = size - idx
-            player.networkHandler.sendPacket(
-                ScoreboardScoreUpdateS2CPacket(
+            player.connection.sendPacket(
+                ClientboundSetScorePacket(
                     slotName(lineNum),
                     objectiveName,
                     score,
-                    Optional.of(Text.literal(text)),
+                    Optional.of(Component.literal(text)),
                     Optional.empty()
                 )
             )

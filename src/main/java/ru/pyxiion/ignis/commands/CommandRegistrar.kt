@@ -2,8 +2,8 @@ package ru.pyxiion.ignis.commands
 
 import com.mojang.brigadier.context.CommandContext
 import com.mojang.brigadier.exceptions.CommandSyntaxException
-import net.minecraft.server.command.ServerCommandSource
-import net.minecraft.text.Text
+import net.minecraft.commands.CommandSourceStack
+import net.minecraft.network.chat.Component
 import org.luaj.vm2.*
 import org.luaj.vm2.LuaValue.NIL
 import ru.pyxiion.ignis.PxIgnis
@@ -31,17 +31,17 @@ class CommandRegistrar(
         val function = handler.checkfunction()
 
         for (variant in variants) {
-            val executor = fun(ctx: CommandContext<ServerCommandSource>): Int {
+            val executor = fun(ctx: CommandContext<CommandSourceStack>): Int {
                 try {
                     executeLuaCommand(ctx, variant, argDefs, function)
                     return 1
                 } catch (e: CommandSyntaxException) {
                     throw e
                 } catch (e: LuaError) {
-                    ctx.source.sendError(Text.literal("При выполнении команды произошла ошибка в скрипте. Сообщите об этом администратору."))
+                    ctx.source.sendError(Component.literal("При выполнении команды произошла ошибка в скрипте. Сообщите об этом администратору."))
                     PxIgnis.logger.error("Ошибка при выполнении команды \"${ctx.command}\": ${e.message}", e)
                 } catch (e: Throwable) {
-                    ctx.source.sendError(Text.literal("При выполнении команды произошла неизвестная ошибка. Сообщите об этом администратору."))
+                    ctx.source.sendError(Component.literal("При выполнении команды произошла неизвестная ошибка. Сообщите об этом администратору."))
                     PxIgnis.logger.error("Ошибка при выполнении команды \"${ctx.command}\": ${e.message}", e)
                 }
                 return 0
@@ -65,11 +65,11 @@ class CommandRegistrar(
     }
 
     private fun prepareLuaArgAndContext(
-        ctx: CommandContext<ServerCommandSource>,
+        ctx: CommandContext<CommandSourceStack>,
         variant: List<SyntaxNode>,
         argDefs: Map<String, ArgDef>
     ): Array<LuaValue> {
-        val player = PlayerWrap.wrap(ctx.source.playerOrThrow)
+        val player = PlayerWrap.wrap(ctx.source.playerOrException)
         val ctxTable = luaTableOf("player" to player)
 
         val result = mutableListOf<LuaValue>()
@@ -85,7 +85,7 @@ class CommandRegistrar(
     }
 
     private fun executeLuaCommand(
-        ctx: CommandContext<ServerCommandSource>,
+        ctx: CommandContext<CommandSourceStack>,
         variant: List<SyntaxNode>,
         argDefs: Map<String, ArgDef>,
         function: LuaFunction

@@ -1,25 +1,25 @@
 package ru.pyxiion.ignis.api.wrapper
 
 import ru.pyxiion.ignis.Compat
-import net.minecraft.entity.EquipmentSlot
-import net.minecraft.entity.player.PlayerInventory
-import net.minecraft.item.ItemStack
-import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket
-import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket
-import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket
-import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket
-import net.minecraft.network.packet.s2c.play.TitleS2CPacket
-import net.minecraft.registry.Registries
-import net.minecraft.registry.RegistryKey
-import net.minecraft.registry.RegistryKeys
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.server.world.ServerWorld
-import net.minecraft.sound.SoundCategory
-import net.minecraft.text.Text
-import net.minecraft.util.Identifier
-import net.minecraft.util.math.Vec3d
-import net.minecraft.world.GameMode
-import net.minecraft.world.TeleportTarget
+import net.minecraft.world.entity.EquipmentSlot
+import net.minecraft.world.entity.player.Inventory
+import net.minecraft.world.item.ItemStack
+import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket
+import net.minecraft.network.protocol.game.ClientboundSoundPacket
+import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket
+import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
+import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.resources.ResourceKey
+import net.minecraft.core.registries.Registries
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.sounds.SoundSource
+import net.minecraft.network.chat.Component
+import net.minecraft.resources.Identifier
+import net.minecraft.world.phys.Vec3
+import net.minecraft.world.level.GameType
+import net.minecraft.world.level.portal.TeleportTransition
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -32,7 +32,7 @@ import ru.pyxiion.ignis.unwrap
 
 object PlayerWrap {
 
-    fun wrap(entity: ServerPlayerEntity): LuaValue {
+    fun wrap(entity: ServerPlayer): LuaValue {
         val t = EntityWrap.wrap(entity)
         t.setmetatable(MetaTableRegistry.PLAYER)
         t.rawset("__pxrp_type", LuaValue.valueOf("player"))
@@ -41,21 +41,21 @@ object PlayerWrap {
         return t
     }
 
-    private val BUILT by lazy { metaTable<ServerPlayerEntity> {
+    private val BUILT by lazy { metaTable<ServerPlayer> {
         inherit { MetaTableRegistry.ENTITY }
 
         prop(
             "food",
-            get = { LuaValue.valueOf(hungerManager.foodLevel) },
-            set = { v -> hungerManager.foodLevel = v.toint() }
+            get = { LuaValue.valueOf(foodData.foodLevel) },
+            set = { v -> foodData.foodLevel = v.toint() }
         )
-        prop("saturation") { LuaValue.valueOf(hungerManager.saturationLevel.toDouble()) }
+        prop("saturation") { LuaValue.valueOf(foodData.saturationLevel.toDouble()) }
         prop(
             "gamemode",
-            get = { LuaValue.valueOf(interactionManager.gameMode.id) },
-            set = { v -> GameMode.byId(v.tojstring())?.let { changeGameMode(it) } }
+            get = { LuaValue.valueOf(gameMode.gameMode.id) },
+            set = { v -> GameType.byId(v.tojstring())?.let { changeGameMode(it) } }
         )
-        prop("ping") { LuaValue.valueOf(networkHandler.latency) }
+        prop("ping") { LuaValue.valueOf(connection.latency) }
         prop("xpLevel") { LuaValue.valueOf(experienceLevel) }
         prop("xpProgress") { LuaValue.valueOf(experienceProgress.toDouble()) }
         prop("isOp") { LuaValue.valueOf(Compat.isAdmin(this)) }
@@ -100,7 +100,7 @@ object PlayerWrap {
                 val stack = getEquippedStack(EquipmentSlot.HEAD)
                 if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
-            set = { v -> setSlot(this, EquipmentSlot.HEAD.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE), v) }
+            set = { v -> setSlot(this, EquipmentSlot.HEAD.getIndex(Inventory.INVENTORY_SIZE), v) }
         )
         prop(
             "chest",
@@ -108,7 +108,7 @@ object PlayerWrap {
                 val stack = getEquippedStack(EquipmentSlot.CHEST)
                 if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
-            set = { v -> setSlot(this, EquipmentSlot.CHEST.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE), v) }
+            set = { v -> setSlot(this, EquipmentSlot.CHEST.getIndex(Inventory.INVENTORY_SIZE), v) }
         )
         prop(
             "legs",
@@ -116,7 +116,7 @@ object PlayerWrap {
                 val stack = getEquippedStack(EquipmentSlot.LEGS)
                 if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
-            set = { v -> setSlot(this, EquipmentSlot.LEGS.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE), v) }
+            set = { v -> setSlot(this, EquipmentSlot.LEGS.getIndex(Inventory.INVENTORY_SIZE), v) }
         )
         prop(
             "feet",
@@ -124,7 +124,7 @@ object PlayerWrap {
                 val stack = getEquippedStack(EquipmentSlot.FEET)
                 if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
-            set = { v -> setSlot(this, EquipmentSlot.FEET.getOffsetEntitySlotId(PlayerInventory.MAIN_SIZE), v) }
+            set = { v -> setSlot(this, EquipmentSlot.FEET.getIndex(Inventory.INVENTORY_SIZE), v) }
         )
         prop(
             "mainhand",
@@ -140,31 +140,31 @@ object PlayerWrap {
                 val stack = getEquippedStack(EquipmentSlot.OFFHAND)
                 if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
             },
-            set = { v -> setSlot(this, PlayerInventory.OFF_HAND_SLOT, v) }
+            set = { v -> setSlot(this, Inventory.SLOT_OFFHAND, v) }
         )
 
         method("hasPermission") { args ->
             val self = args.arg(1).checktable()
-            LuaValue.valueOf(Permissions.check(self.unwrap<ServerPlayerEntity>(), args.arg(2).checkjstring()))
+            LuaValue.valueOf(Permissions.check(self.unwrap<ServerPlayer>(), args.arg(2).checkjstring()))
         }
 
         method("sendMessage") { args ->
-            args.arg(1).checktable().unwrap<ServerPlayerEntity>()
-                .sendMessage(Text.literal(args.arg(2).checkjstring()))
+            args.arg(1).checktable().unwrap<ServerPlayer>()
+                .sendMessage(Component.literal(args.arg(2).checkjstring()))
             LuaValue.NIL
         }
 
         method("sendActionBar") { args ->
             val self = args.arg(1).checktable()
-            self.unwrap<ServerPlayerEntity>().networkHandler.sendPacket(
-                OverlayMessageS2CPacket(Text.literal(args.arg(2).checkjstring()))
+            self.unwrap<ServerPlayer>().connection.sendPacket(
+                ClientboundSetActionBarTextPacket(Component.literal(args.arg(2).checkjstring()))
             )
             LuaValue.NIL
         }
 
         method("sendTitle") { args ->
             val self = args.arg(1).checktable()
-            val e = self.unwrap<ServerPlayerEntity>()
+            val e = self.unwrap<ServerPlayer>()
             val arg2 = args.arg(2)
 
             if (arg2.istable()) {
@@ -174,41 +174,41 @@ object PlayerWrap {
                 val fadeIn = t.get("fadeIn").optint(20)
                 val stay = t.get("stay").optint(60)
                 val fadeOut = t.get("fadeOut").optint(20)
-                e.networkHandler.sendPacket(TitleFadeS2CPacket(fadeIn, stay, fadeOut))
+                e.connection.sendPacket(ClientboundSetTitlesAnimationPacket(fadeIn, stay, fadeOut))
                 if (subtitle.isNotEmpty()) {
-                    e.networkHandler.sendPacket(SubtitleS2CPacket(Text.literal(subtitle)))
+                    e.connection.sendPacket(ClientboundSetSubtitleTextPacket(Component.literal(subtitle)))
                 }
-                e.networkHandler.sendPacket(TitleS2CPacket(Text.literal(title)))
+                e.connection.sendPacket(ClientboundSetTitleTextPacket(Component.literal(title)))
             } else {
                 val title = arg2.checkjstring()
                 val subtitle = args.arg(3).optjstring(null)
-                e.networkHandler.sendPacket(TitleFadeS2CPacket(20, 60, 20))
+                e.connection.sendPacket(ClientboundSetTitlesAnimationPacket(20, 60, 20))
                 if (subtitle != null) {
-                    e.networkHandler.sendPacket(SubtitleS2CPacket(Text.literal(subtitle)))
+                    e.connection.sendPacket(ClientboundSetSubtitleTextPacket(Component.literal(subtitle)))
                 }
-                e.networkHandler.sendPacket(TitleS2CPacket(Text.literal(title)))
+                e.connection.sendPacket(ClientboundSetTitleTextPacket(Component.literal(title)))
             }
             LuaValue.NIL
         }
 
         method("kick") { args ->
             val self = args.arg(1).checktable()
-            self.unwrap<ServerPlayerEntity>().networkHandler
-                .disconnect(Text.literal(args.arg(2).optjstring("Kicked")))
+            self.unwrap<ServerPlayer>().connection
+                .disconnect(Component.literal(args.arg(2).optjstring("Kicked")))
             LuaValue.NIL
         }
 
         method("teleport") { args ->
             val self = args.arg(1).checktable()
-            val e = self.unwrap<ServerPlayerEntity>()
+            val e = self.unwrap<ServerPlayer>()
             val x = args.arg(2).checkdouble()
             val y = args.arg(3).checkdouble()
             val z = args.arg(4).checkdouble()
             val worldName = args.arg(5).optjstring(null)
-            val srv = (e.entityWorld as ServerWorld).server
+            val srv = (e.level() as ServerLevel).server
                 ?: throw IllegalStateException("Server not available")
             val targetWorld = if (worldName != null) {
-                val key = RegistryKey.of(RegistryKeys.WORLD, Identifier.of(worldName))
+                val key = ResourceKey.of(Registries.DIMENSION, Identifier.of(worldName))
                 srv.getWorld(key)
             } else null
 
@@ -216,11 +216,11 @@ object PlayerWrap {
                 throw IllegalArgumentException("World '$worldName' not found")
             }
 
-            if (targetWorld != null && targetWorld != e.entityWorld) {
+            if (targetWorld != null && targetWorld != e.level()) {
                 e.teleportTo(
-                    TeleportTarget(
-                        targetWorld, Vec3d(x, y, z), Vec3d.ZERO,
-                        e.yaw, e.pitch, TeleportTarget.NO_OP
+                    TeleportTransition(
+                        targetWorld, Vec3(x, y, z), Vec3.ZERO,
+                        e.yaw, e.pitch, TeleportTransition.NO_OP
                     )
                 )
             } else {
@@ -231,33 +231,33 @@ object PlayerWrap {
 
         method("damage") { args ->
             val self = args.arg(1).checktable()
-            val e = self.unwrap<ServerPlayerEntity>()
+            val e = self.unwrap<ServerPlayer>()
             val amount = args.arg(2).checkdouble().toFloat()
-            e.damage(e.entityWorld, e.entityWorld.damageSources.generic(), amount)
+            e.damage(e.level(), e.level().damageSources.generic(), amount)
             LuaValue.NIL
         }
 
         method("heal") { args ->
             val self = args.arg(1).checktable()
-            val e = self.unwrap<ServerPlayerEntity>()
+            val e = self.unwrap<ServerPlayer>()
             e.heal(args.arg(2).checkdouble().toFloat())
             LuaValue.NIL
         }
 
         method("playSound") { args ->
             val self = args.arg(1).checktable()
-            val e = self.unwrap<ServerPlayerEntity>()
+            val e = self.unwrap<ServerPlayer>()
             val soundId = args.arg(2).checkjstring()
             val volume = args.arg(3).optdouble(1.0).toFloat()
             val pitch = args.arg(4).optdouble(1.0).toFloat()
-            val soundEntry = Registries.SOUND_EVENT.getEntry(Identifier.of(soundId))
+            val soundEntry = BuiltInRegistries.SOUND_EVENT.getEntry(Identifier.of(soundId))
                 .orElseThrow { IllegalArgumentException("Sound $soundId not found") }
             val pos = e.entityPos
-            e.networkHandler.sendPacket(
-                PlaySoundS2CPacket(
-                    soundEntry, SoundCategory.PLAYERS,
+            e.connection.sendPacket(
+                ClientboundSoundPacket(
+                    soundEntry, SoundSource.PLAYERS,
                     pos.x, pos.y, pos.z,
-                    volume, pitch, e.entityWorld.random.nextLong()
+                    volume, pitch, e.level().random.getLong()
                 )
             )
             LuaValue.NIL
@@ -265,13 +265,13 @@ object PlayerWrap {
 
         method("give") { args ->
             val self = args.arg(1).checktable()
-            val e = self.unwrap<ServerPlayerEntity>()
+            val e = self.unwrap<ServerPlayer>()
             val first = args.arg(2)
             val stack: ItemStack = when {
                 first.isstring() -> {
                     val id = first.tojstring()
                     val count = args.arg(3).optint(1)
-                    val item = Registries.ITEM.get(Identifier.of(id))
+                    val item = BuiltInRegistries.ITEM.get(Identifier.of(id))
                         ?: throw LuaError("Предмет '$id' не найден")
                     ItemStack(item, count)
                 }
@@ -283,13 +283,13 @@ object PlayerWrap {
 
                 else -> throw LuaError("give: ожидается строка (ID предмета) или ItemStack от mc.createItem")
             }
-            e.inventory.offerOrDrop(stack)
+            e.inventory.placeItemBackInInventory(stack)
             LuaValue.NIL
         }
 
         method("setItem") { args ->
             val self = args.arg(1).checktable()
-            val e = self.unwrap<ServerPlayerEntity>()
+            val e = self.unwrap<ServerPlayer>()
             val slot = args.arg(2).checkint()
             val itemVal = args.arg(3)
 
@@ -306,13 +306,13 @@ object PlayerWrap {
             }
 
             inv.setStack(slot, stack)
-            e.currentScreenHandler.sendContentUpdates()
+            e.containerMenu.sendContentUpdates()
             LuaValue.NIL
         }
 
         method("getItem") { args ->
             val self = args.arg(1).checktable()
-            val e = self.unwrap<ServerPlayerEntity>()
+            val e = self.unwrap<ServerPlayer>()
             val slot = args.arg(2).checkint()
             val inv = e.inventory
             if (slot < 0 || slot >= inv.size()) return@method LuaValue.NIL
@@ -321,7 +321,7 @@ object PlayerWrap {
         }
 
         method("clear") { args ->
-            args.arg(1).checktable().unwrap<ServerPlayerEntity>().inventory.clear()
+            args.arg(1).checktable().unwrap<ServerPlayer>().inventory.clear()
             LuaValue.NIL
         }
     }}
@@ -330,7 +330,7 @@ object PlayerWrap {
         BUILT.apply(meta)
     }
 
-    private fun setSlot(e: ServerPlayerEntity, slot: Int, value: LuaValue) {
+    private fun setSlot(e: ServerPlayer, slot: Int, value: LuaValue) {
         val stack = if (value.isnil()) {
             ItemStack.EMPTY
         } else {
@@ -338,6 +338,6 @@ object PlayerWrap {
                 ?: throw LuaError("setItem: ожидается ItemStack от mc.createItem")
         }
         e.inventory.setStack(slot, stack)
-        e.currentScreenHandler.sendContentUpdates()
+        e.containerMenu.sendContentUpdates()
     }
 }

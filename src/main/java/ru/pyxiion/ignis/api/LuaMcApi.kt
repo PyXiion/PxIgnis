@@ -2,22 +2,22 @@ package ru.pyxiion.ignis.api
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException
 import kotlinx.coroutines.CoroutineScope
-import net.minecraft.entity.Entity
-import net.minecraft.inventory.SimpleInventory
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.SimpleContainer
 import net.minecraft.nbt.NbtIo
-import net.minecraft.nbt.NbtSizeTracker
-import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket
-import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket
-import net.minecraft.registry.Registry
-import net.minecraft.registry.RegistryKey
-import net.minecraft.registry.RegistryKeys
+import net.minecraft.nbt.NbtAccounter
+import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket
+import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
+import net.minecraft.core.Registry
+import net.minecraft.resources.ResourceKey
+import net.minecraft.core.registries.Registries
 import net.minecraft.server.MinecraftServer
-import net.minecraft.server.command.ServerCommandSource
-import net.minecraft.server.world.ServerWorld
-import net.minecraft.text.Text
-import net.minecraft.util.Identifier
-import net.minecraft.util.math.Vec3d
-import net.minecraft.world.World
+import net.minecraft.commands.CommandSourceStack
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.network.chat.Component
+import net.minecraft.resources.Identifier
+import net.minecraft.world.phys.Vec3
+import net.minecraft.world.level.Level
 import org.luaj.vm2.*
 import ru.pyxiion.ignis.*
 import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
@@ -87,42 +87,42 @@ class LuaMcApi(
         playerCache.clear()
     }
 
-    private fun <T> getRegistryKey(registryType: RegistryKey<Registry<T>>, key: String): RegistryKey<T> {
-        return RegistryKey.of(registryType, Identifier.of(key))
+    private fun <T> getRegistryKey(registryType: ResourceKey<Registry<T>>, key: String): ResourceKey<T> {
+        return ResourceKey.of(registryType, Identifier.of(key))
     }
 
-    private fun requireWorld(arg: LuaValue): ServerWorld {
+    private fun requireWorld(arg: LuaValue): ServerLevel {
         return server.getWorld(requireWorldKey(arg))
-            ?: throw IllegalArgumentException("World ${arg.tostring()} not found.")
+            ?: throw IllegalArgumentException("Level ${arg.tostring()} not found.")
     }
 
-    private fun requireWorldKey(arg: LuaValue): RegistryKey<World> {
+    private fun requireWorldKey(arg: LuaValue): ResourceKey<Level> {
         val key = arg.checkjstring()
-        return getRegistryKey(RegistryKeys.WORLD, key)
+        return getRegistryKey(Registries.DIMENSION, key)
     }
 
 
-    private fun doBroadcast(text: String, pos: Vec3d?, world: RegistryKey<World>?, range: Double?, overlay: Int?) {
-        var players = server.playerManager.playerList
+    private fun doBroadcast(text: String, pos: Vec3?, world: ResourceKey<Level>?, range: Double?, overlay: Int?) {
+        var players = server.playerList.playerList
 
         range?.let { rng ->
             require(pos != null && world != null)
             val rangeSquare = rng * rng
             players = players.filter {
-                it.entityWorld.registryKey == world
+                it.level().registryKey == world
                         && it.squaredDistanceTo(pos) < rangeSquare
             }
         }
 
         if (overlay == null) {
             players.forEach {
-                it.sendMessage(Text.literal(text))
+                it.sendMessage(Component.literal(text))
             }
         } else {
-            val timingPacket = TitleFadeS2CPacket(20, overlay, 20)
-            val titlePacket = OverlayMessageS2CPacket(Text.literal(text))
+            val timingPacket = ClientboundSetTitlesAnimationPacket(20, overlay, 20)
+            val titlePacket = ClientboundSetActionBarTextPacket(Component.literal(text))
             players.forEach {
-                with(it.networkHandler) {
+                with(it.connection) {
                     sendPacket(timingPacket)
                     sendPacket(titlePacket)
                 }
@@ -168,9 +168,9 @@ class LuaMcApi(
 
     private fun luaGetWorld(args: Varargs): Varargs {
         val name = args.arg(1).checkjstring()
-        val key = RegistryKey.of(RegistryKeys.WORLD, Identifier.of(name))
+        val key = ResourceKey.of(Registries.DIMENSION, Identifier.of(name))
         val world = server.getWorld(key)
-            ?: throw IllegalArgumentException("World '$name' not found")
+            ?: throw IllegalArgumentException("Level '$name' not found")
         return WorldWrap.wrap(world, playerCache, { scheduler.currentTick })
     }
 
@@ -184,8 +184,8 @@ class LuaMcApi(
 
     private fun luaLoadStructureFile(args: Varargs): Varargs {
         val path = args.arg(1).checkjstring()
-        val nbt = NbtIo.readCompressed(Path.of(path), NbtSizeTracker.ofUnlimitedBytes())
-        val template = server.structureTemplateManager.createTemplate(nbt)
+        val nbt = NbtIo.readCompressed(Path.of(path), NbtAccounter.unlimitedHeap())
+        val template = server.structureTemplateManager.readStructure(nbt)
         return StructureWrap.wrap(template)
     }
 
@@ -302,7 +302,7 @@ class LuaMcApi(
         return RegionManager.get(id)?.let { RegionWrap.wrap(it) } ?: LuaValue.NIL
     }
 
-    private fun buildSourceFromOpts(opts: LuaTable): ServerCommandSource {
+    private fun buildSourceFromOpts(opts: LuaTable): CommandSourceStack {
         var source = server.commandSource
         opts.get("as").let { asVal ->
             if (asVal.istable()) {
@@ -331,7 +331,7 @@ class LuaMcApi(
         }
 
         return try {
-            val result = server.commandManager.dispatcher.execute(cmd, source)
+            val result = server.commands.dispatcher.execute(cmd, source)
             LuaValue.varargsOf(LuaValue.TRUE, LuaValue.valueOf(result))
         } catch (e: CommandSyntaxException) {
             LuaValue.varargsOf(LuaValue.FALSE, LuaValue.valueOf(e.message ?: "Syntax error"))
@@ -355,12 +355,12 @@ class LuaMcApi(
             val k = key.checkjstring()
             when (k) {
                 "onlineCount" -> {
-                    server.playerManager.currentPlayerCount.toLua()
+                    server.playerList.currentPlayerCount.toLua()
                 }
 
                 "players" -> {
                     PlayerListWrapper(
-                        source = { server.playerManager.playerList },
+                        source = { server.playerList.playerList },
                         playerCache = playerCache,
                         tickProvider = { scheduler.currentTick },
                     ).toLua()
@@ -380,7 +380,7 @@ class LuaMcApi(
         })
 
         MetaTableRegistry.INVENTORY.set("serialise", luaFunction { self ->
-            val inv = self.unwrap<SimpleInventory>()
+            val inv = self.unwrap<SimpleContainer>()
             val json = InvWrap.serialise(inv, server.registryManager)
             json.toLua()
         })
@@ -414,7 +414,7 @@ class LuaMcApi(
                     }
 
                     "inventory" -> {
-                        val inv = obj.unwrap<SimpleInventory>()
+                        val inv = obj.unwrap<SimpleContainer>()
                         val json = InvWrap.serialise(inv, server.registryManager)
                         LuaValue.valueOf(json)
                     }

@@ -1,22 +1,22 @@
 package ru.pyxiion.ignis.api.manager
 
-import net.minecraft.entity.player.PlayerEntity
-import net.minecraft.entity.player.PlayerInventory
-import net.minecraft.inventory.SimpleInventory
-import net.minecraft.item.ItemStack
-import net.minecraft.screen.GenericContainerScreenHandler
-import net.minecraft.screen.NamedScreenHandlerFactory
-import net.minecraft.screen.ScreenHandler
-import net.minecraft.screen.ScreenHandlerType
-import net.minecraft.screen.slot.SlotActionType
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.text.Text
+import net.minecraft.world.entity.player.Player
+import net.minecraft.world.entity.player.Inventory
+import net.minecraft.world.SimpleContainer
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.inventory.ChestMenu
+import net.minecraft.world.MenuProvider
+import net.minecraft.world.inventory.AbstractContainerMenu
+import net.minecraft.world.inventory.MenuType
+import net.minecraft.world.inventory.ClickType
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.network.chat.Component
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 
-class LockableInventory(size: Int) : SimpleInventory(size) {
+class LockableInventory(size: Int) : SimpleContainer(size) {
     var locked = false
 
     inline fun <T> unlocked(block: () -> T): T {
@@ -46,73 +46,73 @@ class LockableInventory(size: Int) : SimpleInventory(size) {
 }
 
 object ContainerManager {
-    private val containers = mutableMapOf<ScreenHandler, ContainerWrapper>()
+    private val containers = mutableMapOf<AbstractContainerMenu, ContainerWrapper>()
 
     fun open(
-        player: ServerPlayerEntity,
-        inventory: SimpleInventory,
+        player: ServerPlayer,
+        inventory: SimpleContainer,
         rows: Int,
-        title: Text
+        title: Component
     ): ContainerWrapper {
         require(rows in 1..6)
 
-        val type: ScreenHandlerType<*> = when (rows) {
-            1 -> ScreenHandlerType.GENERIC_9X1
-            2 -> ScreenHandlerType.GENERIC_9X2
-            3 -> ScreenHandlerType.GENERIC_9X3
-            4 -> ScreenHandlerType.GENERIC_9X4
-            5 -> ScreenHandlerType.GENERIC_9X5
-            6 -> ScreenHandlerType.GENERIC_9X6
+        val type: MenuType<*> = when (rows) {
+            1 -> MenuType.GENERIC_9x1
+            2 -> MenuType.GENERIC_9x2
+            3 -> MenuType.GENERIC_9x3
+            4 -> MenuType.GENERIC_9x4
+            5 -> MenuType.GENERIC_9x5
+            6 -> MenuType.GENERIC_9x6
             else -> throw IllegalArgumentException()
         }
 
-        var screenHandler: ScreenHandler? = null
-        val factory = object : NamedScreenHandlerFactory {
-            override fun getDisplayName(): Text = title
-            override fun createMenu(syncId: Int, inv: PlayerInventory, player: PlayerEntity): ScreenHandler {
-                return GenericContainerScreenHandler(type, syncId, inv, inventory, rows).also {
+        var screenHandler: AbstractContainerMenu? = null
+        val factory = object : MenuProvider {
+            override fun getDisplayName(): Component = title
+            override fun createMenu(syncId: Int, inv: Inventory, player: Player): AbstractContainerMenu {
+                return ChestMenu(type, syncId, inv, inventory, rows).also {
                     screenHandler = it
                 }
             }
         }
 
-        player.openHandledScreen(factory)
+        player.openMenu(factory)
         val sh = screenHandler!!
         val wrapper = ContainerWrapper(player, inventory, sh)
         containers[sh] = wrapper
         return wrapper
     }
 
-    fun close(sh: ScreenHandler) {
+    fun close(sh: AbstractContainerMenu) {
         val wrapper = containers.remove(sh) ?: return
-        wrapper.player.closeHandledScreen()
+        wrapper.player.closeContainer()
     }
 
-    fun onScreenClosed(sh: ScreenHandler) {
+    fun onScreenClosed(sh: AbstractContainerMenu) {
         containers.remove(sh)
     }
 
-    fun closeAll(player: ServerPlayerEntity) {
+    fun closeAll(player: ServerPlayer) {
         if (containers.any { it.value.player == player }) {
             containers.entries.removeIf { it.value.player == player }
-            player.closeHandledScreen()
+            player.closeContainer()
         }
     }
 
     fun closeAll() {
         containers.keys.toList().forEach { sh ->
             val wrapper = containers[sh] ?: return@forEach
-            wrapper.player.closeHandledScreen()
+            wrapper.player.closeContainer()
         }
         containers.clear()
     }
 
     fun shouldAllowClick(
-        sh: ScreenHandler,
+        sh: AbstractContainerMenu,
         slot: Int,
         button: Int,
-        actionType: SlotActionType,
-        player: ServerPlayerEntity
+        actionType: ClickType,
+        player: ServerPlayer
     ): Boolean {
         val wrapper = containers[sh] ?: return true
         val cb = wrapper.onClickCallback ?: return true
@@ -123,7 +123,7 @@ object ContainerManager {
         val slotStack = wrapper.inventory.getStack(slot)
         val luaItem = if (slotStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(slotStack)
 
-        val cursorStack = player.currentScreenHandler.cursorStack
+        val cursorStack = player.containerMenu.cursorStack
         val luaCursor = if (cursorStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(cursorStack.copy())
 
         val result = cb.invoke(LuaValue.varargsOf(arrayOf(

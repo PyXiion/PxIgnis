@@ -3,7 +3,7 @@ package ru.pyxiion.ignis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import me.lucko.fabric.api.permissions.v0.Permissions
-import net.minecraft.command.CommandSource
+import net.minecraft.commands.SharedSuggestionProvider
 import org.luaj.vm2.*
 import org.luaj.vm2.lib.LuaContinuableFunction
 import org.luaj.vm2.lib.OneArgFunction
@@ -16,7 +16,7 @@ import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 
-fun CommandSource.checkPermission(permission: String): Boolean = Permissions.check(this, permission)
+fun SharedSuggestionProvider.checkPermission(permission: String): Boolean = Permissions.check(this, permission)
 
 fun luaTableOf(vararg items: Pair<String, LuaValue>): LuaTable {
     return LuaTable().apply {

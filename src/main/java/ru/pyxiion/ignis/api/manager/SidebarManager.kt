@@ -1,21 +1,21 @@
 package ru.pyxiion.ignis.api.manager
 
-import net.minecraft.server.network.ServerPlayerEntity
+import net.minecraft.server.level.ServerPlayer
 import ru.pyxiion.ignis.api.wrapper.SidebarWrapper
 
 object SidebarManager {
-    private val sidebars = mutableMapOf<ServerPlayerEntity, SidebarWrapper>()
+    private val sidebars = mutableMapOf<ServerPlayer, SidebarWrapper>()
 
-    fun create(player: ServerPlayerEntity, title: String): SidebarWrapper {
+    fun create(player: ServerPlayer, title: String): SidebarWrapper {
         removeForPlayer(player)
         val wrapper = SidebarWrapper(player, title)
         sidebars[player] = wrapper
         return wrapper
     }
 
-    fun get(player: ServerPlayerEntity): SidebarWrapper? = sidebars[player]
+    fun get(player: ServerPlayer): SidebarWrapper? = sidebars[player]
 
-    fun removeForPlayer(player: ServerPlayerEntity) {
+    fun removeForPlayer(player: ServerPlayer) {
         sidebars.remove(player)?.destroyInternals()
     }
 

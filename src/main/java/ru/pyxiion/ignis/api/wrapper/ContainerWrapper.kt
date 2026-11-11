@@ -1,8 +1,8 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.inventory.SimpleInventory
-import net.minecraft.screen.ScreenHandler
-import net.minecraft.server.network.ServerPlayerEntity
+import net.minecraft.world.SimpleContainer
+import net.minecraft.world.inventory.AbstractContainerMenu
+import net.minecraft.server.level.ServerPlayer
 import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -14,9 +14,9 @@ import ru.pyxiion.ignis.unwrap
 
 
 class ContainerWrapper(
-    val player: ServerPlayerEntity,
-    val inventory: SimpleInventory,
-    val screenHandler: ScreenHandler
+    val player: ServerPlayer,
+    val inventory: SimpleContainer,
+    val screenHandler: AbstractContainerMenu
 ) {
     var onClickCallback: LuaFunction? = null
 

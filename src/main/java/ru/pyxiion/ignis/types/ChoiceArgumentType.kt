@@ -4,8 +4,8 @@ import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import com.mojang.brigadier.exceptions.CommandSyntaxException
 import com.mojang.brigadier.tree.ArgumentCommandNode
-import net.minecraft.server.command.CommandManager
-import net.minecraft.server.command.ServerCommandSource
+import net.minecraft.commands.Commands
+import net.minecraft.commands.CommandSourceStack
 import java.util.concurrent.CompletableFuture
 
 class ChoiceArgumentType(private val choices: List<String>) : LuaArgumentType {
@@ -14,7 +14,7 @@ class ChoiceArgumentType(private val choices: List<String>) : LuaArgumentType {
         require(choices.all { it.isNotBlank() }) { "choice options must not be blank" }
     }
 
-    override fun getArg(ctx: CommandContext<ServerCommandSource>, name: String): Any {
+    override fun getArg(ctx: CommandContext<CommandSourceStack>, name: String): Any {
         val value = StringArgumentType.getString(ctx, name)
         if (value !in choices) {
             throw CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownArgument().create()
@@ -25,8 +25,8 @@ class ChoiceArgumentType(private val choices: List<String>) : LuaArgumentType {
     /**
      * Looks for the best completion
      */
-    override fun getBrigadierArgument(name: String): ArgumentCommandNode<ServerCommandSource, *> {
-        return CommandManager.argument(name, StringArgumentType.word())
+    override fun getBrigadierArgument(name: String): ArgumentCommandNode<CommandSourceStack, *> {
+        return Commands.argument(name, StringArgumentType.word())
             .suggests({ ctx, builder ->
                 val remaining = builder.remainingLowerCase
 

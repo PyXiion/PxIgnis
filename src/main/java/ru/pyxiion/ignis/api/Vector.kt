@@ -1,7 +1,7 @@
 package ru.pyxiion.ignis.api
 
-import net.minecraft.util.math.BlockPos
-import net.minecraft.util.math.Vec3d
+import net.minecraft.core.BlockPos
+import net.minecraft.world.phys.Vec3
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaUserdata
@@ -47,7 +47,7 @@ class Vector private constructor(
             return Vector(x, y, z)
         }
 
-        fun fromMc(vec: Vec3d): Vector {
+        fun fromMc(vec: Vec3): Vector {
             return of(vec.x, vec.y, vec.z)
         }
 
@@ -62,16 +62,16 @@ class Vector private constructor(
         }
 
 
-        fun LuaValue.toVec3d(): Vec3d {
+        fun LuaValue.toVec3d(): Vec3 {
             if (this is Vector) {
-                return Vec3d(this.x, this.y, this.z)
+                return Vec3(this.x, this.y, this.z)
             }
             if (istable()) {
                 val t = checktable()
                 val x = t.get("x").let { if (it.isnumber()) it.todouble() else t.get(1).checkdouble() }
                 val y = t.get("y").let { if (it.isnumber()) it.todouble() else t.get(2).checkdouble() }
                 val z = t.get("z").let { if (it.isnumber()) it.todouble() else t.get(3).checkdouble() }
-                return Vec3d(x, y, z)
+                return Vec3(x, y, z)
             }
 
             throw LuaError("$this is not a Vector. Vector must be either Vector type, {x=x, y=y, z=z} table, or {x, y, z} array.")
@@ -79,7 +79,7 @@ class Vector private constructor(
 
         fun LuaValue.toBlockPos(): BlockPos {
             val v = toVec3d()
-            return BlockPos.ofFloored(v.x, v.y, v.z)
+            return BlockPos.containing(v.x, v.y, v.z)
         }
     }
 }

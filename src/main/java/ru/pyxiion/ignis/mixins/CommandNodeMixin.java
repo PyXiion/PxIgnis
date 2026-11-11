@@ -2,7 +2,7 @@ package ru.pyxiion.ignis.mixins;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.tree.CommandNode;
-import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.commands.CommandSourceStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -27,5 +27,5 @@ public interface CommandNodeMixin {
 
     @Accessor
     @Mutable
-    void setRequirement(Predicate<ServerCommandSource> requirement);
+    void setRequirement(Predicate<CommandSourceStack> requirement);
 }

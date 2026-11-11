@@ -1,0 +1,66 @@
+name: Proposal
+description: New feature or API proposal for PxIgnis
+title: "proposal: <topic>"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What you want to add and why, in a few sentences. This is the elevator pitch reviewers read first.
+      placeholder: e.g. "Add a scoreboard wrapper so scripts can read and mutate team scores without touching Minecraft internals."
+    validations:
+      required: false
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The proposed behavior and API surface. Include Lua code examples, signatures, and semantics. This is the core section; go as deep or as short as the idea needs.
+      placeholder: |
+        ```lua
+        local board = mc.scoreboard("kills")
+        board:set(player, 10)
+        ```
+      render: markdown
+    validations:
+      required: false
+
+  - type: textarea
+    id: open_questions
+    attributes:
+      label: Open questions
+      description: Unresolved decisions that need discussion before implementation. Leave blank if the proposal is fully decided.
+      placeholder: e.g. "Should registry-backed objects be referenced by ID or by wrapper object?"
+    validations:
+      required: false
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: What is explicitly out of scope for the first version. Helps reviewers avoid scope creep and sets expectations.
+      placeholder: e.g. "Client-side execution, dynamic resource-pack generation, full custom entities."
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Concrete, checkable conditions that must hold for the proposal to be considered done. Useful for implementation and review.
+      placeholder: |
+        - [ ] Scoreboard changes are visible to all players
+        - [ ] Operations run on the server thread
+        - [ ] Tests cover set/add/reset
+    validations:
+      required: false
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related proposals
+      description: Cross-links to related issues or proposals this builds on or depends on. Use "Refs #N" so GitHub links them automatically.
+      placeholder: "Refs #5, #13"
+    validations:
+      required: false

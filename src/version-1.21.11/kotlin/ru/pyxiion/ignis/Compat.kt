@@ -1,20 +1,20 @@
 package ru.pyxiion.ignis
 
-import net.minecraft.command.DefaultPermissions
-import net.minecraft.entity.Entity
-import net.minecraft.entity.EntityType
-import net.minecraft.entity.LoadedEntityProcessor
-import net.minecraft.entity.SpawnReason
-import net.minecraft.nbt.NbtCompound
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.server.world.ServerWorld
-import net.minecraft.util.math.MathHelper
+import net.minecraft.server.permissions.Permissions
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.EntityType
+import net.minecraft.world.entity.EntityProcessor
+import net.minecraft.world.entity.EntitySpawnReason
+import net.minecraft.nbt.CompoundTag
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.util.Mth
 
 object Compat {
-    fun fastCos(v: Double): Double = MathHelper.cos(v).toDouble()
-    fun fastSin(v: Double): Double = MathHelper.sin(v).toDouble()
-    fun isAdmin(player: ServerPlayerEntity): Boolean =
-        player.getPermissions().hasPermission(DefaultPermissions.ADMINS)
-    fun loadEntities(nbt: NbtCompound, world: ServerWorld, reason: SpawnReason): Entity? =
-        EntityType.loadEntityWithPassengers(nbt, world, reason, LoadedEntityProcessor.NOOP)
+    fun fastCos(v: Double): Double = Mth.cos(v).toDouble()
+    fun fastSin(v: Double): Double = Mth.sin(v).toDouble()
+    fun isAdmin(player: ServerPlayer): Boolean =
+        player.permissions().hasPermission(Permissions.ADMINS)
+    fun loadEntities(nbt: CompoundTag, world: ServerLevel, reason: EntitySpawnReason): Entity? =
+        EntityType.loadEntityRecursive(nbt, world, reason, EntityProcessor.NOOP)
 }

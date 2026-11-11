@@ -1,13 +1,13 @@
 package ru.pyxiion.ignis.api.wrappertoLuaValue
 
-import net.minecraft.server.network.ServerPlayerEntity
+import net.minecraft.server.level.ServerPlayer
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import java.util.UUID
 
 class PlayerListWrapper(
-    private val source: () -> List<ServerPlayerEntity>,
+    private val source: () -> List<ServerPlayer>,
     private val playerCache: MutableMap<UUID, LuaValue>,
     private val tickProvider: () -> Long,
 ) {

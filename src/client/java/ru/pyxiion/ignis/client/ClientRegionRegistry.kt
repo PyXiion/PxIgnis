@@ -1,11 +1,11 @@
 package ru.pyxiion.ignis.client
 
-import net.minecraft.util.math.Box
+import net.minecraft.world.phys.AABB
 import ru.pyxiion.ignis.network.RegionEntry
 import java.util.concurrent.ConcurrentHashMap
 
 object ClientRegionRegistry {
-    private val regions: ConcurrentHashMap<Int, Box> = ConcurrentHashMap()
+    private val regions: ConcurrentHashMap<Int, AABB> = ConcurrentHashMap()
 
     @Volatile
     var enabled: Boolean = false
@@ -15,7 +15,7 @@ object ClientRegionRegistry {
         enabled = value
     }
 
-    fun upsert(id: Int, box: Box) {
+    fun upsert(id: Int, box: AABB) {
         regions[id] = box
     }
 
@@ -30,9 +30,9 @@ object ClientRegionRegistry {
         }
     }
 
-    fun snapshot(): Map<Int, Box> = regions.toMap()
+    fun snapshot(): Map<Int, AABB> = regions.toMap()
 
-    fun values(): Collection<Box> = regions.values
+    fun values(): Collection<AABB> = regions.values
 
     fun clear() {
         regions.clear()

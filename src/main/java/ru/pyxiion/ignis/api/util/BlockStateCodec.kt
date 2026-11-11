@@ -1,12 +1,12 @@
 package ru.pyxiion.ignis.api.util
 
-import net.minecraft.block.Block
-import net.minecraft.block.BlockState
-import net.minecraft.state.property.BooleanProperty
-import net.minecraft.state.property.IntProperty
-import net.minecraft.state.property.Property
-import net.minecraft.registry.Registries
-import net.minecraft.util.Identifier
+import net.minecraft.world.level.block.Block
+import net.minecraft.world.level.block.state.BlockState
+import net.minecraft.world.level.block.state.properties.BooleanProperty
+import net.minecraft.world.level.block.state.properties.IntegerProperty
+import net.minecraft.world.level.block.state.properties.Property
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.resources.Identifier
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -15,14 +15,14 @@ import ru.pyxiion.ignis.luaTableOf
 @Suppress("UNCHECKED_CAST")
 object BlockStateCodec {
     fun stateToTable(state: BlockState): LuaTable {
-        val blockId = Registries.BLOCK.getId(state.block)
+        val blockId = BuiltInRegistries.BLOCK.getId(state.block)
         val propsTable = LuaTable()
 
         for (prop in state.properties) {
             val value: Any = state.get(prop)
             val luaValue = when (prop) {
                 is BooleanProperty -> LuaValue.valueOf(value as Boolean)
-                is IntProperty -> LuaValue.valueOf((value as Int).toDouble())
+                is IntegerProperty -> LuaValue.valueOf((value as Int).toDouble())
                 else -> LuaValue.valueOf((prop as Property<Comparable<Any>>).name(value as Comparable<Any>))
             }
             propsTable.set(prop.name, luaValue)
@@ -44,7 +44,7 @@ object BlockStateCodec {
             if (propName == "id") continue
 
             val prop = stateManager.getProperty(propName)
-                ?: throw LuaError("Блок '${Registries.BLOCK.getId(block)}' не имеет свойства '$propName'")
+                ?: throw LuaError("Блок '${BuiltInRegistries.BLOCK.getId(block)}' не имеет свойства '$propName'")
 
             val value = propsTable.get(key)
             state = applyProperty(state, prop, value)

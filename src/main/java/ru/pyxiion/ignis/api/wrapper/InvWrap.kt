@@ -5,12 +5,12 @@ import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.mojang.serialization.JsonOps
-import net.minecraft.inventory.SimpleInventory
-import net.minecraft.item.ItemStack
-import net.minecraft.registry.RegistryOps
-import net.minecraft.registry.RegistryWrapper
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.text.Text
+import net.minecraft.world.SimpleContainer
+import net.minecraft.world.item.ItemStack
+import net.minecraft.resources.RegistryOps
+import net.minecraft.core.HolderLookup
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.network.chat.Component
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -22,7 +22,7 @@ import ru.pyxiion.ignis.unwrap
 
 object InvWrap {
 
-    fun wrap(inv: SimpleInventory): LuaValue {
+    fun wrap(inv: SimpleContainer): LuaValue {
         val t = LuaTable()
         t.setmetatable(MetaTableRegistry.INVENTORY)
         t.rawset("__pxrp_type", LuaValue.valueOf("inventory"))
@@ -30,7 +30,7 @@ object InvWrap {
         return t
     }
 
-    private fun unlock(inv: SimpleInventory, action: () -> Unit) {
+    private fun unlock(inv: SimpleContainer, action: () -> Unit) {
         if (inv is LockableInventory) {
             inv.unlocked { action() }
         } else {
@@ -38,12 +38,12 @@ object InvWrap {
         }
     }
 
-    private val BUILT = metaTable<SimpleInventory> {
+    private val BUILT = metaTable<SimpleContainer> {
         prop("size") { LuaValue.valueOf(size()) }
 
         method("getItem") { args ->
             val self = args.arg(1).checktable()
-            val inv = self.unwrap<SimpleInventory>()
+            val inv = self.unwrap<SimpleContainer>()
             val slot = args.arg(2).checkint() - 1
             if (slot < 0 || slot >= inv.size()) return@method LuaValue.NIL
             val stack = inv.getStack(slot)
@@ -52,7 +52,7 @@ object InvWrap {
 
         method("setItem") { args ->
             val self = args.arg(1).checktable()
-            val inv = self.unwrap<SimpleInventory>()
+            val inv = self.unwrap<SimpleContainer>()
             val slot = args.arg(2).checkint() - 1
             if (slot < 0 || slot >= inv.size()) return@method LuaValue.NIL
             unlock(inv) {
@@ -69,7 +69,7 @@ object InvWrap {
 
         method("fill") { args ->
             val self = args.arg(1).checktable()
-            val inv = self.unwrap<SimpleInventory>()
+            val inv = self.unwrap<SimpleContainer>()
             val stack = if (args.arg(2).isnil()) {
                 ItemStack.EMPTY
             } else {
@@ -86,22 +86,22 @@ object InvWrap {
 
         method("clear") { args ->
             val self = args.arg(1).checktable()
-            val inv = self.unwrap<SimpleInventory>()
+            val inv = self.unwrap<SimpleContainer>()
             unlock(inv) { inv.clear() }
             LuaValue.NIL
         }
 
         method("open") { args ->
             val self = args.arg(1).checktable()
-            val inv = self.unwrap<SimpleInventory>()
+            val inv = self.unwrap<SimpleContainer>()
             val playerArg = args.arg(2)
-            val player = playerArg.unwrap<ServerPlayerEntity>()
+            val player = playerArg.unwrap<ServerPlayer>()
             val title = args.arg(3).optjstring("Container")
 
             val rows = inv.size() / 9
             if (inv.size() % 9 != 0 || rows !in 1..6) return@method LuaValue.NIL
 
-            val container = ContainerManager.open(player, inv, rows, Text.literal(title))
+            val container = ContainerManager.open(player, inv, rows, Component.literal(title))
             container.toLuaValue()
         }
     }
@@ -110,7 +110,7 @@ object InvWrap {
         BUILT.apply(meta)
     }
 
-    fun serialise(inv: SimpleInventory, lookup: RegistryWrapper.WrapperLookup): String {
+    fun serialise(inv: SimpleContainer, lookup: HolderLookup.WrapperLookup): String {
         val ops = RegistryOps.of(JsonOps.INSTANCE, lookup)
         val items = JsonArray()
         for (i in 0 until inv.size()) {
@@ -126,7 +126,7 @@ object InvWrap {
         return root.toString()
     }
 
-    fun deserialise(json: String, lookup: RegistryWrapper.WrapperLookup): LockableInventory {
+    fun deserialise(json: String, lookup: HolderLookup.WrapperLookup): LockableInventory {
         val ops = RegistryOps.of(JsonOps.INSTANCE, lookup)
         val root = JsonParser.parseString(json).asJsonObject
         val size = root.get("size").asInt

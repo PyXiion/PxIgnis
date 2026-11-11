@@ -1,6 +1,6 @@
 package ru.pyxiion.ignis
 
-import net.minecraft.util.math.Box
+import net.minecraft.world.phys.AABB
 import ru.pyxiion.ignis.api.manager.RegionManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,7 +8,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private fun box(minX: Double, minY: Double, minZ: Double, maxX: Double, maxY: Double, maxZ: Double) =
-    Box(minX, minY, minZ, maxX, maxY, maxZ)
+    AABB(minX, minY, minZ, maxX, maxY, maxZ)
 
 private fun box1() = box(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
 private fun box2() = box(2.0, 2.0, 2.0, 3.0, 3.0, 3.0)

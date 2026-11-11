@@ -1,17 +1,17 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.entity.Entity
-import net.minecraft.entity.EquipmentSlot
-import net.minecraft.entity.LivingEntity
-import net.minecraft.entity.attribute.EntityAttributes
-import net.minecraft.entity.effect.StatusEffectInstance
-import net.minecraft.entity.player.PlayerEntity
-import net.minecraft.item.ItemStack
-import net.minecraft.registry.Registries
-import net.minecraft.server.world.ServerWorld
-import net.minecraft.text.Text
-import net.minecraft.util.Identifier
-import net.minecraft.util.math.Vec3d
+import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.EquipmentSlot
+import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.entity.ai.attributes.Attributes
+import net.minecraft.world.effect.MobEffectInstance
+import net.minecraft.world.entity.player.Player
+import net.minecraft.world.item.ItemStack
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.network.chat.Component
+import net.minecraft.resources.Identifier
+import net.minecraft.world.phys.Vec3
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -38,19 +38,19 @@ object EntityWrap {
     }
 
     private val attributeAccessors = mapOf(
-        "speed" to EntityAttributes.MOVEMENT_SPEED,
-        "armor" to EntityAttributes.ARMOR,
-        "armorToughness" to EntityAttributes.ARMOR_TOUGHNESS,
-        "attackDamage" to EntityAttributes.ATTACK_DAMAGE,
-        "attackSpeed" to EntityAttributes.ATTACK_SPEED,
-        "knockbackResistance" to EntityAttributes.KNOCKBACK_RESISTANCE,
-        "luck" to EntityAttributes.LUCK,
-        "stepHeight" to EntityAttributes.STEP_HEIGHT,
-        "blockBreakSpeed" to EntityAttributes.BLOCK_BREAK_SPEED,
-        "gravity" to EntityAttributes.GRAVITY,
-        "scale" to EntityAttributes.SCALE,
-        "safeFallDistance" to EntityAttributes.SAFE_FALL_DISTANCE,
-        "flyingSpeed" to EntityAttributes.FLYING_SPEED,
+        "speed" to Attributes.MOVEMENT_SPEED,
+        "armor" to Attributes.ARMOR,
+        "armorToughness" to Attributes.ARMOR_TOUGHNESS,
+        "attackDamage" to Attributes.ATTACK_DAMAGE,
+        "attackSpeed" to Attributes.ATTACK_SPEED,
+        "knockbackResistance" to Attributes.KNOCKBACK_RESISTANCE,
+        "luck" to Attributes.LUCK,
+        "stepHeight" to Attributes.STEP_HEIGHT,
+        "blockBreakSpeed" to Attributes.BLOCK_BREAK_SPEED,
+        "gravity" to Attributes.GRAVITY,
+        "scale" to Attributes.SCALE,
+        "safeFallDistance" to Attributes.SAFE_FALL_DISTANCE,
+        "flyingSpeed" to Attributes.FLYING_SPEED,
     )
 
     private val equipmentSlots = mapOf(
@@ -64,8 +64,8 @@ object EntityWrap {
 
     internal val BUILT = metaTable<Entity> {
         prop("uuid") { LuaValue.valueOf(uuid.toString()) }
-        prop("type") { LuaValue.valueOf(Registries.ENTITY_TYPE.getId(type).toString()) }
-        prop("name") { LuaValue.valueOf(name.literalString ?: name.string) }
+        prop("type") { LuaValue.valueOf(BuiltInRegistries.ENTITY_TYPE.getId(type).toString()) }
+        prop("name") { LuaValue.valueOf(name.tryCollapseToString() ?: name.string) }
         prop("displayName") { LuaValue.valueOf(displayName?.string ?: name.string) }
         prop(
             "customName",
@@ -73,9 +73,9 @@ object EntityWrap {
                 val cn = customName
                 if (cn != null) LuaValue.valueOf(cn.string) else LuaValue.NIL
             },
-            set = { v -> customName = if (v.isnil()) null else Text.literal(v.tojstring()) }
+            set = { v -> customName = if (v.isnil()) null else Component.literal(v.tojstring()) }
         )
-        prop("world") { WorldWrap.wrap(entityWorld as ServerWorld, sharedPlayerCache, sharedTickProvider) }
+        prop("world") { WorldWrap.wrap(level() as ServerLevel, sharedPlayerCache, sharedTickProvider) }
 
         prop(
             "pos",
@@ -96,8 +96,8 @@ object EntityWrap {
         )
         prop(
             "fireTicks",
-            get = { LuaValue.valueOf(fireTicks) },
-            set = { v -> fireTicks = v.toint() }
+            get = { LuaValue.valueOf(remainingFireTicks) },
+            set = { v -> remainingFireTicks = v.toint() }
         )
         prop(
             "glowing",
@@ -121,10 +121,10 @@ object EntityWrap {
         )
         prop(
             "air",
-            get = { LuaValue.valueOf(air) },
-            set = { v -> air = v.toint() }
+            get = { LuaValue.valueOf(airSupply) },
+            set = { v -> airSupply = v.toint() }
         )
-        prop("maxAir") { LuaValue.valueOf(maxAir) }
+        prop("maxAir") { LuaValue.valueOf(maxAirSupply) }
         prop("removed") { if (isRemoved) LuaValue.TRUE else LuaValue.FALSE }
 
         prop(
@@ -138,13 +138,13 @@ object EntityWrap {
         prop(
             "maxHealth",
             get = {
-                val v = (this as? LivingEntity)?.getAttributeInstance(EntityAttributes.MAX_HEALTH)?.value
+                val v = (this as? LivingEntity)?.getAttribute(Attributes.MAX_HEALTH)?.value
                 if (v != null) LuaValue.valueOf(v) else LuaValue.NIL
             },
             set = { v ->
                 (this as? LivingEntity)?.let { liv ->
-                    liv.getAttributeInstance(EntityAttributes.MAX_HEALTH)?.let { attr ->
-                        attr.baseValue = v.todouble()
+                    liv.getAttribute(Attributes.MAX_HEALTH)?.let { attr ->
+                        attr.amount = v.todouble()
                         liv.health = Math.min(liv.health, attr.value.toFloat())
                     }
                 }
@@ -154,11 +154,11 @@ object EntityWrap {
         map(
             attributeAccessors,
             getter = { e, attr ->
-                val v = (e as? LivingEntity)?.getAttributeInstance(attr)?.value
+                val v = (e as? LivingEntity)?.getAttribute(attr)?.value
                 if (v != null) LuaValue.valueOf(v) else LuaValue.NIL
             },
             setter = { e, attr, v ->
-                (e as? LivingEntity)?.getAttributeInstance(attr)?.baseValue = v.todouble()
+                (e as? LivingEntity)?.getAttribute(attr)?.baseValue = v.todouble()
             }
         )
 
@@ -172,7 +172,7 @@ object EntityWrap {
                 val stack = if (v.isnil()) ItemStack.EMPTY
                 else ItemStackWrap.unwrap(v)
                     ?: throw LuaError("setItem: ожидается ItemStack от mc.createItem")
-                (e as? LivingEntity)?.equipStack(slot, stack)
+                (e as? LivingEntity)?.setItemSlot(slot, stack)
             }
         )
 
@@ -205,7 +205,7 @@ object EntityWrap {
 //            if (!nbtTable.istable()) throw LuaError("writeNbt: ожидается таблица")
 //            val compound = luaToNbt(nbtTable) as NbtCompound
 //            val e = self.unwrap<Entity>()
-//            val world = e.entityWorld as ServerWorld
+//            val world = e.entityWorld as ServerLevel
 //            val readView = NbtReadView.create(ErrorReporter.EMPTY, world.registryManager, compound)
 //            e.readData(readView)
 //            LuaValue.NIL
@@ -215,13 +215,13 @@ object EntityWrap {
             val self = args.arg(1).checktable()
             val e = self.unwrap<Entity>()
             val amount = args.arg(2).checkdouble().toFloat()
-            val world = e.entityWorld as ServerWorld
+            val world = e.level() as ServerLevel
             val sourceEntity = if (args.narg() >= 3 && args.arg(3).istable()) {
                 val uuid = args.arg(3).checktable().get("uuid")
                 if (uuid.isstring()) world.getEntity(UUID.fromString(uuid.tojstring())) else null
             } else null
             val damageSource = when (sourceEntity) {
-                is PlayerEntity -> world.damageSources.playerAttack(sourceEntity)
+                is Player -> world.damageSources.playerAttack(sourceEntity)
                 is LivingEntity -> world.damageSources.mobAttack(sourceEntity)
                 else -> world.damageSources.generic()
             }
@@ -236,11 +236,11 @@ object EntityWrap {
             val includeFluids = args.arg(3).optboolean(false)
             val includeEntities = args.arg(4).optboolean(true)
 
-            val start = e.eyePos
+            val start = e.eyePosition
             val dir = e.rotationVector.normalize()
-            val end = Vec3d(start.x + dir.x * range, start.y + dir.y * range, start.z + dir.z * range)
+            val end = Vec3(start.x + dir.x * range, start.y + dir.y * range, start.z + dir.z * range)
 
-            performRaycast(start, end, range, includeFluids, includeEntities, e.entityWorld, e)
+            performRaycast(start, end, range, includeFluids, includeEntities, e.level(), e)
         }
 
         method("addEffect") { args ->
@@ -253,10 +253,10 @@ object EntityWrap {
             val particles = args.arg(5).optboolean(true)
             val icon = args.arg(6).optboolean(true)
 
-            val effect = Registries.STATUS_EFFECT.getEntry(Identifier.of(effectId))
+            val effect = BuiltInRegistries.MOB_EFFECT.getEntry(Identifier.of(effectId))
                 .orElseThrow { LuaError("Эффект '$effectId' не найден") }
-            val instance = StatusEffectInstance(effect, duration, amplifier, false, particles, icon)
-            LuaValue.valueOf(liv.addStatusEffect(instance))
+            val instance = MobEffectInstance(effect, duration, amplifier, false, particles, icon)
+            LuaValue.valueOf(liv.addEffect(instance))
         }
 
         method("removeEffect") { args ->
@@ -264,9 +264,9 @@ object EntityWrap {
             val e = self.unwrap<Entity>()
             val liv = e as? LivingEntity ?: return@method LuaValue.NIL
             val effectId = args.arg(2).checkjstring()
-            val effect = Registries.STATUS_EFFECT.getEntry(Identifier.of(effectId))
+            val effect = BuiltInRegistries.MOB_EFFECT.getEntry(Identifier.of(effectId))
                 .orElseThrow { LuaError("Эффект '$effectId' не найден") }
-            LuaValue.valueOf(liv.removeStatusEffect(effect))
+            LuaValue.valueOf(liv.removeEffect(effect))
         }
 
         method("hasEffect") { args ->
@@ -274,16 +274,16 @@ object EntityWrap {
             val e = self.unwrap<Entity>()
             val liv = e as? LivingEntity ?: return@method LuaValue.FALSE
             val effectId = args.arg(2).checkjstring()
-            val effect = Registries.STATUS_EFFECT.getEntry(Identifier.of(effectId))
+            val effect = BuiltInRegistries.MOB_EFFECT.getEntry(Identifier.of(effectId))
                 .orElseThrow { LuaError("Эффект '$effectId' не найден") }
-            LuaValue.valueOf(liv.hasStatusEffect(effect))
+            LuaValue.valueOf(liv.hasEffect(effect))
         }
 
         method("setOnFireFor") { args ->
             val self = args.arg(1).checktable()
             val e = self.unwrap<Entity>()
             val ticks = args.arg(2).checkint()
-            e.fireTicks = ticks
+            e.remainingFireTicks = ticks
             e.isOnFire = true
             LuaValue.NIL
         }
@@ -300,7 +300,7 @@ object EntityWrap {
         meta.set("__index", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val tag = args.arg(2).tojstring()
-                return valueOf(entity.commandTags.contains(tag))
+                return valueOf(entity.tags.contains(tag))
             }
         })
         meta.set("__newindex", object : VarArgFunction() {
@@ -308,16 +308,16 @@ object EntityWrap {
                 val tag = args.arg(2).tojstring()
                 val value = args.arg(3)
                 if (value.toboolean()) {
-                    entity.addCommandTag(tag)
+                    entity.addTag(tag)
                 } else {
-                    entity.removeCommandTag(tag)
+                    entity.removeTag(tag)
                 }
                 return NIL
             }
         })
         meta.set("__pairs", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
-                val tags = entity.commandTags.toList()
+                val tags = entity.tags.toList()
                 val iterator = object : VarArgFunction() {
                     private var index = 0
                     override fun invoke(args: Varargs): Varargs {

@@ -6,8 +6,8 @@ import com.mojang.brigadier.tree.ArgumentCommandNode
 import com.mojang.brigadier.tree.CommandNode
 import com.mojang.brigadier.tree.LiteralCommandNode
 import net.minecraft.server.MinecraftServer
-import net.minecraft.server.command.CommandManager
-import net.minecraft.server.command.ServerCommandSource
+import net.minecraft.commands.Commands
+import net.minecraft.commands.CommandSourceStack
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.checkPermission
 import ru.pyxiion.ignis.mixins.CommandNodeMixin
@@ -16,9 +16,9 @@ class LuaCommandManager(
     private val server: MinecraftServer
 ) {
     private var isRegistered = false
-    private val commands = linkedMapOf<String, LiteralCommandNode<ServerCommandSource>>()
+    private val commands = linkedMapOf<String, LiteralCommandNode<CommandSourceStack>>()
     private val pathPermissions = mutableMapOf<String, MutableSet<String?>>()
-    private val originalNodes = mutableMapOf<String, LiteralCommandNode<ServerCommandSource>>()
+    private val originalNodes = mutableMapOf<String, LiteralCommandNode<CommandSourceStack>>()
 
     companion object {
         val RESERVED_COMMANDS = setOf(
@@ -32,7 +32,7 @@ class LuaCommandManager(
     fun addCommand(
         nodes: List<SyntaxNode>,
         argDefs: Map<String, ArgDef>,
-        executor: (ctx: CommandContext<ServerCommandSource>) -> Int,
+        executor: (ctx: CommandContext<CommandSourceStack>) -> Int,
         permission: String?
     ) {
         check(!isRegistered) { "You can't add commands until you unregister the current commands" }
@@ -43,7 +43,7 @@ class LuaCommandManager(
             "Команда '${firstLiteral.value}' является зарезервированной и не может быть переопределена через Lua"
         }
 
-        var currentNode: CommandNode<ServerCommandSource>? = null
+        var currentNode: CommandNode<CommandSourceStack>? = null
         val pathBuilder = mutableListOf<String>()
 
         for (node in nodes) {
@@ -54,7 +54,7 @@ class LuaCommandManager(
                     } else {
                         var child = currentNode.getChild(node.value)
                         if (child == null) {
-                            child = CommandManager.literal(node.value).build()
+                            child = Commands.literal(node.value).build()
                             currentNode.addChild(child)
                         }
                         child
@@ -69,7 +69,7 @@ class LuaCommandManager(
                         ?: argDef.luaType.getBrigadierArgument(node.name).also {
                             currentNode.addChild(it)
                         }
-                    argNode as CommandNode<ServerCommandSource>
+                    argNode as CommandNode<CommandSourceStack>
                 }
             }
             currentNode = next
@@ -103,13 +103,13 @@ class LuaCommandManager(
             permission)
     }
 
-    private fun getOrCreateNodeByCmdPath(path: List<String>): LiteralCommandNode<ServerCommandSource> {
-        var node = commands.getOrPut(path.first()) { CommandManager.literal(path.first()).build() }
+    private fun getOrCreateNodeByCmdPath(path: List<String>): LiteralCommandNode<CommandSourceStack> {
+        var node = commands.getOrPut(path.first()) { Commands.literal(path.first()).build() }
 
         for (i in 1..<path.size) {
             var child = node.getChild(path[i])
             if (child == null) {
-                child = CommandManager.literal(path[i]).build()
+                child = Commands.literal(path[i]).build()
                 node.addChild(child)
             }
             node = child as LiteralCommandNode
@@ -121,21 +121,21 @@ class LuaCommandManager(
     fun registerAll() {
         check(!isRegistered) { "You can't register commands twice" }
         isRegistered = true
-        val dispatcher = server.commandManager.dispatcher
+        val dispatcher = server.commands.dispatcher
         val root = dispatcher.root as CommandNodeMixin
         commands.forEach { (k, v) ->
             if (root.children.containsKey(k)) {
-                originalNodes.putIfAbsent(k, root.children[k] as LiteralCommandNode<ServerCommandSource>)
+                originalNodes.putIfAbsent(k, root.children[k] as LiteralCommandNode<CommandSourceStack>)
                 root.children.remove(k)
                 root.literals.remove(k)
             }
-            dispatcher.root.addChild(v)
+            dispatcher.root.addOrReplaceChild(v)
         }
         updateCommandLists()
     }
 
     fun clear() {
-        val root = (server.commandManager.dispatcher.root as CommandNodeMixin)
+        val root = (server.commands.dispatcher.root as CommandNodeMixin)
 
         if (isRegistered) {
             commands.forEach { (k, _) ->
@@ -156,8 +156,8 @@ class LuaCommandManager(
     }
 
     private fun updateCommandLists() {
-        val cmdManager = server.commandManager
-        server.playerManager.playerList.forEach {
+        val cmdManager = server.commands
+        server.playerList.playerList.forEach {
             cmdManager.sendCommandTree(it)
         }
     }

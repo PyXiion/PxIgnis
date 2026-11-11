@@ -1,11 +1,11 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.component.DataComponentTypes
-import net.minecraft.component.type.CustomModelDataComponent
-import net.minecraft.component.type.LoreComponent
-import net.minecraft.item.ItemStack
-import net.minecraft.registry.Registries
-import net.minecraft.text.Text
+import net.minecraft.core.component.DataComponents
+import net.minecraft.world.item.component.CustomModelData
+import net.minecraft.world.item.component.ItemLore
+import net.minecraft.world.item.ItemStack
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.network.chat.Component
 import net.minecraft.util.Unit
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -17,7 +17,7 @@ import ru.pyxiion.ignis.unwrapOrNull
 
 object ItemStackWrap {
     private val BUILT = metaTable<ItemStack> {
-        prop("id") { LuaValue.valueOf(Registries.ITEM.getId(item).toString()) }
+        prop("id") { LuaValue.valueOf(BuiltInRegistries.ITEM.getId(item).toString()) }
 
         prop(
             "count",
@@ -28,26 +28,26 @@ object ItemStackWrap {
         prop(
             "name",
             get = {
-                val cn = get(DataComponentTypes.CUSTOM_NAME)
+                val cn = get(DataComponents.CUSTOM_NAME)
                 if (cn != null) LuaValue.valueOf(cn.string) else LuaValue.NIL
             },
             set = { v ->
                 if (v.isnil()) {
-                    remove(DataComponentTypes.CUSTOM_NAME)
+                    remove(DataComponents.CUSTOM_NAME)
                 } else {
-                    set(DataComponentTypes.CUSTOM_NAME, Text.literal(v.tojstring()))
+                    set(DataComponents.CUSTOM_NAME, Component.literal(v.tojstring()))
                 }
             }
         )
 
         prop(
             "unbreakable",
-            get = { LuaValue.valueOf(contains(DataComponentTypes.UNBREAKABLE)) },
+            get = { LuaValue.valueOf(contains(DataComponents.UNBREAKABLE)) },
             set = { v ->
                 if (v.toboolean()) {
-                    set(DataComponentTypes.UNBREAKABLE, Unit.INSTANCE)
+                    set(DataComponents.UNBREAKABLE, Unit.INSTANCE)
                 } else {
-                    remove(DataComponentTypes.UNBREAKABLE)
+                    remove(DataComponents.UNBREAKABLE)
                 }
             }
         )
@@ -55,17 +55,17 @@ object ItemStackWrap {
         prop(
             "custom_model_data",
             get = {
-                val cmd = get(DataComponentTypes.CUSTOM_MODEL_DATA)
+                val cmd = get(DataComponents.CUSTOM_MODEL_DATA)
                 val first = cmd?.floats?.firstOrNull()
                 if (first != null) LuaValue.valueOf(first.toInt()) else LuaValue.NIL
             },
             set = { v ->
                 if (v.isnil()) {
-                    remove(DataComponentTypes.CUSTOM_MODEL_DATA)
+                    remove(DataComponents.CUSTOM_MODEL_DATA)
                 } else if (v.isint()) {
                     set(
-                        DataComponentTypes.CUSTOM_MODEL_DATA,
-                        CustomModelDataComponent(listOf(v.toint().toFloat()), emptyList(), emptyList(), emptyList())
+                        DataComponents.CUSTOM_MODEL_DATA,
+                        CustomModelData(listOf(v.toint().toFloat()), emptyList(), emptyList(), emptyList())
                     )
                 }
             }
@@ -80,24 +80,24 @@ object ItemStackWrap {
         prop(
             "lore",
             get = {
-                get(DataComponentTypes.LORE)?.lines()?.map { LuaValue.valueOf(it.string) }.toLuaArray()
+                get(DataComponents.LORE)?.lines()?.map { LuaValue.valueOf(it.string) }.toLuaArray()
             },
             set = { v ->
                 if (v.isnil()) {
-                    remove(DataComponentTypes.LORE)
+                    remove(DataComponents.LORE)
                 } else if (v.istable()) {
-                    val lines = mutableListOf<Text>()
+                    val lines = mutableListOf<Component>()
                     val table = v.checktable()
                     for (i in 1..table.length()) {
-                        lines.add(Text.literal(table.get(i).tojstring()))
+                        lines.add(Component.literal(table.get(i).tojstring()))
                     }
-                    set(DataComponentTypes.LORE, LoreComponent(lines))
+                    set(DataComponents.LORE, ItemLore(lines))
                 }
             }
         )
 
 
-        toString { "ItemStack{${Registries.ITEM.getId(item)} x$count}" }
+        toString { "ItemStack{${BuiltInRegistries.ITEM.getId(item)} x$count}" }
     }
 
     fun wrap(stack: ItemStack): LuaValue {

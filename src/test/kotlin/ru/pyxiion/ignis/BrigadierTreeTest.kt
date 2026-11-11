@@ -5,15 +5,15 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.mojang.brigadier.builder.RequiredArgumentBuilder
 import com.mojang.brigadier.tree.ArgumentCommandNode
 import com.mojang.brigadier.tree.CommandNode
-import net.minecraft.server.command.ServerCommandSource
+import net.minecraft.commands.CommandSourceStack
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 private fun literal(name: String) =
-    LiteralArgumentBuilder.literal<ServerCommandSource>(name).build()
+    LiteralArgumentBuilder.literal<CommandSourceStack>(name).build()
 
-private fun arg(name: String): ArgumentCommandNode<ServerCommandSource, *> =
-    RequiredArgumentBuilder.argument<ServerCommandSource, String>(name, StringArgumentType.word()).build()
+private fun arg(name: String): ArgumentCommandNode<CommandSourceStack, *> =
+    RequiredArgumentBuilder.argument<CommandSourceStack, String>(name, StringArgumentType.word()).build()
 
 private val childrenField = CommandNode::class.java.getDeclaredField("children").also { it.isAccessible = true }
 

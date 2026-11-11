@@ -1,8 +1,8 @@
 package ru.pyxiion.ignis.mixins;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,23 +14,23 @@ import ru.pyxiion.ignis.api.manager.RegionManager;
 @Mixin(Entity.class)
 public class EntityMixin {
     @Unique
-    private Vec3d pxrp$lastPos = null;
+    private Vec3 pxrp$lastPos = null;
 
     @Inject(method = "baseTick", at = @At("TAIL"))
     private void pxrp$capturePos(CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
         if (self.getEntityWorld().isClient()) return;
-        Vec3d cur = self.getEntityPos();
+        Vec3 cur = self.getEntityPos();
         if (pxrp$lastPos == null) {
             pxrp$lastPos = cur;
             return;
         }
         if (!cur.equals(pxrp$lastPos)) {
-            Vec3d prev = pxrp$lastPos;
+            Vec3 prev = pxrp$lastPos;
             pxrp$lastPos = cur;
             RegionManager.INSTANCE.onEntityMoved(self, prev, cur);
 
-            if (self instanceof ServerPlayerEntity player) {
+            if (self instanceof ServerPlayer player) {
                 PlayerMoveDispatcher.INSTANCE.onPlayerMoved(player, prev, cur);
             }
         }

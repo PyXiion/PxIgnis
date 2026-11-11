@@ -1,12 +1,12 @@
 package ru.pyxiion.ignis.api
 
-import net.minecraft.server.network.ServerPlayerEntity
-import net.minecraft.util.math.Vec3d
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.phys.Vec3
 
 object PlayerMoveDispatcher {
-    var handler: ((ServerPlayerEntity, Vec3d, Vec3d) -> Unit)? = null
+    var handler: ((ServerPlayer, Vec3, Vec3) -> Unit)? = null
 
-    fun onPlayerMoved(player: ServerPlayerEntity, from: Vec3d, to: Vec3d) {
+    fun onPlayerMoved(player: ServerPlayer, from: Vec3, to: Vec3) {
         handler?.invoke(player, from, to)
     }
 }

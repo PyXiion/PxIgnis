@@ -6,8 +6,8 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
-import net.minecraft.command.CommandRegistryAccess
-import net.minecraft.text.Text
+import net.minecraft.commands.CommandBuildContext
+import net.minecraft.network.chat.Component
 import ru.pyxiion.ignis.network.RegionInterestPayload
 
 object ClientCommands {
@@ -17,7 +17,7 @@ object ClientCommands {
 
     private fun registerCallback(
         dispatcher: CommandDispatcher<FabricClientCommandSource>,
-        registryAccess: CommandRegistryAccess
+        registryAccess: CommandBuildContext
     ) {
         dispatcher.register(
             ClientCommandManager.literal("ignis")
@@ -42,7 +42,7 @@ object ClientCommands {
         }
         ClientPlayNetworking.send(RegionInterestPayload(newValue))
         source.sendFeedback(
-            Text.literal("Region debug overlay: ${if (newValue) "on" else "off"}")
+            Component.literal("Region debug overlay: ${if (newValue) "on" else "off"}")
         )
         return 1
     }

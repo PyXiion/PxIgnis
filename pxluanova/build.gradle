@@ -14,8 +14,15 @@ subprojects {
         mavenCentral()
     }
 
-    java {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+    // Keep the bytecode at Java 21 whichever JDK runs Gradle: PxIgnis consumes this build from
+    // both its 1.21.x (Java 21) and 26.x (Java 25) targets.
+    pluginManager.withPlugin('java') {
+        java {
+            sourceCompatibility = JavaVersion.VERSION_21
+            targetCompatibility = JavaVersion.VERSION_21
+        }
+        tasks.withType(JavaCompile).configureEach {
+            options.release = 21
+        }
     }
 }

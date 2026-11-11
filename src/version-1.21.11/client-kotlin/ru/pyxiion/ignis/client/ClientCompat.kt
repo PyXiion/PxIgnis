@@ -2,7 +2,7 @@ package ru.pyxiion.ignis.client
 
 import com.mojang.blaze3d.vertex.VertexFormat
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext
-import net.minecraft.util.math.Box
+import net.minecraft.world.phys.AABB
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -26,7 +26,7 @@ object ClientCompat {
     @Volatile
     private var warned: Boolean = false
 
-    fun drawWireframeBoxes(context: WorldRenderContext, boxes: Collection<Box>) {
+    fun drawWireframeBoxes(context: WorldRenderContext, boxes: Collection<AABB>) {
         if (boxes.isEmpty()) return
         if (!warned) {
             warned = true

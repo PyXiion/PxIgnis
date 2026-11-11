@@ -1,14 +1,14 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.entity.SpawnReason
-import net.minecraft.nbt.NbtDouble
-import net.minecraft.nbt.NbtList
-import net.minecraft.server.world.ServerWorld
-import net.minecraft.structure.StructurePlacementData
-import net.minecraft.structure.StructureTemplate
-import net.minecraft.util.BlockMirror
-import net.minecraft.util.BlockRotation
-import net.minecraft.util.math.BlockPos
+import net.minecraft.world.entity.EntitySpawnReason
+import net.minecraft.nbt.DoubleTag
+import net.minecraft.nbt.ListTag
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate
+import net.minecraft.world.level.block.Mirror
+import net.minecraft.world.level.block.Rotation
+import net.minecraft.core.BlockPos
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -41,7 +41,7 @@ object StructureWrap {
             val template = self.unwrap<StructureTemplate>()
 
             val worldArg = args.arg(2)
-            val world = worldArg.unwrap<ServerWorld>()
+            val world = worldArg.unwrap<ServerLevel>()
             val pos = args.arg(3).toBlockPos()
             val params = if (args.narg() >= 4 && args.arg(4).istable())
                 args.arg(4).checktable() else null
@@ -56,7 +56,7 @@ object StructureWrap {
 
             val pivot = BlockPos((template.size.x - 1) / 2, 0, (template.size.z - 1) / 2)
 
-            val data = StructurePlacementData()
+            val data = StructurePlaceSettings()
                 .setRotation(rotation)
                 .setMirror(mirror)
                 .setPosition(pivot)
@@ -75,32 +75,32 @@ object StructureWrap {
                 for (entry in accessor.entities) {
                     val entityInfo = entry
                     val nbt = entityInfo.nbt.copy()
-                    val transformedPos = StructureTemplate.transformAround(entityInfo.pos, mirror, rotation, pivot)
+                    val transformedPos = StructureTemplate.transform(entityInfo.pos, mirror, rotation, pivot)
                     val finalPos = transformedPos.add(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble())
 
-                    val posList = NbtList()
-                    posList.add(NbtDouble.of(finalPos.x))
-                    posList.add(NbtDouble.of(finalPos.y))
-                    posList.add(NbtDouble.of(finalPos.z))
+                    val posList = ListTag()
+                    posList.add(DoubleTag.of(finalPos.x))
+                    posList.add(DoubleTag.of(finalPos.y))
+                    posList.add(DoubleTag.of(finalPos.z))
                     nbt.put("Pos", posList)
                     nbt.remove("UUID")
 
                     val entity = Compat.loadEntities(
                         nbt,
                         world,
-                        SpawnReason.STRUCTURE
+                        EntitySpawnReason.STRUCTURE
                     ) ?: continue
 
-                    val yaw = entity.applyRotation(rotation) + entity.applyMirror(mirror) - entity.yaw
+                    val yaw = entity.rotate(rotation) + entity.mirror(mirror) - entity.yaw
                     entity.refreshPositionAndAngles(finalPos.x, finalPos.y, finalPos.z, yaw, entity.pitch)
-                    entity.setBodyYaw(yaw)
-                    entity.setHeadYaw(yaw)
+                    entity.setYBodyRot(yaw)
+                    entity.setYHeadRot(yaw)
 
                     val entityWrapper = EntityFactory.wrap(entity)
                     val callbackResult = entityCallback.call(entityWrapper)
                     if (callbackResult.isboolean() && !callbackResult.toboolean()) continue
 
-                    world.spawnEntityAndPassengers(entity)
+                    world.addFreshEntityWithPassengers(entity)
                     anySpawned = true
                 }
 
@@ -118,21 +118,21 @@ object StructureWrap {
         BUILT.apply(meta)
     }
 
-    private fun parseRotation(s: String): BlockRotation {
+    private fun parseRotation(s: String): Rotation {
         return when (s) {
-            "0", "none" -> BlockRotation.NONE
-            "90", "clockwise_90" -> BlockRotation.CLOCKWISE_90
-            "180", "clockwise_180" -> BlockRotation.CLOCKWISE_180
-            "270", "counterclockwise_90" -> BlockRotation.COUNTERCLOCKWISE_90
+            "0", "none" -> Rotation.NONE
+            "90", "clockwise_90" -> Rotation.CLOCKWISE_90
+            "180", "clockwise_180" -> Rotation.CLOCKWISE_180
+            "270", "counterclockwise_90" -> Rotation.COUNTERCLOCKWISE_90
             else -> throw LuaError("Неизвестный поворот: '$s' (0/90/180/270)")
         }
     }
 
-    private fun parseMirror(s: String): BlockMirror {
+    private fun parseMirror(s: String): Mirror {
         return when (s) {
-            "none" -> BlockMirror.NONE
-            "left_right" -> BlockMirror.LEFT_RIGHT
-            "front_back" -> BlockMirror.FRONT_BACK
+            "none" -> Mirror.NONE
+            "left_right" -> Mirror.LEFT_RIGHT
+            "front_back" -> Mirror.FRONT_BACK
             else -> throw LuaError("Неизвестное отражение: '$s' (none/left_right/front_back)")
         }
     }

@@ -1,8 +1,8 @@
 package ru.pyxiion.ignis.mixins;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -13,7 +13,7 @@ import ru.pyxiion.ignis.api.manager.MobAIManager;
 public class LivingEntityMixin {
     @Inject(method = "remove", at = @At(value="INVOKE", target="Lnet/minecraft/entity/LivingEntity;onRemoval(Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/entity/Entity$RemovalReason;)V"))
     private void onRemove(Entity.RemovalReason reason, CallbackInfo ci) {
-        if ((Object) this instanceof MobEntity mob) {
+        if ((Object) this instanceof Mob mob) {
             MobAIManager.INSTANCE.onEntityRemove(mob);
         }
     }
