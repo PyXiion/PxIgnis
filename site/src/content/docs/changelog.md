@@ -3,7 +3,7 @@ title: Changelog
 description: Release history for PxIgnis.
 ---
 
-## Unreleased
+## 0.18.0 — Event model, MC 1.21.11 + 26.3, parallel workers, particles (2026-11-12)
 
 ### Breaking
 
