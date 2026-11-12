@@ -1,0 +1,153 @@
+---
+title: 6. Statistics and leaderboard
+description: "Arena tutorial, chapter 6: per-player statistics in player.data and a leaderboard hologram."
+---
+
+import { Code } from '@astrojs/starlight/components';
+import checkpoint from '../../../../tutorial/arena/06-stats.lua?raw';
+
+Wins and kills should count for more than one round. This chapter keeps statistics for every player, shows
+them on the scoreboard and with `/arena stats`, and puts a top-5 leaderboard in the lobby.
+
+## Per-player data
+
+`player.data` works like `mc.data`, but belongs to one player. It is saved to
+`config/ignis/storage/players/<uuid>.json`, loaded when the player joins and written when they leave.
+
+The statistics are a table inside it. The same rule as in chapter 1 applies: assign the table, then read it
+back from `player.data`:
+
+```lua
+local function stats(player)
+    if not player.data.arenaStats then
+        player.data.arenaStats = { wins = 0, kills = 0, deaths = 0, games = 0 }
+    end
+    return player.data.arenaStats
+end
+```
+
+What `stats` returns is the saved table, so changing a field is enough, no assignment back needed:
+
+```lua
+        stats(player).games = stats(player).games + 1
+```
+
+```lua
+    stats(player).deaths = stats(player).deaths + 1
+```
+
+Kills also count per round, for the scoreboard. That list is part of the game state, reset in `startRound`
+and cleaned up in `leave`:
+
+```lua
+    kills = {},        -- uuid -> kills this round
+```
+
+```lua
+        game.kills[killer.uuid] = (game.kills[killer.uuid] or 0) + 1
+        stats(killer).kills = stats(killer).kills + 1
+```
+
+The scoreboard gets three more lines:
+
+```lua
+        local s = stats(player)
+```
+
+```lua
+                "",
+                "Kills this round: §e" .. (game.kills[uuid] or 0),
+                "Wins: §e" .. s.wins,
+```
+
+## `/arena stats`
+
+An optional argument in `[...]` is `nil` when it is left out, so `/arena stats` shows your own numbers and
+`/arena stats Steve` someone else's:
+
+```lua
+register("arena stats [<target:player>]", function(ctx, target)
+    local player = target or ctx.player
+    local s = stats(player)
+    ctx.player:sendMessage(string.format(
+        "§6%s§7: %d wins, %d kills, %d deaths in %d games",
+        player.name, s.wins, s.kills, s.deaths, s.games))
+end)
+```
+
+The `player` argument type only accepts players who are online, which is fine here: `player.data` is only
+available for them.
+
+## A leaderboard
+
+The leaderboard must include players who are offline, and their `player.data` is not loaded. So the wins
+are copied into `mc.data` too, when a round is won:
+
+```lua
+-- Wins of every player who ever won, for the leaderboard (offline players too).
+mc.data.arenaWins = mc.data.arenaWins or {}
+local wins = mc.data.arenaWins
+```
+
+```lua
+        stats(winner).wins = stats(winner).wins + 1
+        wins[winner.uuid] = { name = winner.name, wins = stats(winner).wins }
+        updateLeaderboard()
+```
+
+It is shown by a [hologram](/reference/hologram-api), floating text in the world. `/arena setleaderboard`
+saves its position, and the hologram is created from it when the script loads (holograms are removed on
+reload, like regions and boss bars):
+
+```lua
+local function spawnLeaderboard()
+    if leaderboard then leaderboard:destroy() end
+    leaderboard = nil
+    local point = config.leaderboard
+    if not point then return end
+    leaderboard = mc.world(point.world):spawnHologram(vec(point.x, point.y, point.z), "Arena")
+    updateLeaderboard()
+end
+```
+
+```lua
+spawnLeaderboard()
+```
+
+`updateLeaderboard` sorts the entries and writes the top five into `leaderboard.lines`:
+
+```lua
+    local rows = {}
+    for _, entry in pairs(wins) do
+        rows[#rows + 1] = entry
+    end
+    table.sort(rows, function(a, b) return a.wins > b.wins end)
+
+    local lines = { "§6§lArena: top players" }
+    for i = 1, math.min(5, #rows) do
+        lines[#lines + 1] = string.format("§e%d. §f%s §7- %d", i, rows[i].name, rows[i].wins)
+    end
+    if #rows == 0 then
+        lines[#lines + 1] = "§7no winners yet"
+    end
+    leaderboard.lines = lines
+```
+
+`table.sort` takes a function that says whether `a` goes before `b`.
+
+## Try it
+
+1. Stand in the lobby and run `/arena setleaderboard`.
+2. Play a round. The winner appears on the leaderboard; `/arena stats` shows the numbers.
+3. Restart the server: statistics and leaderboard are still there.
+
+## Checkpoint
+
+<details>
+<summary>config/ignis/arena.lua after chapter 6</summary>
+
+<Code code={checkpoint} lang="lua" title="config/ignis/arena.lua" />
+
+</details>
+
+**Exercise:** add a kill/death ratio to `/arena stats`. Mind players with zero deaths.

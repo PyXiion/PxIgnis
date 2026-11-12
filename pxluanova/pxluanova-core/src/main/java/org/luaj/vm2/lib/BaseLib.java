@@ -36,6 +36,7 @@ import org.luaj.vm2.LuaString;
 import org.luaj.vm2.LuaTable;
 import org.luaj.vm2.LuaThread;
 import org.luaj.vm2.LuaValue;
+import org.luaj.vm2.ProtectedCall;
 import org.luaj.vm2.Varargs;
 import org.luaj.vm2.YieldContinuationException;
 
@@ -222,7 +223,8 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	}
 		
 	// "pcall", // (f, arg1, ...) -> status, result1, ...
-	final class pcall extends LuaContinuableFunction<Object> {
+	final class pcall extends LuaContinuableFunction<Object> implements ProtectedCall {
+		public boolean hasMessageHandler() { return false; }
 		public Varargs invoke(Varargs args, Object continuation) {
 			if (continuation != null) {
 				if (continuation instanceof YieldContinuationException inner) {
@@ -252,6 +254,11 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 			LuaValue func = args.checkvalue(1);
 			if (state != null && state.debuglib != null)
 				state.debuglib.onCall(this);
+			// An enclosing xpcall's handler must not see errors this pcall catches.
+			final LuaThread et = state != null ? state.getCurrentThread() : null;
+			final LuaValue preverror = et != null ? et.errorfunc : null;
+			if (et != null)
+				et.errorfunc = null;
 			Varargs result;
 			try {
 				result = func.invoke(args.subargs(2));
@@ -266,6 +273,8 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 				final String m = e.getMessage();
 				return varargsOf(FALSE, valueOf(m!=null? m: e.toString()));
 			} finally {
+				if (et != null)
+					et.errorfunc = preverror;
 				if (state != null && state.debuglib != null)
 					state.debuglib.onReturn();
 			}
@@ -293,7 +302,8 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 			for ( int i=1, n=args.narg(); i<=n; i++ ) {
 				if ( i>1 ) state.STDOUT.print( '\t' );
 				LuaString s = tostring.call( args.arg(i) ).strvalue();
-				state.STDOUT.print(s.tojstring());
+				// Raw bytes, like C Lua: decoding to a Java String would mangle non-UTF-8 data.
+				state.STDOUT.write(s.m_bytes, s.m_offset, s.m_length);
 			}
 			state.STDOUT.print('\n');
 			return NONE;
@@ -410,7 +420,8 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	}
 
 	// "xpcall", // (f, err) -> result1, ...
-	final class xpcall extends LuaContinuableFunction<Object> {
+	final class xpcall extends LuaContinuableFunction<Object> implements ProtectedCall {
+		public boolean hasMessageHandler() { return true; }
 		public Varargs invoke(Varargs args, Object continuation) {
 			if (continuation != null) {
 				if (continuation instanceof YieldContinuationException inner) {
@@ -562,7 +573,7 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 				offset = ls.m_offset;
 				remaining = ls.m_length;
 				if (remaining <= 0)
-					return -1;
+					return remaining = -1; // an empty string ends the chunk, like nil
 			}
 			--remaining;
 			return 0xFF&bytes[offset++];

@@ -5,6 +5,16 @@
 ---@class mcApi
 mc = {}
 
+---@class ItemOpts
+---@field count? integer
+---@field name? string
+---@field lore? string[]
+---@field unbreakable? boolean
+---@field custom_model_data? integer
+
+---@class ItemSpec : ItemOpts
+---@field id string
+
 -- === Functions =============================================================
 
 ---@param text string
@@ -116,7 +126,7 @@ function mc.mapped(className) end
 
 ---Registers a custom mob behaviour handler. See /reference/mob-ai.
 ---@param id string
----@param fn fun(entity. Mob, ctx. table)
+---@param fn fun(entity: Mob, ctx: table)
 function mc.registerBehaviour(id, fn) end
 
 ---@param title string
@@ -131,29 +141,18 @@ function mc.createBossBar(title, color, style) end
 ---@return boolean, integer|string
 function mc.execute(command, opts) end
 
----Creates an ItemStack. Two overloads.
----  createItem("minecraft.stone", 64)
----  createItem({ id = "minecraft.diamond_sword", count = 1, name = "Excalibur", lore = {...}, unbreakable = true, custom_model_data = 1 })
----@param idOrSpec string|table
----@param count? integer
+---Creates an ItemStack. Three forms:
+---  createItem("minecraft:stone", 64)
+---  createItem("minecraft:diamond_sword", { name = "Excalibur", lore = {...}, unbreakable = true })
+---  createItem({ id = "minecraft:diamond_sword", count = 1, name = "Excalibur", custom_model_data = 1 })
+---@param idOrSpec string|ItemSpec
+---@param countOrOpts? integer|ItemOpts
 ---@return Item
-function mc.createItem(idOrSpec, count) end
+function mc.createItem(idOrSpec, countOrOpts) end
 
 -- === Event methods =========================================================
 
----Subscribes a handler to an event. Returns a handler id (pass to `mc.off`).
----@param event PxIgnisEventName|string
----@param handler fun(...):boolean|nil  -- return false to cancel (cancellable events only)
----@return integer
-function mc.on(event, handler) end
-
----@param id integer
----@return boolean
-function mc.off(id) end
-
----Fires an event synchronously. Useful for cross-script communication.
----@param event string
-function mc.emit(event, ...) end
+-- mc.on / mc.off / mc.emit: see 19-events.lua
 
 -- === Properties ============================================================
 
@@ -169,15 +168,3 @@ mc.onlineCount = nil
 ---@type table<string, any>
 mc.data = nil
 
--- === Async (coroutine only) ================================================
-
----Performs an HTTP request. **Only valid in a coroutine context** (e.g.
----inside `mc.schedule`); for event handlers, wrap with `mc.schedule(0, fn)`.
----@param request string|FetchRequest
----@return FetchResult
-function mc.fetch(request) end
-
----Yields the current coroutine for the given number of server ticks.
----**Only valid in a coroutine context.**
----@param ticks integer
-function mc.sleep(ticks) end

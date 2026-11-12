@@ -131,17 +131,17 @@ public class JavaFunctionYieldTest extends TestCase {
 		assertEquals("yield_val", result.arg(2).tojstring());
 		assertEquals("suspended", co.getStatus());
 
-		// Second call to yield_fn: yields
-		result = co.resume(LuaValue.NONE);
+		// Second call to yield_fn: yields; the first call returns what this resume passed
+		result = co.resume(LuaValue.valueOf("first"));
 		assertTrue(result.arg1().toboolean());
 		assertEquals("yield_val", result.arg(2).tojstring());
 		assertEquals("suspended", co.getStatus());
 
-		// After both calls complete, Lua returns r1, r2
-		result = co.resume(LuaValue.NONE);
+		// Each yield_fn call returns the values of the resume that continued it
+		result = co.resume(LuaValue.valueOf("second"));
 		assertTrue(result.arg1().toboolean());
-		assertEquals("yield_val", result.arg(2).tojstring());
-		assertEquals("yield_val", result.arg(3).tojstring());
+		assertEquals("first", result.arg(2).tojstring());
+		assertEquals("second", result.arg(3).tojstring());
 		assertEquals("dead", co.getStatus());
 	}
 
@@ -290,17 +290,25 @@ public class JavaFunctionYieldTest extends TestCase {
 		assertEquals("dead", r.arg(4).tojstring());
 	}
 
-	public void testYieldInsidePcallClosureIsAnError() {
+	/** pcall is a protected frame, so a yield inside the pcall'd closure suspends and resumes. */
+	public void testYieldInsidePcallClosureSuspendsAndResumes() {
 		state.globals.set("reached_in_pcall", LuaValue.NIL);
 		LuaValue f = state.load(
 			"local co = coroutine.create(function()\n" +
 			"  return pcall(function() coroutine.yield('y'); reached_in_pcall = true end)\n" +
 			"end)\n" +
-			"local r, ok, err = coroutine.resume(co)\n" +
-			"return r, ok, err, coroutine.status(co), reached_in_pcall", "pcallclosure");
+			"local r1, y = coroutine.resume(co)\n" +
+			"local s1 = coroutine.status(co)\n" +
+			"local r2, ok = coroutine.resume(co)\n" +
+			"return r1, y, s1, r2, ok, coroutine.status(co), reached_in_pcall", "pcallclosure");
 		Varargs r = f.invoke(LuaValue.NONE);
-		assertPcallBoundaryError(r);
-		assertTrue("body must not run past the yield", r.arg(5).isnil());
+		assertTrue(r.arg(1).toboolean());
+		assertEquals("y", r.arg(2).tojstring());
+		assertEquals("suspended", r.arg(3).tojstring());
+		assertTrue(r.arg(4).toboolean());
+		assertTrue(r.arg(5).toboolean());
+		assertEquals("dead", r.arg(6).tojstring());
+		assertTrue(r.arg(7).toboolean());
 	}
 
 	public void testYieldInsideSortComparatorUnderPcallIsAnError() {

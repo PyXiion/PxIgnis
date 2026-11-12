@@ -1,0 +1,108 @@
+---
+title: 5. Boss bar and scoreboard
+description: "Arena tutorial, chapter 5: a boss bar with the countdown and a scoreboard sidebar for each player."
+---
+
+import { Code } from '@astrojs/starlight/components';
+import checkpoint from '../../../../tutorial/arena/05-interface.lua?raw';
+
+The game works, but players see little of it. This chapter adds a boss bar at the top of the screen with
+the phase and the time, and a scoreboard on the right.
+
+## The boss bar
+
+One [boss bar](/reference/bossbar-api) is shared by all arena players. It is created when the script loads
+(and, like regions, removed on reload):
+
+```lua
+local bar = mc.createBossBar("Arena", "yellow", "progress")
+```
+
+Players are added when they join and removed when they leave:
+
+```lua
+        bar:addPlayer(player)
+```
+
+```lua
+local function hideUI(player)
+    bar:removePlayer(player)
+    player.sidebar = nil
+end
+```
+
+```lua
+    hideUI(player)
+```
+
+## Updating it
+
+`updateUI` sets the bar's text and fill from the phase. `bar.progress` goes from 0 to 1:
+
+```lua
+local function updateUI()
+    local status
+    if game.phase == "waiting" then
+        status = string.format("Waiting for players: %d/%d", count(game.players), MIN_PLAYERS)
+        bar.progress = math.min(1, count(game.players) / MIN_PLAYERS)
+    elseif game.phase == "countdown" then
+        status = string.format("Starting in %d s", game.timer)
+        bar.progress = game.timer / COUNTDOWN
+    elseif game.phase == "playing" then
+        local minutes, seconds = math.floor(game.timer / 60), game.timer % 60
+        status = string.format("Alive: %d · %d:%02d", count(game.alive), minutes, seconds)
+        bar.progress = game.timer / ROUND_TIME
+    else
+        status = "Round over"
+        bar.progress = 1
+    end
+    bar.title = status
+```
+
+`string.format` fills in `%d` (a whole number) and `%02d` (at least two digits, so `4:05` and not `4:5`).
+
+It is called at the end of `tick`, so it refreshes once a second, and after each join so the new player sees
+it at once:
+
+```lua
+    updateUI()
+```
+
+## The scoreboard
+
+Every player has their own [sidebar](/reference/sidebar-api). Assigning a table to `player.sidebar` creates
+it or updates it; assigning `nil` removes it (see `hideUI` above):
+
+```lua
+    for uuid, player in pairs(game.players) do
+        player.sidebar = {
+            title = "§6§lArena",
+            lines = {
+                game.alive[uuid] and "§aYou are fighting" or "§7You are watching",
+                "Players: §e" .. count(game.players),
+            },
+        }
+    end
+end
+```
+
+`a and b or c` is Lua's short form of "if a then b else c" (as long as `b` is not `false` or `nil`).
+
+The sidebar has only two lines for now; the next chapters add kills, wins and the kit.
+
+## Try it
+
+Join and watch the bar fill up as players join, count down, then show the time left. Leave the arena: the
+bar and the sidebar disappear.
+
+## Checkpoint
+
+<details>
+<summary>config/ignis/arena.lua after chapter 5</summary>
+
+<Code code={checkpoint} lang="lua" title="config/ignis/arena.lua" />
+
+</details>
+
+**Exercise:** change the bar color with the phase: `bar.color = "green"` while waiting, `"yellow"` during the
+countdown, `"red"` during the fight.

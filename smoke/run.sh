@@ -125,7 +125,8 @@ EOF
     local ok fail errors done_
     ok=$(grep -c '^\[SMOKE\] .*: OK$' "$log" || true)
     fail=$(grep '^\[SMOKE\] .*: FAIL' "$log" || true)
-    errors=$(grep -E '/(ERROR|FATAL)\]' "$log" || true)
+    # Errors the smoke script provokes on purpose: a throwing handler (fail-closed events) and a runaway task (watchdog).
+    errors=$(grep -E '/(ERROR|FATAL)\]' "$log" | grep -vE 'smoke: expected failure|ignis-smoke\.lua:[0-9]+: script exceeded the' || true)
     done_=$(grep -c '^\[SMOKE\] all done' "$log" || true)
 
     local status=0

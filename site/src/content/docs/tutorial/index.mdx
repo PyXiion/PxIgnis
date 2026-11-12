@@ -1,0 +1,73 @@
+---
+title: "Tutorial: an arena minigame"
+description: Build a complete PvP arena minigame with PxIgnis, one feature per chapter.
+---
+
+In this tutorial you build a small but complete minigame: a PvP arena where the last player standing wins.
+Each chapter adds one feature and one part of the PxIgnis API, so by the end you have used most of what a
+real server script needs.
+
+The finished arena has:
+
+- setup commands for admins: arena corners, spawn points, lobby, leaderboard;
+- `/arena join`, `/arena leave`: a queue, a countdown and rounds that start by themselves;
+- knockouts instead of deaths, so nobody loses their items or sees a death screen;
+- a boss bar with the countdown and time left, and a scoreboard for every player;
+- kits chosen from a chest menu, while the player's own items wait safely in storage;
+- statistics per player and a leaderboard hologram;
+- an `arena:win` event that other scripts use for rewards;
+- clean behaviour on `/ignis reload` and after a server crash.
+
+## Before you start
+
+You need a server with PxIgnis and operator rights (or the `px.ignis` permission). Three things make the
+work much faster; set them up first:
+
+1. **Editor.** Open `config/ignis/` in VS Code with the Lua extension, as described in
+   [Editor setup](/guide/getting-started#editor-setup). You get completion for the whole API and your
+   typos are underlined before you even reload.
+2. **Auto-reload.** Run `/ignis watch on`. From now on every save of a `.lua` file reloads the scripts and
+   the result shows up in chat.
+3. **Errors in chat.** Script errors are sent to operators in chat
+   ([details](/guide/getting-started#script-errors-in-chat)), with the file and line.
+
+`/ignis eval <lua>` runs a line of Lua in the scripts' environment, handy for quick checks:
+`/ignis eval me.pos` prints where you stand, `/ignis eval mc.data.arena` shows the saved arena settings.
+
+## How the tutorial works
+
+Everything lives in one file, `config/ignis/arena.lua`, which grows from chapter to chapter. The code
+snippets in the text are pieces of it. Each chapter ends with a **checkpoint**: the complete file as it
+should look at that point. If something does not work, compare with it; to start from any chapter, copy
+the checkpoint of the previous one.
+
+The arena expects all its points (corners, spawns, lobby) in one area of one world. Build it somewhere
+flat first: a fenced 20×20 field is enough, and a lobby a little outside it.
+
+## Chapters
+
+1. [Commands and saved settings](/tutorial/01-commands): `register`, permissions, `mc.data`.
+2. [The arena region](/tutorial/02-region): regions and cancelling block events.
+3. [Rounds](/tutorial/03-rounds): a game loop with the scheduler and `async.sleep`.
+4. [Fights](/tutorial/04-fights): knockouts with `entity.death`, region enter and leave.
+5. [Boss bar and scoreboard](/tutorial/05-interface): boss bars, sidebars and titles.
+6. [Statistics and leaderboard](/tutorial/06-stats): `player.data` and holograms.
+7. [Kits and inventories](/tutorial/07-kits): saving items and a chest menu.
+8. [Events for other scripts](/tutorial/08-events): `mc.emit` and a second script.
+9. [Reloads and crashes](/tutorial/09-reliability): what survives a reload and how to clean up.
+
+## The Lua you need
+
+If you have written a bit of JavaScript or Python, Lua reads easily. The differences that matter here:
+
+- `local` makes a variable local to the file or the block. Use it for everything; globals are shared by all
+  scripts.
+- Tables (`{}`) are both arrays and dictionaries. Arrays start at index **1**; `#t` is the length of an
+  array; `pairs(t)` iterates over all keys, `ipairs(t)` over array items in order.
+- `nil` means "no value". Setting a table key to `nil` removes it.
+- `..` joins strings: `"Hello, " .. player.name`.
+- `obj:method(x)` is a method call and is the same as `obj.method(obj, x)`. PxIgnis objects use `:` for
+  methods and `.` for properties: `player:sendMessage("hi")`, `player.health = 20`.
+- `§` codes color text in Minecraft: `§a` green, `§c` red, `§e` yellow, `§7` gray, `§6` gold, `§l` bold.
+
+More in [Language](/reference/language).

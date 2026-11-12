@@ -8,12 +8,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.state.BlockState;
-import org.luaj.vm2.LuaValue;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import ru.pyxiion.ignis.PxIgnis;
-import ru.pyxiion.ignis.api.Vector;
-import ru.pyxiion.ignis.api.wrapper.PlayerWrap;
+import ru.pyxiion.ignis.events.GameEvents;
 
 @Mixin(BlockItem.class)
 public abstract class BlockItemMixin {
@@ -32,16 +29,10 @@ public abstract class BlockItemMixin {
     )
     private boolean pxrp$onPlaceBlock(BlockItem item, BlockPlaceContext context, BlockState state, Operation<Boolean> original) {
         if (context.getPlayer() instanceof ServerPlayer player) {
-            var rt = PxIgnis.getRuntimeOrNull();
-            if (rt != null) {
-                BlockPos pos = context.getClickedPos();
-                if (rt.getEventManager().fireCancellable("player_block_place", () -> new LuaValue[]{
-                    PlayerWrap.INSTANCE.wrap(player),
-                    Vector.Companion.of(pos.getX(), pos.getY(), pos.getZ()).toLuaValue(),
-                    LuaValue.valueOf(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString())
-                })) {
-                    return false;
-                }
+            BlockPos pos = context.getClickedPos();
+            String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+            if (!GameEvents.placeBlock(player, pos, blockId)) {
+                return false;
             }
         }
         return original.call(item, context, state);

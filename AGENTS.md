@@ -54,12 +54,25 @@ config and internals are allowed and expected whenever they make the design simp
 - `luaj` numbers: `LuaString.isint()` / `isnumber()` are true for numeric strings, and `LuaNumber.isstring()` is true.
   Branch on `type()` when the distinction matters.
 - `ItemStackWrap.wrap()` holds the live stack; `ItemStackWrap.unwrap()` returns a copy.
+- Events: built-in names live in `events/EventCatalog.kt` (`GlobalEvents`, `RegionEvents`); Minecraft callbacks
+  post them through `events/GameEvents.kt` (mixins call its `@JvmStatic` functions). Handlers get one event table
+  `e` (fields set with `rawset`, `e:cancel()` from a shared metatable). Pre-0.18 names are `LegacyEvent` views that
+  rebuild positional args from `e`. Adding an event = `EventDef` + a `GameEvents` function + `lua-types/19-events.lua`
+  + `site/.../reference/events.md`. Design: `docs/events.md`.
+- Script errors/warnings go through `runtime/ScriptErrors` (log + chat to `px.ignis.prompt_errors`, rate-limited),
+  not `logger` directly.
 
 ## Releases
 
 Bump `mod_version` in `gradle.properties` and the badge in `README.md`, add the changelog entry, tag `v<version>`.
 **Never commit a version bump or changelog entry without user review.** Stage the files and stop.
 CI (`.github/workflows/build.yml`) builds both targets and publishes to Modrinth on tag push.
+
+## Tutorial
+
+`site/src/content/docs/tutorial/` is a step-by-step arena minigame; its code is in `site/tutorial/arena/`
+(one checkpoint file per chapter) and is checked by `site/tutorial/test.sh` (snippets match checkpoints,
+LuaLS against `lua-types/`, a fake-API game run). API changes that touch it must keep that script green.
 
 ## More
 

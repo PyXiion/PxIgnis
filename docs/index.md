@@ -7,3 +7,5 @@ code. Changelog entries describe what changed; these describe the reasoning.
 
 - [Async suspend bridge (Kotlin ↔ Lua)](./async-suspend-bridge.md) — how Lua coroutines call Kotlin `suspend` blocks
   without blocking the server thread.
+- [Event model](./events.md) — event tables, cancellation, priorities, fail-closed errors and how the old
+  positional event names are kept working.

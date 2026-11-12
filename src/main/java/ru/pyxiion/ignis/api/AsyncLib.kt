@@ -17,6 +17,7 @@ import ru.pyxiion.ignis.parallel.SharedLib
 import ru.pyxiion.ignis.parallel.Snapshotter
 import ru.pyxiion.ignis.parallel.StdlibRegistry
 import ru.pyxiion.ignis.parallel.checkGlobals
+import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import ru.pyxiion.ignis.sandbox.Vfs
 import java.time.Duration
 
@@ -216,7 +217,7 @@ class AsyncLib(
         val previous = LuaState.current()
         LuaState.setCurrent(luaState)
         try {
-            val result = thread.resume(args)
+            val result = ScriptWatchdog.guard { thread.resume(args) }
             if (thread.status == "dead") {
                 if (result.arg1().toboolean()) {
                     awaitable.resolve(result.subargs(2))
@@ -368,39 +369,19 @@ class AsyncLib(
     private fun handleFetch(args: Varargs): Varargs {
         if (args.narg() < 1) throw LuaError("async.fetch(url) or async.fetch({...}) requires 1 argument")
 
-        val (url, method, headers, body, timeout) = parseRequest(args.arg(1))
-
-        val builder = HttpRequest.newBuilder().uri(URI.create(url))
-        headers.forEach { (k, v) -> builder.header(k, v) }
-
-        val bodyPublisher = if (body != null) {
-            HttpRequest.BodyPublishers.ofString(body)
-        } else {
-            HttpRequest.BodyPublishers.noBody()
-        }
-
-        when (method.uppercase()) {
-            "GET" -> builder.GET()
-            "DELETE" -> builder.DELETE()
-            "HEAD" -> builder.method("HEAD", HttpRequest.BodyPublishers.noBody())
-            else -> builder.method(method.uppercase(), bodyPublisher)
-        }
-
-        timeout?.let { builder.timeout(Duration.ofSeconds(it)) }
-
-        val request = builder.build()
+        val request = LuaHttp.buildRequest(LuaHttp.parseRequest(args.arg(1)))
         val co = luaState.currentThread
             ?: throw LuaError("async.fetch: must be called inside a coroutine")
         val gen = generation
 
         // The completion runs on an HTTP client thread: the response table is built and the coroutine resumed
         // on the server thread, and not at all if the scripts were reloaded in the meantime.
-        httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+        LuaHttp.send(request)
             .whenComplete { response, error ->
                 dispatch {
                     if (gen == generation) {
                         try {
-                            val result = if (error != null) buildError(error) else buildResponse(response)
+                            val result = if (error != null) LuaHttp.buildError(error) else LuaHttp.buildResponse(response)
                             resumeThread(co, result, "async.fetch callback", gen)
                         } catch (e: Throwable) {
                             PxIgnis.logger.error("async.fetch: не удалось возобновить корутину: ${e.message}", e)
@@ -518,7 +499,7 @@ class AsyncLib(
 
     internal fun buildModule(stdlib: StdlibRegistry): LuaTable {
         this.stdlib = stdlib
-        responseMetaReset()
+        LuaHttp.resetResponseMeta()
         val module = LuaTable()
         module.set("task", luaVarFunction(::handleTask))
         module.set("run", runFn)
@@ -533,155 +514,8 @@ class AsyncLib(
         return module
     }
 
-    // ── HTTP / JSON (companion) ────────────────────────────────────────
-
-    private data class RequestConfig(
-        val url: String,
-        val method: String,
-        val headers: Map<String, String>,
-        val body: String?,
-        val timeout: Long?
-    )
-
-    private fun parseRequest(arg: LuaValue): RequestConfig {
-        if (arg.isstring()) {
-            val url = arg.checkjstring()
-            validateUrl(url)
-            return RequestConfig(url, "GET", emptyMap(), null, DEFAULT_TIMEOUT)
-        }
-
-        val table = arg.checktable()
-        val url = table.get("url").checkjstring()
-        validateUrl(url)
-        val method = table.get("method").optjstring("GET")
-
-        val headers = mutableMapOf<String, String>()
-        table.get("headers").opttable(null)?.forEach { k, v ->
-            headers[k.checkjstring().lowercase()] = v.checkjstring()
-        }
-
-        val bodyVal = table.get("body")
-        val jsonVal = table.get("json")
-        val hasBody = !bodyVal.isnil()
-        val hasJson = !jsonVal.isnil()
-
-        if (hasBody && hasJson) throw LuaError("fetch: body and json are mutually exclusive")
-
-        val body = when {
-            hasBody -> bodyVal.checkjstring()
-            hasJson -> {
-                if (!headers.containsKey("content-type")) {
-                    headers["content-type"] = "application/json"
-                }
-                luaToJsonString(jsonVal)
-            }
-            else -> null
-        }
-
-        val timeout = table.get("timeout").optlong(DEFAULT_TIMEOUT)
-        if (timeout <= 0) throw LuaError("fetch: timeout must be a positive number of seconds, got $timeout")
-        return RequestConfig(url, method, headers, body, timeout)
-    }
-
-    private fun buildResponse(response: HttpResponse<String>): LuaValue {
-        val status = response.statusCode()
-        val body = response.body()
-        val t = LuaTable()
-        t.setmetatable(RESPONSE_META)
-        t.rawset("__body", LuaValue.valueOf(body))
-        t.rawset("ok", LuaValue.valueOf(status in 200..299))
-        t.rawset("status", LuaValue.valueOf(status))
-        t.rawset("text", LuaValue.valueOf(body))
-        t.rawset("headers", buildHeadersTable(response.headers().map()))
-        return t
-    }
-
-    private fun buildError(error: Throwable): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(RESPONSE_META)
-        t.rawset("ok", LuaValue.FALSE)
-        t.rawset("error", LuaValue.valueOf(error.message ?: "Unknown error"))
-        return t
-    }
-
-    private fun buildHeadersTable(headers: Map<String, List<String>>): LuaTable {
-        val t = LuaTable()
-        for ((key, values) in headers) {
-            if (values.isNotEmpty()) t.rawset(key, LuaValue.valueOf(values.first()))
-        }
-        return t
-    }
-
     companion object {
-        private const val DEFAULT_TIMEOUT = 10L
-
         /** Rounds of [drain] per tick. A wake-up chain is a few rounds long; this only bounds runaway loops. */
         private const val MAX_DRAIN_ROUNDS = 1024
-
-        private fun validateUrl(url: String) {
-            val uri = try {
-                URI.create(url)
-            } catch (e: IllegalArgumentException) {
-                throw LuaError("fetch: invalid URL '$url': ${e.message}")
-            }
-            if (uri.scheme == null || uri.host == null) {
-                throw LuaError("fetch: URL '$url' needs a scheme and host (http:// or https://)")
-            }
-        }
-
-        private val httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(DEFAULT_TIMEOUT))
-            .build()
-
-        private val gson = Gson()
-
-        var RESPONSE_META: LuaTable = LuaTable()
-            private set
-
-        private val responseKeys = listOf("ok", "status", "text", "headers", "json")
-
-        fun responseMetaReset() {
-            RESPONSE_META = LuaTable()
-            metaInit(RESPONSE_META)
-        }
-
-        private fun metaInit(meta: LuaTable) {
-            meta.rawset("__index", luaFunction { self, key ->
-                val s = self.checktable()
-                val k = key.checkjstring()
-                if (k == "json") {
-                    val cached = s.rawget("json")
-                    if (!cached.isnil()) return@luaFunction cached
-                    val body = s.rawget("__body")
-                    if (body.isnil()) return@luaFunction LuaValue.NIL
-                    val parsed = try {
-                        jsonStringToLua(body.checkjstring())
-                    } catch (e: JsonSyntaxException) {
-                        throw LuaError("HTTP response body is not valid JSON: ${e.message}")
-                    }
-                    s.rawset("json", parsed)
-                    parsed
-                } else {
-                    LuaValue.NIL
-                }
-            })
-
-            meta.rawset("__pairs", luaVarFunction { args ->
-                val self = args.arg(1)
-                var i = 0
-                val iterator = luaVarFunction { _: Varargs ->
-                    if (i >= responseKeys.size) LuaValue.NIL as Varargs
-                    else {
-                        val key = responseKeys[i]; i++
-                        LuaValue.varargsOf(LuaValue.valueOf(key), self.get(key))
-                    }
-                }
-                LuaValue.varargsOf(iterator, self, LuaValue.NIL)
-            })
-        }
-
-        private fun jsonStringToLua(json: String): LuaValue = LuaJson.fromJson(JsonParser.parseString(json))
-
-        private fun luaToJsonString(value: LuaValue): String = gson.toJson(LuaJson.toJson(value, "json"))
     }
 }

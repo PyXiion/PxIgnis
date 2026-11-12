@@ -1,11 +1,12 @@
 package ru.pyxiion.ignis
 
 import org.luaj.vm2.LuaClosure
-import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaThread
 import org.luaj.vm2.LuaValue
+import ru.pyxiion.ignis.runtime.ScriptErrors
+import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import java.util.PriorityQueue
 
 /** Server-thread only: Lua runs on one thread, so there is no locking. */
@@ -44,12 +45,12 @@ class Scheduler(private val stateProvider: () -> LuaState) {
             try {
                 val cb = task.callback
                 if (cb is LuaClosure) {
-                    LuaThread(state, cb).resumeOrLog(LuaValue.NONE, "Ошибка в задании планировщика #${task.id}")
+                    LuaThread(state, cb).resumeOrLog(LuaValue.NONE, "scheduled task #${task.id}")
                 } else {
-                    cb.call()
+                    ScriptWatchdog.guard { cb.call() }
                 }
-            } catch (e: LuaError) {
-                PxIgnis.logger.error("Ошибка в задании планировщика #${task.id}: ${e.message}", e)
+            } catch (e: Throwable) {
+                ScriptErrors.error("scheduled task #${task.id}", e)
             }
         }
     }
@@ -72,6 +73,9 @@ class Scheduler(private val stateProvider: () -> LuaState) {
         if (tasks.none { it.id == id }) return false
         return cancelledIds.add(id)
     }
+
+    /** Tasks waiting to run (cancelled ones that were not reached yet are not counted). */
+    fun pendingCount(): Int = tasks.count { it.id !in cancelledIds }
 
     fun clear() {
         tasks.clear()

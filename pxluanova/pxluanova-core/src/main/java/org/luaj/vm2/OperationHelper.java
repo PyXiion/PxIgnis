@@ -84,8 +84,9 @@ public final class OperationHelper {
 		LuaValue h = left.metatag(tag);
 		if (!h.isnil()) return h.call(left, right);
 
+		// Operands keep their order whichever side supplies the handler: 2 * v calls __mul(2, v).
 		h = right.metatag(tag);
-		if (!h.isnil()) return h.call(right, left);
+		if (!h.isnil()) return h.call(left, right);
 
 		throw createArithmeticError(left, right);
 	}
@@ -132,6 +133,7 @@ public final class OperationHelper {
 		if (tLeft == LuaValue.TSTRING && tRight == LuaValue.TSTRING) return left.strvalue().strcmp(right.strvalue()) <= 0;
 
 		LuaValue leMt = left.metatag(LuaValue.LE);
+		if (leMt.isnil()) leMt = right.metatag(LuaValue.LE);
 		if (!leMt.isnil()) return leMt.call(left, right).toboolean();
 
 		LuaValue ltMt = left.metatag(LuaValue.LT);
@@ -196,8 +198,9 @@ public final class OperationHelper {
 			}
 			return LuaDouble.valueOf(-value.todouble());
 		} else if (type == LuaValue.TSTRING) {
-			double res = value.todouble();
-			if (!Double.isNaN(res)) return LuaDouble.valueOf(-res);
+			// todouble() yields 0 for non-numeric strings; only numeric strings may be negated.
+			LuaValue n = value.tonumber();
+			if (!n.isnil()) return LuaDouble.valueOf(-n.todouble());
 		}
 
 		LuaValue meta = value.metatag(LuaValue.UNM);

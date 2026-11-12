@@ -38,11 +38,10 @@ description: Release history for PxIgnis.
   gone (`mc.createInventory` returns a plain inventory); `inv:getItem`/`setItem` with a slot out of range and
   `inv:open` with a size that is not 9 × 1..6 raise errors. `chestgui` keys its containers by `player.uuid`, a button
   must return `true` to let a click through and shift-click from the player's inventory is cancelled.
-- **Events:** `player_hurt`, `entity_hurt`, `player_death` and `entity_death` take `(victim, amount, msgId, attacker)`
-  with the full `msgId`; `player_hurt`/`entity_hurt` used to be `(victim, damageType, amount[, source])` with a
-  shortened type. `player_block_place` reports the placement position and the placed block and fires inside the
-  placement (once, cancellable), not on every right-click with a block item. `player_pickup_item` fires once per
-  pickup attempt, after the pickup delay; `player_consume_item` is for players only and a cancel resends the inventory.
+- **Events:** `block.place` (`player_block_place`) reports the placement position and the placed block and fires inside
+  the placement (once, cancellable), not on every right-click with a block item. `player.pickup`
+  (`player_pickup_item`) fires once per pickup attempt, after the pickup delay; `player.consume`
+  (`player_consume_item`) is for players only and a cancel resends the inventory.
 - **`mc.broadcast(text, overlay)` / `world:broadcastInRange(text, pos, range, overlay)`:** `overlay` is a boolean
   (action bar); a number is an error and the title timings are not touched. `simple.defaultOverlay` is removed.
 - `entity.pos = v` teleports (a player gets the position packet) instead of `setPos`; `player.gamemode = "typo"`,
@@ -77,8 +76,19 @@ description: Release history for PxIgnis.
   villagers and piglins stayed without behaviour for good): brain-driven mobs get the Lua goal next to their own
   behaviour, so vanilla behaviour keeps running while the goal runs. A goal pausing (`Goal.stop()`) no longer ends
   the Lua AI; a Lua AI error is logged with the behaviour id.
+- **New event model.** Built-in events have new names (`player.join`, `block.break`, `entity.hurt`, ...) and pass
+  one event table `e` instead of positional arguments; cancel with `e:cancel(reason?)`. The old names still work
+  with positional arguments and `return false`, and log a deprecation warning. See
+  [Events](/reference/events#old-event-names) for the mapping.
+- **Cancelled events skip later handlers** unless they are registered with `{ receiveCancelled = true }`. This also
+  applies to handlers under the old names.
+- **Errors cancel.** A handler of a cancellable event that throws now cancels the event (a crashing whitelist used to
+  let everyone in).
+- **`mc.emit` refuses built-in event names.** It returns `false` when a handler of the custom event returned `false`.
+- Region events: `enter`, `leave`, `move`, `death` with `e.entity` / `e.player` / `e.region`; the old `entity_*` /
+  `player_*` names still work.
 
-### New API
+### New
 
 - **`entity.yaw`, `entity.pitch`, `entity.noGravity`, `entity.velocity`, `mob.noAi` and `entity:remove()`** (`remove`
   was documented in the type stubs but did not exist). `remove()` discards the entity without death or loot and
@@ -88,6 +98,17 @@ description: Release history for PxIgnis.
   `async.map()`, `async.counter()` and `async.channel()` cross by reference or copy as described in the Async API.
   `/ignis reload` cancels running and queued calls.
 - **`table.freeze(t)` / `table.isfrozen(t)`**: deep, permanent read-only tables.
+- **Handler options** for `mc.on` and `region:on`: `priority` (a number, higher runs first; aliases `lowest` ...
+  `highest`), `receiveCancelled`, `throttle`.
+- **Unknown event names** produce a warning with the closest name ("did you mean 'player.join'?").
+- **Script errors in chat**: errors in handlers, commands and scheduled tasks are sent to players with
+  `px.ignis.prompt_errors` (operators by default), at most once per 10 seconds per error.
+- **Editor support**: `config/ignis/.types/` (LuaLS type definitions, refreshed on start) and `.luarc.json` (created
+  once). Event handlers are typed per event.
+- **`/ignis watch on|off`**: reload automatically when a `.lua` file is saved (`-Dpxignis.watch=true` to start on).
+- **`/ignis eval <lua>`**: run Lua in the scripts' environment, `me` is the caller (`px.ignis.eval`).
+- **`/ignis status`**: loaded scripts, handlers per event, commands, scheduled tasks, regions.
+- `player.login` kick message: `e:cancel("reason")`.
 
 ### Bugfixes
 
@@ -121,8 +142,12 @@ description: Release history for PxIgnis.
   coroutine twice. `async.run`, `task:wait`, `async.all`, a blocking channel `send` / `receive` and calls of
   `async.parallel` functions outside a coroutine raise an error before starting any work. A parallel function
   that raises a non-string error object reports it as a string.
+- Region `death` / `entity_death` / `player_death` handlers were never called.
+- `throttle` on region handlers only counted down while the region had a `tick` handler; the global bus only while
+  some `tick` handler existed.
 
 ### Internal
+
 
 - Multi-version build: `-PtargetVersion=1.21.11|26.3` selects `gradle/versions/<v>.properties`. 1.21.11 is built with
   Loom remapping, 26.3 uses the unobfuscated Loom flavour (no mappings, Java 25).

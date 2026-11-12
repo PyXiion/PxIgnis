@@ -7,7 +7,6 @@ import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.network.protocol.game.ClientboundSetCursorItemPacket;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.level.ServerPlayer;
-import org.luaj.vm2.LuaValue;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -15,9 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import ru.pyxiion.ignis.Compat;
-import ru.pyxiion.ignis.PxIgnis;
-import ru.pyxiion.ignis.api.wrapper.ItemStackWrap;
-import ru.pyxiion.ignis.api.wrapper.PlayerWrap;
+import ru.pyxiion.ignis.events.GameEvents;
 
 @Mixin(ServerGamePacketListenerImpl.class)
 public abstract class ServerPlayNetworkHandlerMixin {
@@ -95,12 +92,6 @@ public abstract class ServerPlayNetworkHandlerMixin {
 
     @Unique
     private boolean fireDropEvent(ItemStack stack, int count) {
-        var rt = PxIgnis.getRuntimeOrNull();
-        if (rt == null) return false;
-        return rt.getEventManager().fireCancellable("player_drop_item", () -> new LuaValue[]{
-            PlayerWrap.INSTANCE.wrap(player),
-            ItemStackWrap.INSTANCE.wrap(stack),
-            LuaValue.valueOf(count)
-        });
+        return !GameEvents.drop(player, stack, count);
     }
 }

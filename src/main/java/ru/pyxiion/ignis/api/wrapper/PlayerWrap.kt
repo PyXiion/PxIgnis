@@ -32,6 +32,7 @@ import ru.pyxiion.ignis.lookup
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.isAdmin
+import ru.pyxiion.ignis.SCRIPT_PERMISSION_LEVEL
 import ru.pyxiion.ignis.unwrap
 
 object PlayerWrap {
@@ -106,7 +107,8 @@ object PlayerWrap {
 
         method("hasPermission") { args ->
             val self = args.arg(1).checktable()
-            LuaValue.valueOf(Permissions.check(self.unwrap<ServerPlayer>(), args.arg(2).checkjstring()))
+            val player = self.unwrap<ServerPlayer>()
+            LuaValue.valueOf(Permissions.check(player, args.arg(2).checkjstring(), SCRIPT_PERMISSION_LEVEL))
         }
 
         method("sendMessage") { args ->

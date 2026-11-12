@@ -52,6 +52,10 @@ function ChestGuiInstance:open(player) end
 ---@param player Player
 function ChestGuiInstance:close(player) end
 
+---Changes the title used by the next `open`.
+---@param title string
+function ChestGuiInstance:setTitle(title) end
+
 ---Sets the item in a slot.
 ---@param row integer
 ---@param col integer
@@ -179,3 +183,18 @@ function Fx.helix(opts) end
 ---@param opts FxPlayOpts
 ---@return FxHandle
 function Fx.play(node, opts) end
+
+---`require "async"`. Only `sleep` and `fetch` are typed here; see
+---https://ignis.pyxiion.ru/reference/async-api for tasks, promises and `async.parallel`.
+---@class AsyncLib
+local Async = {}
+
+---Yields the current coroutine for the given number of server ticks.
+---Valid in command/event handlers, scheduler callbacks and async tasks.
+---@param ticks integer
+function Async.sleep(ticks) end
+
+---Performs an HTTP request, yielding the current coroutine until it completes.
+---@param request string|FetchRequest
+---@return FetchResult
+function Async.fetch(request) end

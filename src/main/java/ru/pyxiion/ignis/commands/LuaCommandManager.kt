@@ -17,6 +17,9 @@ class LuaCommandManager(
 ) {
     private var isRegistered = false
     private val commands = linkedMapOf<String, LiteralCommandNode<CommandSourceStack>>()
+
+    /** Root names of the commands scripts registered. */
+    val commandNames: Set<String> get() = commands.keys
     private val pathPermissions = mutableMapOf<String, MutableSet<String?>>()
     private val originalNodes = mutableMapOf<String, LiteralCommandNode<CommandSourceStack>>()
 

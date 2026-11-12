@@ -4,7 +4,7 @@ A modernized, maintained fork of LuaJ 3.0.2 with bug fixes from [wagyourtail/lua
 
 ## Features
 
-- **Modern Java**: Requires Java 21+ — virtual threads for coroutines by default
+- **Modern Java**: Requires Java 21+; coroutines are frame-based and need no threads
 - **Bug fixes**: Comprehensive fixes from wagyourtail/luaj and Cobalt
 - **Enhanced stdlib**: Lua 5.3+ additions (`math.type`, multi-arg `math.min`/`max`, `math.atan(y, x)`)
 - **API compatible**: Drop-in replacement for LuaJ 3.0.2 (`org.luaj.vm2.*` packages)
@@ -27,31 +27,15 @@ LuaValue result = globals.load("return 2 + 2").call();
 System.out.println(result.toint()); // prints 4
 ```
 
-## Coroutines & Virtual Threads
+## Coroutines
 
-PxLuaNova uses Java virtual threads for coroutines by default, enabling millions of concurrent coroutines with minimal memory overhead (~1-10KB per coroutine vs ~1MB for platform threads).
+Coroutines run on the thread that resumes them: `resume` drives a frame-based interpreter until the body
+returns, errors or yields, and a yield just saves the frame stack. No Java thread is parked per coroutine, so
+an abandoned coroutine is ordinary garbage.
 
-```lua
--- Create 10,000 coroutines without memory issues
-local threads = {}
-for i = 1, 10000 do
-    threads[i] = coroutine.create(function()
-        coroutine.yield(i)
-    end)
-end
-
--- Resume all of them
-for i = 1, 10000 do
-    coroutine.resume(threads[i])
-end
-```
-
-### Platform Threads (Opt-out)
-
-```java
-Globals globals = JsePlatform.standardGlobals();
-globals.coroutineThreadFactory = LuaThread.PLATFORM_THREAD_FACTORY;
-```
+Lua code can yield anywhere the frame interpreter runs it directly — including inside `pcall`/`xpcall` and
+generic-`for` iterators. Lua code entered from Java (metamethods, `table.sort` comparators, `load` readers,
+LuaJC-compiled functions) cannot yield and raises `attempt to yield across a C-call boundary`, as in Lua 5.2.
 
 ## Building
 
@@ -65,15 +49,19 @@ globals.coroutineThreadFactory = LuaThread.PLATFORM_THREAD_FACTORY;
 ./gradlew test
 ```
 
-40 known pre-existing test failures — see [AGENTS.md](AGENTS.md) for details.
+Reference-output tests with known differences are excluded, with the reason for each, in
+`pxluanova-test/build.gradle`; everything else must pass.
 
 ## What's New
 
 ### Coroutine model
-- Virtual threads are the default coroutine implementation (Java 21+)
-- `synchronized`/`wait()`/`notify()` replaced with `ReentrantLock`/`Condition` for deadlock-free handoff
-- Configurable `coroutineThreadFactory` on `Globals` (virtual or platform threads)
-- `globals.running` made `volatile` for cross-thread visibility
+- Frame-based coroutines: `pcall`/`xpcall` run as protected frames, so yields inside them resume correctly
+- Clean "attempt to yield across a C-call boundary" error instead of silently continuing
+- Java functions can be coroutine bodies (run through a bytecode trampoline)
+
+### Fork-specific behaviour
+- `LuaTable.freeze()` — shallow, permanent; later writes throw `attempt to modify a frozen table`, reads stay safe across threads
+- The string metatable is per `LuaState` (no static `LuaString.s_metatable`)
 
 ### Standard library
 - `math.type` — Lua 5.3+ type classification for numbers
@@ -107,7 +95,7 @@ PxLuaNova is API-compatible with LuaJ 3.0.2. The package names remain `org.luaj.
 **Breaking changes:**
 - Minimum Java version raised from 11 to 21
 - JME (Java ME) support removed
-- Coroutines use virtual threads by default (can be disabled)
+- Coroutines are frame-based and run on the resuming thread
 
 ## Modules
 
@@ -124,4 +112,4 @@ PxLuaNova is API-compatible with LuaJ 3.0.2. The package names remain `org.luaj.
 
 ## License
 
-The LuaJ 3.0.2 base is MIT licensed — see the [upstream LICENSE](https://github.com/luaj/luaj/blob/master/LICENSE). My bug fixes and new features (virtual thread coroutines, etc.) are released under the GNU LGPL v3.0.
+The LuaJ 3.0.2 base is MIT licensed — see the [upstream LICENSE](https://github.com/luaj/luaj/blob/master/LICENSE). My bug fixes and new features (frame-based coroutines, frozen tables, etc.) are released under the GNU LGPL v3.0.

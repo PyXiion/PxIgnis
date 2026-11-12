@@ -91,7 +91,9 @@ class ScriptEnvironment(private val vfs: Vfs) {
     val luaStateOrNull: LuaState? get() = _state
 
     fun rebuild(api: LuaMcApi, commandRegistrar: CommandRegistrar): LuaState {
-        val state = LuaState()
+        val state = LuaState.builder()
+            .checkpointHandler(ScriptWatchdog::checkpoint)
+            .build()
         val stdlib = installStdlib(state, vfs)
 
         val globals = state.globals
@@ -105,7 +107,6 @@ class ScriptEnvironment(private val vfs: Vfs) {
         globals.get("package").checktable().get("loaded").checktable().set("async", asyncModule)
 
         installStrictGlobals(globals)
-
         return state
     }
 }

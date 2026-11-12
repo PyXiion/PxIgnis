@@ -1,0 +1,127 @@
+---
+title: 9. Reloads and crashes
+description: "Arena tutorial, chapter 9: what a reload keeps and throws away, cleaning up in uninit, and debugging."
+---
+
+import { Code } from '@astrojs/starlight/components';
+import checkpoint from '../../../../tutorial/arena/09-final.lua?raw';
+
+The arena works as long as nothing unexpected happens. This last chapter is about the unexpected: a
+`/ignis reload` in the middle of a round, a server crash, a broken setup. It also collects the debugging
+tricks that help while writing scripts like this one.
+
+## What a reload keeps
+
+`/ignis reload` (and every save with `/ignis watch on`) throws away everything the scripts created and runs
+the files again:
+
+| Removed on reload | Kept |
+|---|---|
+| local variables, e.g. `game` | `mc.data` and `player.data` |
+| event handlers and commands | the world, and what scripts did to it |
+| scheduled tasks and sleeping coroutines | players, their positions and inventories |
+| regions, holograms, boss bars, sidebars, open menus | |
+
+The arena's own objects (region, boss bar, leaderboard) are created again when the file loads, from the
+settings in `mc.data`. But the round in progress is gone, and its players are left standing in the arena
+with a kit instead of their items.
+
+## Cleaning up in `uninit`
+
+The `uninit` event fires just before a reload, while the old handlers still work. It is the place to
+undo what only the script knows about:
+
+```lua
+-- Before a reload the game state is thrown away: put everyone back first.
+mc.on("uninit", function()
+    for uuid, player in pairs(game.players) do
+        if game.alive[uuid] then
+            restore(player)
+            teleport(player, config.lobby)
+        end
+        player.sidebar = nil
+        player:sendMessage("§eThe arena was reloaded, join again with /arena join.")
+    end
+end)
+```
+
+A normal server stop needs nothing extra: every player leaves the server, `player.leave` fires, and `leave`
+knocks them out and gives their items back.
+
+## After a crash
+
+A crash skips all of that. What is left is whatever was written to disk. The stash is in `player.data`, so
+the next time the player joins, the script can finish the job:
+
+```lua
+-- Came back after a crash in the middle of a round: return their items.
+mc.on("player.join", function(e)
+    if e.player.data.arenaStash then
+        restore(e.player)
+        if config.lobby then teleport(e.player, config.lobby) end
+        e.player:sendMessage("§eYour items from the last arena round were returned.")
+    end
+end)
+```
+
+:::caution
+PxIgnis writes `player.data` to disk on `/ignis reload`, when the player leaves and when the server stops,
+not on a timer. If the server crashes during a round, the stash is on disk only if one of those happened
+since the round started. Keep that in mind for anything valuable you keep in storage.
+:::
+
+## Guarding against a broken setup
+
+An admin can run `/arena clearspawns` while players wait for the countdown. `startRound` would then pick a
+spawn point from an empty list and fail. A check at the start turns that into a clear message:
+
+```lua
+    if not isReady() then
+        game.phase = "waiting"
+        tell("§cThe arena setup is incomplete, the round cannot start.")
+        return
+    end
+```
+
+A rule of thumb: every function that runs later (on a timer, on an event) checks that what it needs still
+exists, because a command or a reload may have changed it in between.
+
+## Debugging
+
+- **Errors in chat.** When a handler fails, operators see where and why in chat, e.g.
+  `event 'entity.death': arena.lua:22: attempt to index ? (a nil value) with key 'x'`: line 22 is
+  `teleport`, and the point it got was `nil` (no lobby set?). The same error is shown at most once every 10
+  seconds, so a failing tick does not flood the chat.
+- **Syntax errors** stop the reload: the old scripts keep running and the error is reported.
+- **`/ignis status`** lists the scripts, event handlers per event, commands, tasks and regions. Two
+  `tick` tasks where you expect one means something is scheduled twice.
+- **`/ignis eval`** shows what the scripts see: `/ignis eval mc.data.arena.lobby`,
+  `/ignis eval me.data.arenaStats`. Local variables are invisible to it; to look at the game state, add
+  `arenaDebug = game` at the end of the file for a while and run `/ignis eval arenaDebug.phase`.
+- **Your editor** catches most typos before you save: a misspelled method or event field is underlined.
+
+## Checkpoint
+
+This is the finished arena.
+
+<details>
+<summary>config/ignis/arena.lua, complete</summary>
+
+<Code code={checkpoint} lang="lua" title="config/ignis/arena.lua" />
+
+</details>
+
+## Where to go from here
+
+Ideas to take it further, each a good exercise on its own:
+
+- **Several arenas.** Turn `config` and `game` into tables keyed by an arena name, and add a name argument to
+  the commands: `register("arena join <name:word>", ...)`.
+- **Teams.** Two teams with colored names, friendly fire off (`player.attack` knows both players), and
+  a team win instead of a last player standing.
+- **Spectators.** Instead of the lobby, knocked-out players become spectators (`player.gamemode =
+  "spectator"`) until the round ends.
+- **Split it up.** Move the kits and the statistics into their own files and load them with `require`; see
+  [Language](/reference/language) and the [libraries overview](/libraries/overview).
+
+The [reference](/reference/mc-api) describes everything used here in full, and more.

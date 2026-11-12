@@ -257,36 +257,27 @@ public class SyncCoroutineTest extends TestCase {
 		assertEquals(10, result.arg(2).toint());
 	}
 
-	/** A Lua closure under pcall runs inside LuaClosure.execute; yielding across it is an error. */
-	public void testYieldInsidePcallClosureIsError() {
+	public void testPcallYieldPropagates() {
 		LuaValue func = state.load(
-			"local ok, val = pcall(function() coroutine.yield('from-yield') end)\n" +
+			"local ok, val = pcall(function() return coroutine.yield('from-yield') end)\n" +
 			"return ok, val", "test").checkfunction();
 		LuaThread co = new LuaThread(state, func);
-		Varargs r = co.resume(LuaValue.NONE);
-		assertTrue(r.arg1().toboolean());
-		assertFalse(r.arg(2).toboolean());
-		assertTrue(r.arg(3).tojstring().contains("C-call boundary"));
+		Varargs first = co.resume(LuaValue.NONE);
+		assertTrue(first.arg1().toboolean());
+		assertEquals("from-yield", first.arg(2).tojstring());
+		assertEquals("suspended", co.getStatus());
+		// yield returns the resume values; the function returns them, so pcall returns true, them
+		Varargs second = co.resume(LuaValue.valueOf("from-yield"));
+		assertTrue(second.arg1().toboolean());
+		assertTrue(second.arg(2).toboolean());
+		assertEquals("from-yield", second.arg(3).tojstring());
 		assertEquals("dead", co.getStatus());
 	}
 
-	public void testYieldInsideXpcallClosureIsError() {
+	public void testPcallYieldMultipleValues() {
 		LuaValue func = state.load(
-			"local ok, val = xpcall(function() coroutine.yield('xpcall-yield') end, function(e) return e end)\n" +
-			"return ok, val", "test").checkfunction();
-		LuaThread co = new LuaThread(state, func);
-		Varargs r = co.resume(LuaValue.NONE);
-		assertTrue(r.arg1().toboolean());
-		assertFalse(r.arg(2).toboolean());
-		assertTrue(r.arg(3).tojstring().contains("C-call boundary"));
-		assertEquals("dead", co.getStatus());
-	}
-
-	/** pcall(coroutine.yield, ...) calls the yielder directly from the continuable pcall, so it suspends. */
-	public void testPcallOfYieldSuspendsAndResumes() {
-		LuaValue func = state.load(
-			"local ok = pcall(coroutine.yield, 1, 2, 3)\n" +
-			"return ok", "test").checkfunction();
+			"local ok, a, b, c = pcall(function() return coroutine.yield(1, 2, 3) end)\n" +
+			"return ok, a, b, c", "test").checkfunction();
 		LuaThread co = new LuaThread(state, func);
 		Varargs first = co.resume(LuaValue.NONE);
 		assertTrue(first.arg1().toboolean());
@@ -294,9 +285,29 @@ public class SyncCoroutineTest extends TestCase {
 		assertEquals(2, first.arg(3).toint());
 		assertEquals(3, first.arg(4).toint());
 		assertEquals("suspended", co.getStatus());
-		Varargs second = co.resume(LuaValue.NONE);
+		Varargs second = co.resume(LuaValue.varargsOf(new LuaValue[] {
+			LuaValue.valueOf(1), LuaValue.valueOf(2), LuaValue.valueOf(3) }));
 		assertTrue(second.arg1().toboolean());
 		assertTrue(second.arg(2).toboolean());
+		assertEquals(1, second.arg(3).toint());
+		assertEquals(2, second.arg(4).toint());
+		assertEquals(3, second.arg(5).toint());
+		assertEquals("dead", co.getStatus());
+	}
+
+	public void testXpcallYieldPropagates() {
+		LuaValue func = state.load(
+			"local ok, val = xpcall(function() return coroutine.yield('xpcall-yield') end, function(e) return e end)\n" +
+			"return ok, val", "test").checkfunction();
+		LuaThread co = new LuaThread(state, func);
+		Varargs first = co.resume(LuaValue.NONE);
+		assertTrue(first.arg1().toboolean());
+		assertEquals("xpcall-yield", first.arg(2).tojstring());
+		assertEquals("suspended", co.getStatus());
+		Varargs second = co.resume(LuaValue.valueOf("xpcall-yield"));
+		assertTrue(second.arg1().toboolean());
+		assertTrue(second.arg(2).toboolean());
+		assertEquals("xpcall-yield", second.arg(3).tojstring());
 		assertEquals("dead", co.getStatus());
 	}
 

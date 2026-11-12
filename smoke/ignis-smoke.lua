@@ -51,9 +51,57 @@ local function particlePhase(w)
     end)
 end
 
+-- Модель событий: таблица события, приоритеты, старые имена, отмена (в том числе падением обработчика), watchdog.
+local function eventPhase(w)
+    local order, got, legacy = {}, nil, nil
+    local ids = {
+        mc.on("entity.spawn", function(e) order[#order + 1] = "low"; got = e end, { priority = "low" }),
+        mc.on("entity.spawn", function(e) order[#order + 1] = "high" end, { priority = "high" }),
+        mc.on("entity_spawn", function(entity) legacy = entity end),
+    }
+    local pig
+    step("events: spawn passes an event table", function()
+        pig = w:spawn("minecraft:pig", vec(6, 80, 6), {})
+        assert(got and got.name == "entity.spawn" and got.entity, "no event table")
+    end)
+    step("events: priority order", function() assert(order[1] == "high" and order[2] == "low", table.concat(order, ",")) end)
+    step("events: old name gets positional args", function() assert(legacy and legacy.type == "minecraft:pig", tostring(legacy)) end)
+    for _, id in ipairs(ids) do mc.off(id) end
+
+    local function hurtWith(handler)
+        local id = mc.on("entity.hurt", handler)
+        local before = pig.health
+        pig:damage(1)
+        mc.off(id)
+        return before, pig.health
+    end
+    step("events: e:cancel() stops the damage", function()
+        local before, after = hurtWith(function(e) e:cancel("test") end)
+        assert(after == before, before .. " -> " .. after)
+    end)
+    step("events: a failing handler cancels the event", function()
+        local before, after = hurtWith(function(e) error("smoke: expected failure") end)
+        assert(after == before, before .. " -> " .. after)
+    end)
+    step("events: no handler, damage applies", function()
+        local before = pig.health
+        pig:damage(1)
+        assert(pig.health < before, "damage not applied")
+    end)
+    step("events: builtin names cannot be emitted", function() assert(fails(mc.emit, "entity.spawn")) end)
+    pig:remove()
+
+    step("ignis: /ignis status", function() assert(mc.execute("ignis status"), "command failed") end)
+
+    -- A cycle in a task must not hold the server: the watchdog stops it, and the next task still runs.
+    mc.schedule(1, function() while true do end end)
+    mc.schedule(2, function() step("watchdog: runaway task was stopped", function() end) end)
+end
+
 -- Сущности: чанк удерживается forceload, а проверки идут через 10 секунд, когда чанк точно принимает сущности.
 local function entityPhase(w)
     particlePhase(w)
+    eventPhase(w)
     local mob
     w:setBlock(vec(0, 79, 0), "minecraft:stone")
     step("spawn", function() mob = w:spawn("minecraft:zombie", vec(0, 80, 0), {}); assert(mob) end)

@@ -1,0 +1,94 @@
+---
+title: 8. Events for other scripts
+description: "Arena tutorial, chapter 8: a custom event with mc.emit and a second script that rewards winners."
+---
+
+import { Code } from '@astrojs/starlight/components';
+import checkpoint from '../../../../tutorial/arena/08-events.lua?raw';
+import rewards from '../../../../tutorial/arena/08-rewards.lua?raw';
+
+The arena should not have to know about the server's economy, Discord or quests. Instead it announces what
+happened, and other scripts decide what to do about it. This chapter adds an `arena:win` event and a second
+script that rewards the winner.
+
+## Firing a custom event
+
+`mc.emit(name, ...)` calls every handler of the event with the arguments you pass. Custom event names
+contain a `:`; a prefix like `arena:` keeps them apart from other scripts' events.
+
+The event fires at the end of the celebration, when the winner is back in the lobby:
+
+```lua
+        -- Tell other scripts, now that the winner has their own items back.
+        if winner and game.players[winner.uuid] then
+            mc.emit("arena:win", winner, game.kills[winner.uuid] or 0)
+        end
+```
+
+Why not right away in `finish`? At that moment the winner still carries the kit, and `restore` clears the
+inventory before giving their own items back: a reward handed out earlier would vanish with the kit.
+`game.players[winner.uuid]` skips the event if the winner left the server during the celebration.
+
+## A rewards script
+
+Create a second file, `config/ignis/arena_rewards.lua`. Scripts in `config/ignis/` share the event bus, so
+it can listen to the arena's event. Handlers of custom events get the emitted arguments as they are:
+
+```lua
+mc.on("arena:win", function(winner, kills)
+    winner:give("minecraft:diamond", 1 + kills)
+    mc.broadcast("§6" .. winner.name .. " §ewon an arena round with " .. kills .. " kills!")
+```
+
+The arena works without this file, and this file can be replaced by another one (coins, a quest step, a
+title) without touching the arena.
+
+## Posting to Discord
+
+Event handlers run as coroutines, so they can wait for an HTTP request with `async.fetch` without
+stopping the server. With a Discord webhook URL in `WEBHOOK`, winners are announced on Discord too:
+
+```lua
+-- A Discord webhook URL to announce winners there, or nil to skip it.
+local WEBHOOK = nil
+```
+
+```lua
+    if WEBHOOK then
+        local response = async.fetch({
+            url = WEBHOOK,
+            method = "POST",
+            json = { content = winner.name .. " won an arena round with " .. kills .. " kills" },
+        })
+        if not response.ok then
+            print("arena webhook failed: " .. tostring(response.error or response.status))
+        end
+    end
+```
+
+`mc.emit` returns as soon as the handler starts waiting, so the arena does not wait for Discord.
+`print` writes to the server console. See the [Async API](/reference/async-api) for more.
+
+## Try it
+
+Win a round: diamonds (one plus one per kill) land in your inventory next to your own items, and everyone
+reads the announcement.
+
+## Checkpoint
+
+<details>
+<summary>config/ignis/arena.lua after chapter 8</summary>
+
+<Code code={checkpoint} lang="lua" title="config/ignis/arena.lua" />
+
+</details>
+
+<details>
+<summary>config/ignis/arena_rewards.lua</summary>
+
+<Code code={rewards} lang="lua" title="config/ignis/arena_rewards.lua" />
+
+</details>
+
+**Exercise:** add an `arena:eliminated` event, fired in `eliminate` with the player and the killer, and use
+it in `arena_rewards.lua` to give the killer an arrow for every knockout.

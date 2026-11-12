@@ -21,10 +21,7 @@ local Vec = {}
 ---@operator div(number): Vec
 ---Negation.
 ---@operator unm: Vec
----Component-wise equality.
----@operator eq(Vec|Vec3Like): boolean
----Renders as `"(x, y, z)"`.
----@operator tostring: string
+-- `==` compares components; `tostring(v)` renders as `"(x, y, z)"`.
 
 ---Returns sqrt(x² + y² + z²).
 ---@return number

@@ -6,7 +6,7 @@ import net.minecraft.commands.CommandSourceStack
 import net.minecraft.network.chat.Component
 import org.luaj.vm2.*
 import org.luaj.vm2.LuaValue.NIL
-import ru.pyxiion.ignis.PxIgnis
+import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.luaVarFunction
@@ -39,10 +39,10 @@ class CommandRegistrar(
                     throw e
                 } catch (e: LuaError) {
                     ctx.source.sendFailure(Component.literal("При выполнении команды произошла ошибка в скрипте. Сообщите об этом администратору."))
-                    PxIgnis.logger.error("Ошибка при выполнении команды \"${ctx.command}\": ${e.message}", e)
+                    ScriptErrors.error("command /${ctx.input}", e)
                 } catch (e: Throwable) {
                     ctx.source.sendFailure(Component.literal("При выполнении команды произошла неизвестная ошибка. Сообщите об этом администратору."))
-                    PxIgnis.logger.error("Ошибка при выполнении команды \"${ctx.command}\": ${e.message}", e)
+                    ScriptErrors.error("command /${ctx.input}", e)
                 }
                 return 0
             }

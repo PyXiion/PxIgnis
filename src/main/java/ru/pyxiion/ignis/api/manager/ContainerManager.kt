@@ -15,6 +15,8 @@ import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
+import ru.pyxiion.ignis.runtime.ScriptErrors
+import ru.pyxiion.ignis.runtime.ScriptWatchdog
 
 /** Открытые GUI-меню. Принадлежит [ru.pyxiion.ignis.IgnisRuntime]; обёртки хранят ссылку на своего владельца. */
 class ContainerManager {
@@ -105,17 +107,19 @@ class ContainerManager {
         val luaCursor = if (cursorStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(cursorStack.copy())
 
         val allowed = try {
-            val result = cb.invoke(LuaValue.varargsOf(arrayOf(
-                PlayerWrap.wrap(player),
-                luaSlot,
-                LuaValue.valueOf(actionType.name.lowercase()),
-                luaItem,
-                luaCursor,
-                LuaValue.valueOf(inGui),
-            )))
+            val result = ScriptWatchdog.guard {
+                cb.invoke(LuaValue.varargsOf(arrayOf(
+                    PlayerWrap.wrap(player),
+                    luaSlot,
+                    LuaValue.valueOf(actionType.name.lowercase()),
+                    luaItem,
+                    luaCursor,
+                    LuaValue.valueOf(inGui),
+                )))
+            }
             result.arg1() == LuaValue.TRUE
         } catch (e: Throwable) {
-            PxIgnis.logger.error("Ошибка в onClick GUI-контейнера: ${e.message}", e)
+            ScriptErrors.error("container click", e)
             false
         }
 

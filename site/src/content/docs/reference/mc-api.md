@@ -159,7 +159,7 @@ See [ItemStack API](/reference/itemstack-api) for details.
 ### `mc.deserialise(type, json)`
 
 Serialise and deserialise items or inventories to/from JSON strings. Useful for saving
-stacks to `mc.data` or transferring over `mc.fetch`.
+stacks to `mc.data` or transferring over `async.fetch`.
 
 - `type` (`string`) — `"item"` or `"inventory"`
 - `obj` — An [ItemStack](/reference/itemstack-api) or [Inventory](/reference/inventory-api) wrapper
@@ -211,33 +211,34 @@ Returns a table of all active boss bars.
 Returns the boss bar with the given UUID, or `nil`.
 ## Events
 
-### `mc.on(event, handler)`
-Registers a handler for a server event. Returns a numeric handler ID. Cancellable events:
-return `false` to cancel. See [Events](/reference/events) for the full event list.
+### `mc.on(event, handler, opts?)`
+Registers a handler for a server event and returns a numeric handler ID. The handler gets an event table `e`;
+cancellable events are cancelled with `e:cancel()`. `opts` sets `priority`, `receiveCancelled` and `throttle`.
+See [Events](/reference/events) for the event list and the rules.
 
 ```lua
-mc.on("player_join", function(player)
-  player:sendMessage("Welcome, " .. player.name .. "!")
+mc.on("player.join", function(e)
+  e.player:sendMessage("Welcome, " .. e.player.name .. "!")
 end)
 
-mc.on("player_block_break", function(player, pos, blockId)
-  if player.gamemode == "survival" then
-    return false -- cancel
+mc.on("block.break", function(e)
+  if e.player.gamemode == "survival" then
+    e:cancel()
   end
-end)
+end, { priority = "high" })
 ```
 
+### `mc.off(id)`
+Removes a handler registered with `mc.on`. Returns `true` if it was found.
+
 ### `mc.emit(event, ...)`
-Programmatically emits an event, triggering all registered handlers.
+Fires a custom event (not a built-in name) and returns `false` if a handler cancelled it by returning `false`.
+Handlers get the arguments as they are.
 
 ```lua
-mc.emit("script:custom_event", player, "Hello!")
-
 mc.on("script:custom_event", function(p, msg)
     p:sendMessage(msg)
 end)
 
-mc.on("script:custom_event", function(p, msg)
-    print("MESSAGE LOG: " .. p.name .. " got " .. msg)
-end)
+mc.emit("script:custom_event", player, "Hello!")
 ```

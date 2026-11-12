@@ -1,0 +1,145 @@
+---
+title: 4. Fights
+description: "Arena tutorial, chapter 4: knockouts instead of deaths, a winner, and region enter/leave events."
+---
+
+import { Code } from '@astrojs/starlight/components';
+import checkpoint from '../../../../tutorial/arena/04-fights.lua?raw';
+
+Time to fight. A player who would die is knocked out instead: they stay alive, are healed and go back to the
+lobby. When one player is left, they win.
+
+## Knockouts instead of deaths
+
+`entity.death` fires when an entity takes fatal damage, before it dies, and it is cancellable. For players,
+`e.player` is set (for other entities it is `nil`), and `e.attacker` is whoever dealt the damage, if
+anyone:
+
+```lua
+-- A fatal hit knocks the player out of the round instead of killing them.
+mc.on("entity.death", function(e)
+    local player = e.player
+    if not player or not game.alive[player.uuid] then return end
+    e:cancel()
+    player.health = player.maxHealth
+    player.fireTicks = 0
+    if game.phase == "playing" then
+        eliminate(player, e.attacker and game.players[e.attacker.uuid])
+    end
+end, { priority = "high" })
+```
+
+Cancelling the death keeps the player alive, but their health is still zero, so the handler must heal them
+right away. No death screen, no dropped items, no respawn point to worry about.
+
+The winner is still in `game.alive` during the celebration. If they fall off something then, the handler
+heals them but does not eliminate them: that is what the `game.phase == "playing"` check is for.
+
+`e.attacker and game.players[e.attacker.uuid]` is the attacker if they are an arena player, otherwise
+`nil` (a zombie, fall damage, a player from outside).
+
+## Knocking a player out
+
+```lua
+local function eliminate(player, killer)
+    game.alive[player.uuid] = nil
+    teleport(player, config.lobby)
+
+    if killer and game.alive[killer.uuid] then
+        tell("§c" .. player.name .. " §7was eliminated by §a" .. killer.name)
+    else
+        tell("§c" .. player.name .. " §7was eliminated")
+    end
+    checkWinner()
+end
+```
+
+Knocked-out players stay in `game.players`: they watch from the lobby and play in the next round.
+
+## Who won?
+
+```lua
+local function checkWinner()
+    if game.phase ~= "playing" then return end
+    local left = count(game.alive)
+    if left == 1 then
+        finish(game.players[next(game.alive)])
+    elseif left == 0 then
+        finish(nil)
+    end
+end
+```
+
+`next(t)` returns some key of a table; with one entry left, it is the last player standing.
+
+## Leaving
+
+A player who leaves the arena (with `/arena leave` or by disconnecting) during a round is knocked out
+first, so the round can still end:
+
+```lua
+    if game.alive[uuid] then
+        eliminate(player, nil)
+    end
+```
+
+## Region events
+
+Regions have their own events, subscribed with `region:on`. `leave` and `enter` fire when an entity leaves
+or enters the box; like other entity events, `e.player` is set for players. The handlers are added in
+`buildRegion`, right after the region is created:
+
+```lua
+    -- Walking (or being knocked) out of the arena counts as losing.
+    region:on("leave", function(e)
+        if e.player and game.phase == "playing" and game.alive[e.player.uuid] then
+            e.player:sendMessage("§cYou left the arena!")
+            eliminate(e.player, nil)
+        end
+    end)
+
+    -- Nobody else walks in during a round.
+    region:on("enter", function(e)
+        local player = e.player
+        if player and game.phase == "playing" and not game.alive[player.uuid]
+            and not player:hasPermission(ADMIN) then
+            teleport(player, config.lobby)
+            player:sendMessage("§eA round is in progress.")
+        end
+    end)
+```
+
+`eliminate` teleports the player to the lobby, which is outside the arena, so it fires `leave` again. That
+second call does nothing because the player is no longer in `game.alive`. Handlers that react to their own
+side effects are common; checking the state first keeps them harmless.
+
+## No hits from the lobby
+
+Players waiting in the lobby, and knocked-out ones, should not hit anybody:
+
+```lua
+-- No friendly hits before the round starts.
+mc.on("player.attack", function(e)
+    if game.players[e.player.uuid] and not game.alive[e.player.uuid] then
+        e:cancel()
+    end
+end)
+```
+
+## Try it
+
+With two players: fight until one of them would die. They land in the lobby with full health, the other
+one gets the title and the particles, and after five seconds both are in the lobby and the next countdown
+starts. Try walking out of the arena and back in during a round, too.
+
+## Checkpoint
+
+<details>
+<summary>config/ignis/arena.lua after chapter 4</summary>
+
+<Code code={checkpoint} lang="lua" title="config/ignis/arena.lua" />
+
+</details>
+
+**Exercise:** make the final duel visible: when only two players are left, set `player.glowing = true` on
+both, and turn it off again when the round ends.

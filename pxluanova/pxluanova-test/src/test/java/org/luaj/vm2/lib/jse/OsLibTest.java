@@ -55,7 +55,7 @@ public class OsLibTest extends TestCase {
 	public void testStringDate_UW_pos4() { time+=4*DAY; t("%c %U %W", "Mon Aug 27 14:55:02 2001 34 35"); } 
 	
 	public void testJseOsGetenvForEnvVariables() {
-		LuaValue USER = LuaValue.valueOf("USER");
+		LuaValue USER = LuaValue.valueOf("PATH"); // set in every environment, unlike USER
 		LuaValue jse_user = jse_lib.get("getenv").call(USER);
 		assertFalse(jse_user.isnil());
 		System.out.println("User: " + jse_user);
