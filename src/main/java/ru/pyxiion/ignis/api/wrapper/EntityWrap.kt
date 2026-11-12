@@ -127,6 +127,37 @@ object EntityWrap {
         )
         prop("maxAir") { LuaValue.valueOf(maxAirSupply) }
         prop("removed") { if (isRemoved) LuaValue.TRUE else LuaValue.FALSE }
+        prop(
+            "yaw",
+            get = { LuaValue.valueOf(yRot.toDouble()) },
+            set = { v ->
+                val f = v.tofloat()
+                yRot = f
+                if (this is LivingEntity) {
+                    setYBodyRot(f)
+                    setYHeadRot(f)
+                }
+            }
+        )
+        prop(
+            "pitch",
+            get = { LuaValue.valueOf(xRot.toDouble()) },
+            set = { v -> xRot = v.tofloat() }
+        )
+        prop(
+            "noGravity",
+            get = { if (isNoGravity) LuaValue.TRUE else LuaValue.FALSE },
+            set = { v -> isNoGravity = v.toboolean() }
+        )
+        prop(
+            "velocity",
+            get = { Vector.fromMc(deltaMovement).toLuaValue() },
+            set = { v ->
+                val d = v.toVec3d()
+                deltaMovement = Vec3(d.x, d.y, d.z)
+                Compat.syncMotion(this) // the tracker sends the new motion; players apply it client-side
+            }
+        )
 
         prop(
             "health",
@@ -211,6 +242,13 @@ object EntityWrap {
 //            e.readData(readView)
 //            LuaValue.NIL
 //        }
+
+        method("remove") { args ->
+            val e = args.arg(1).checktable().unwrap<Entity>()
+            if (e is Player) throw LuaError("entity:remove(): игрока удалить нельзя")
+            e.discard()
+            LuaValue.NIL
+        }
 
         method("damage") { args ->
             val self = args.arg(1).checktable()

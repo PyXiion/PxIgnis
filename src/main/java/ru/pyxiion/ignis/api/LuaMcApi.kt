@@ -49,6 +49,8 @@ class LuaMcApi(
     fun suspendFunction(block: suspend (Varargs) -> Varargs): LuaFunction =
         luaSuspendFunction(modScope, block)
 
+    val registries: net.minecraft.core.RegistryAccess get() = server.registryAccess()
+
     init {
         RegionManager.sharedStateProvider = stateProvider
     }

@@ -12,6 +12,10 @@ Mob.isMob = nil
 ---@type boolean
 Mob.aiActive = nil
 
+---Vanilla AI switched off. Read/write.
+---@type boolean
+Mob.noAi = nil
+
 ---Current target. Read/write; assigning a table reads `.uuid` from it.
 ---@type Entity|Player|nil
 Mob.target = nil

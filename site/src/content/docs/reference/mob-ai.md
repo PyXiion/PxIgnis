@@ -51,6 +51,7 @@ behaviour id and does not stop the AI.
 | `mob.pathRemaining` | number | Path completion progress (0–1) |
 | `mob.pathFound` | boolean | Whether a valid path was found |
 | `mob.aiActive` | boolean | Whether a behaviour is currently running |
+| `mob.noAi` | boolean | Vanilla AI off: the mob stands still unless you move it. Read/write. Independent of the Lua `setAI` behaviours |
 
 ## Methods
 

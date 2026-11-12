@@ -60,10 +60,15 @@
 ---@field lines? string[]
 ---@field visible? boolean
 
----@class ParticleOpts
----@field count? integer
----@field spread? Vec|Vec3Like|number
----@field speed? number
+---@class EmitOpts
+---@field count? integer             -- particles per emit, >= 1 (default 1); not with `velocity`
+---@field spread? Vec|Vec3Like|number -- random offset per axis; not with `velocity`
+---@field speed? number               -- default 0, or 1 with `velocity`
+---@field velocity? Vec|Vec3Like      -- spawns one particle moving along this vector (times `speed`)
+---@field alwaysShow? boolean         -- shown even on "Minimal" particle settings (default false)
+---@field viewers? Player|Player[]    -- only these players see it (default: everyone in range)
+
+---@class ParticleData
 ---@field block? string    -- block particles: block, block_marker, falling_dust, dust_pillar, block_crumble
 ---@field power? number   -- dragon_breath, effect, instant_effect (default 1.0)
 ---@field color? table    -- dust, dust_color_transition, effect, instant_effect -> {r,g,b}; entity_effect, tinted_leaves, flash -> {a,r,g,b}
@@ -76,7 +81,18 @@
 ---@field duration? integer -- trail (default 20)
 ---@field from? Vec|Vec3Like -- vibration -> vec
 ---@field arrivalInTicks? integer -- vibration (default 1)
----@field item? string    -- item -> item id (count uses the top-level `count` field)
+---@field item? string    -- item -> item id
+---@field count? integer  -- item -> item stack size
+
+---Immutable, pre-built particle. Create once with `particle()`, send with `World:emit`.
+---@class Particle
+---@field id string
+
+---Builds a particle. Errors for an unknown id, or when a type that needs `data` gets none.
+---@param id string
+---@param data? ParticleData
+---@return Particle
+function particle(id, data) end
 
 ---@class BlockStateProps table<string, string>
 

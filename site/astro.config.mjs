@@ -61,6 +61,7 @@ export default defineConfig({
             { label: "Format", slug: "libraries/format" },
             { label: "Simple", slug: "libraries/simple" },
             { label: "Chest GUI", slug: "libraries/chestgui" },
+            { label: "Particles", slug: "libraries/particles" },
           ],
         },
         {

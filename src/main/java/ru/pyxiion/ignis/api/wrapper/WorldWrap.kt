@@ -11,13 +11,8 @@ import net.minecraft.world.entity.EntitySpawnReason
 import net.minecraft.world.entity.ai.attributes.Attributes
 import net.minecraft.world.entity.Display
 import net.minecraft.world.entity.Mob
-import net.minecraft.nbt.CompoundTag
-import net.minecraft.nbt.NbtOps
-import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
-import net.minecraft.core.particles.ParticleOptions
-import net.minecraft.core.particles.ParticleType
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.resources.ResourceKey
 import net.minecraft.core.registries.Registries
@@ -37,12 +32,12 @@ import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.Compat
+import ru.pyxiion.ignis.api.ParticleLib
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector.Companion.toBlockPos
 import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.api.manager.HologramManager
 import ru.pyxiion.ignis.api.manager.RegionManager
-import ru.pyxiion.ignis.api.resolveOperand
 import ru.pyxiion.ignis.lookup
 import ru.pyxiion.ignis.api.util.BlockStateCodec
 import ru.pyxiion.ignis.luaTableOf
@@ -228,44 +223,15 @@ object WorldWrap {
             LuaValue.NIL
         }
 
-        // world:particle(particleId, pos, opts?)
-        method("particle") { args ->
-            val self = args.arg(1).checktable()
-            val w = self.unwrap<ServerLevel>()
-            val id = args.arg(2).checkjstring()
-            val resolvedId = if (id.contains(':')) id else "minecraft:$id"
-            val key = ResourceKey.create(Registries.PARTICLE_TYPE, Identifier.parse(resolvedId))
-            val particleType = BuiltInRegistries.PARTICLE_TYPE.getValue(key)
-                ?: throw LuaError("Частица '$id' не найдена")
+        // world:emit(particle, pos, opts?)
+        method("emit") { args ->
+            ParticleLib.emit(args.arg(1).checktable().unwrap<ServerLevel>(), args)
+            LuaValue.NIL
+        }
 
-            val (x, y, z) = resolveOperand(args.arg(3))
-
-            val count: Int
-            val deltaX: Double
-            val deltaY: Double
-            val deltaZ: Double
-            val speed: Double
-            var data: LuaTable?
-
-            if (args.narg() >= 4 && args.arg(4).istable()) {
-                val opts = args.arg(4).checktable()
-                count = opts.get("count").optint(1)
-                val spread = opts.get("spread")
-                if (spread.istable()) {
-                    val (dx, dy, dz) = resolveOperand(spread)
-                    deltaX = dx; deltaY = dy; deltaZ = dz
-                } else {
-                    deltaX = 0.0; deltaY = 0.0; deltaZ = 0.0
-                }
-                speed = opts.get("speed").optdouble(0.0)
-                data = opts
-            } else {
-                count = 1; deltaX = 0.0; deltaY = 0.0; deltaZ = 0.0; speed = 0.0; data = null
-            }
-
-            val effect = buildParticleEffect(particleType, data, w, resolvedId)
-
-            w.sendParticles(effect, true, false, x, y, z, count, deltaX, deltaY, deltaZ, speed)
+        // world:emitMany(particle, positions, opts?)
+        method("emitMany") { args ->
+            ParticleLib.emitMany(args.arg(1).checktable().unwrap<ServerLevel>(), args)
             LuaValue.NIL
         }
 
@@ -524,10 +490,6 @@ object WorldWrap {
         BUILT.apply(meta)
     }
 
-    private fun resolveBlockId(id: String): String {
-        return if (id.contains(':')) id else "minecraft:$id"
-    }
-
     private fun applyOverrides(entity: Entity, overrides: LuaTable) {
         overrides.get("health").let { v ->
             if (v.isnumber() && entity is LivingEntity) {
@@ -546,144 +508,6 @@ object WorldWrap {
                 entity.customName = Component.literal(v.tojstring())
             }
         }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun buildParticleEffect(
-        type: ParticleType<*>,
-        data: LuaTable?,
-        world: ServerLevel,
-        id: String
-    ): ParticleOptions {
-        if (type is ParticleOptions) return type
-
-        val nbt = buildParticleDataNbt(type, data, world, id)
-        val ops = world.registryAccess().createSerializationContext(NbtOps.INSTANCE)
-        return (type as ParticleType<ParticleOptions>).codec().codec()
-            .parse(ops, nbt)
-            .getOrThrow { msg: String -> LuaError("Частица '$id': $msg") }
-    }
-
-    private fun buildParticleDataNbt(
-        type: ParticleType<*>,
-        data: LuaTable?,
-        world: ServerLevel,
-        id: String,
-    ): CompoundTag {
-        fun tbl(): LuaTable = data ?: throw LuaError("Частица '$id': data required for this particle type")
-
-        fun rgb(v: LuaValue): Int {
-            val t = v.checktable()
-            val r = t.get(1).optdouble(t.get("r").optdouble(0.0))
-            val g = t.get(2).optdouble(t.get("g").optdouble(0.0))
-            val b = t.get(3).optdouble(t.get("b").optdouble(0.0))
-            val s = if (r > 1.0 || g > 1.0 || b > 1.0) 1.0 else 255.0
-            val ri = (r * s).toInt().coerceIn(0, 255)
-            val gi = (g * s).toInt().coerceIn(0, 255)
-            val bi = (b * s).toInt().coerceIn(0, 255)
-            return (ri shl 16) or (gi shl 8) or bi
-        }
-
-        fun argb(v: LuaValue): Int {
-            val t = v.checktable()
-            val a = t.get(1).optdouble(t.get("a").optdouble(255.0))
-            val r = t.get(2).optdouble(t.get("r").optdouble(0.0))
-            val g = t.get(3).optdouble(t.get("g").optdouble(0.0))
-            val b = t.get(4).optdouble(t.get("b").optdouble(0.0))
-            val ai = a.toInt().coerceIn(0, 255)
-            val ri = r.toInt().coerceIn(0, 255)
-            val gi = g.toInt().coerceIn(0, 255)
-            val bi = b.toInt().coerceIn(0, 255)
-            return (ai shl 24) or (ri shl 16) or (gi shl 8) or bi
-        }
-
-        val c = CompoundTag()
-        when (type) {
-            ParticleTypes.BLOCK,
-            ParticleTypes.BLOCK_MARKER,
-            ParticleTypes.FALLING_DUST,
-            ParticleTypes.DUST_PILLAR,
-            ParticleTypes.BLOCK_CRUMBLE -> {
-                c.putString("block_state", resolveBlockId(tbl().get("block").checkjstring()))
-            }
-
-            ParticleTypes.DRAGON_BREATH -> {
-                c.putFloat("power", tbl().get("power").optdouble(1.0).toFloat())
-            }
-
-            ParticleTypes.DUST -> {
-                val t = tbl()
-                c.putInt("color", rgb(t.get("color")))
-                c.putFloat("scale", t.get("scale").optdouble(1.0).toFloat())
-            }
-
-            ParticleTypes.DUST_COLOR_TRANSITION -> {
-                val t = tbl()
-                c.putInt("from_color", rgb(t.get("fromColor")))
-                c.putInt("to_color", rgb(t.get("toColor")))
-                c.putFloat("scale", t.get("scale").optdouble(1.0).toFloat())
-            }
-
-            ParticleTypes.EFFECT,
-            ParticleTypes.INSTANT_EFFECT -> {
-                val t = tbl()
-                val colorVal = t.get("color")
-                c.putInt("color", if (colorVal.istable()) rgb(colorVal) else -1)
-                c.putFloat("power", t.get("power").optdouble(1.0).toFloat())
-            }
-
-            ParticleTypes.ENTITY_EFFECT,
-            ParticleTypes.TINTED_LEAVES,
-            ParticleTypes.FLASH -> {
-                c.putInt("color", argb(tbl().get("color")))
-            }
-
-            ParticleTypes.ITEM -> {
-                val t = tbl()
-                val itemCompound = CompoundTag()
-                itemCompound.putString("id", resolveBlockId(t.get("item").checkjstring()))
-                itemCompound.putInt("count", t.get("count").optint(1))
-                c.put("item", itemCompound)
-            }
-
-            ParticleTypes.SCULK_CHARGE -> {
-                c.putFloat("roll", tbl().get("roll").optdouble(0.0).toFloat())
-            }
-
-            ParticleTypes.SHRIEK -> {
-                c.putInt("delay", tbl().get("delay").optint(0))
-            }
-
-            ParticleTypes.TRAIL -> {
-                val t = tbl()
-                val target = t.get("target").toVec3d()
-                val targetCompound = CompoundTag()
-                targetCompound.putDouble("x", target.x)
-                targetCompound.putDouble("y", target.y)
-                targetCompound.putDouble("z", target.z)
-                c.put("target", targetCompound)
-                c.putInt("color", rgb(t.get("color")))
-                c.putInt("duration", t.get("duration").optint(20))
-            }
-
-            ParticleTypes.VIBRATION -> {
-                val t = tbl()
-                val from = t.get("from").toVec3d()
-                val dest = CompoundTag()
-                dest.putString("type", "minecraft:block")
-                dest.putInt("x", from.x.toInt())
-                dest.putInt("y", from.y.toInt())
-                dest.putInt("z", from.z.toInt())
-                c.put("destination", dest)
-                c.putInt("arrival_in_ticks", t.get("arrivalInTicks").optint(1))
-            }
-
-            else -> {
-                val name = BuiltInRegistries.PARTICLE_TYPE.getKey(type)?.toString() ?: id
-                throw LuaError("Частица '$name' не поддерживается в data")
-            }
-        }
-        return c
     }
 
 }

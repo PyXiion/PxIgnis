@@ -7,6 +7,14 @@ description: Release history for PxIgnis.
 
 ### Breaking
 
+- **Particles:** `world:particle(id, pos, opts)` is removed. Build a particle once with the global
+  `particle(id, data?)` (type fields such as `color`, `block`, `item` go in `data`, so `count` is no longer both the
+  particle count and the item stack size) and send it with `world:emit(particle, pos, opts?)` or
+  `world:emitMany(particle, positions, opts?)`. `opts` are `count`, `spread`, `speed`, `velocity`, `alwaysShow`,
+  `viewers`; any other key is an error. `spread` accepts a `Vec`, `{x,y,z}` or a number (a `Vec` used to be ignored),
+  `velocity` spawns one particle moving along a vector, `viewers` limits who sees it. `particle` is not available in
+  `async.parallel` workers. New library `core:particles` (`fx.play`, `fx.seq`/`par`/`loop`/..., `fx.circle`/`burst`/
+  `helix`/...) builds tick-driven effects on top; see [particles](/libraries/particles).
 - **Supported Minecraft versions are now 1.21.11 and 26.3.** Minecraft 1.21.10 is no longer built or published.
   One jar per version (`PxIgnis-<version>-fabric-1.21.11.jar`, `PxIgnis-<version>-fabric-26.3.jar`).
 - **Unknown registry ids are errors.** `world:spawn`, `world:setBlock`, `world:setBlockState`, `world:fill`,
@@ -72,6 +80,9 @@ description: Release history for PxIgnis.
 
 ### New API
 
+- **`entity.yaw`, `entity.pitch`, `entity.noGravity`, `entity.velocity`, `mob.noAi` and `entity:remove()`** (`remove`
+  was documented in the type stubs but did not exist). `remove()` discards the entity without death or loot and
+  refuses players.
 - **`async.parallel(fn)`** runs a Lua function on a pool thread in an isolated state and waits for the result.
   Captures and arguments are copied on every call; `table.freeze(t)` tables, `vec` and the shared objects
   `async.map()`, `async.counter()` and `async.channel()` cross by reference or copy as described in the Async API.

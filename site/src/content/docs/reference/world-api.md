@@ -167,22 +167,42 @@ local nearby = world:getEntitiesBySelector("@a", { at = pos })
 
 ## Effects
 
-### `world:particle(id, pos, opts?)`
+### `particle(id, data?)`
 
-Spawns particles at a position.
+Global function. Builds an immutable `Particle` once; reuse it for every emit. The `Particle` has a read-only `id`
+(namespaced, `minecraft:flame`).
 
-- `id` (`string`) — Particle identifier
-- `pos` (`table`) — `{x, y, z}` position
+- `id` (`string`) — Particle identifier; `minecraft:` is implied
+- `data` (`table`, optional) — type-specific fields, see below. Errors for an unknown id, a type that needs `data`
+  when none is given, or a type that is not supported
 
-Optional `opts` table:
+Not available in `async.parallel` workers: a `Particle` cannot cross threads.
 
-| Option   | Type     | Default     | Description                                                            |
-|----------|----------|-------------|------------------------------------------------------------------------|
-| `count`  | `number` | `1`         | Number of particles                                                    |
-| `spread` | `table`  | `{0, 0, 0}` | Spread vector (also accepts `delta` as alias)                          |
-| `speed`  | `number` | `0`         | Particle speed                                                         |
+### `world:emit(particle, pos, opts?)`
 
-Particle-specific fields are passed directly in the `opts` table. The following types support custom fields:
+Sends a particle at a position.
+
+- `particle` (`Particle`) — from `particle()`; a string is an error
+- `pos` (`Vec`) — position
+
+Optional `opts` table. Any other key is an error (`emit: unknown option 'viewer'`).
+
+| Option       | Type                  | Default        | Description                                                                                  |
+|--------------|-----------------------|----------------|----------------------------------------------------------------------------------------------|
+| `count`      | `integer` >= 1        | `1`            | Number of particles                                                                          |
+| `spread`     | `Vec`, `{x,y,z}`, `number` | `0`       | Random offset per axis; a number applies to all axes                                         |
+| `speed`      | `number`              | `0`            | Particle speed                                                                               |
+| `velocity`   | `Vec`, `{x,y,z}`      | none           | One particle moving along this vector times `speed` (default `1`). Not with `count`/`spread` |
+| `alwaysShow` | `boolean`             | `false`        | Shown even on the client's "Minimal" particle setting                                        |
+| `viewers`    | `Player`, `Player[]`  | everyone in range | Only these players see it; players in another dimension are skipped; `{}` sends to nobody |
+
+### `world:emitMany(particle, positions, opts?)`
+
+Same as `world:emit` for every `Vec` in the `positions` array. `opts` are parsed once. An empty array does nothing.
+
+#### `particle()` data fields
+
+Fields by particle type (types not listed here need no `data`):
 
 | Particle id             | Fields                                                                             |
 |-------------------------|-----------------------------------------------------------------------------------|
@@ -208,18 +228,19 @@ Particle-specific fields are passed directly in the `opts` table. The following 
 Simple particles (no `data` needed): `angry_villager`, `ash`, `bubble`, `bubble_column_up`, `bubble_pop`, `campfire_cosy_smoke`, `campfire_signal_smoke`, `cherry_leaves`, `cloud`, `composter`, `copper_fire_flame`, `crit`, `crimson_spore`, `current_down`, `damage_indicator`, `dolphin`, `dripping_dripstone_lava`, `dripping_dripstone_water`, `dripping_honey`, `dripping_lava`, `dripping_obsidian_tear`, `dripping_water`, `dust_plume`, `egg_crack`, `elder_guardian`, `electric_spark`, `enchant`, `enchanted_hit`, `end_rod`, `explosion`, `explosion_emitter`, `falling_dripstone_lava`, `falling_dripstone_water`, `falling_honey`, `falling_lava`, `falling_nectar`, `falling_obsidian_tear`, `falling_spore_blossom`, `falling_water`, `firefly`, `firework`, `fishing`, `flame`, `glow`, `glow_squid_ink`, `gust`, `gust_emitter_large`, `gust_emitter_small`, `happy_villager`, `heart`, `infested`, `item_cobweb`, `item_slime`, `item_snowball`, `landing_honey`, `landing_lava`, `landing_obsidian_tear`, `large_smoke`, `lava`, `mycelium`, `nautilus`, `note`, `ominous_spawning`, `pale_oak_leaves`, `poof`, `portal`, `raid_omen`, `rain`, `reverse_portal`, `scrape`, `sculk_charge_pop`, `sculk_soul`, `small_flame`, `small_gust`, `smoke`, `sneeze`, `snowflake`, `sonic_boom`, `soul`, `soul_fire_flame`, `spit`, `splash`, `spore_blossom_air`, `squid_ink`, `sweep_attack`, `totem_of_undying`, `trial_omen`, `trial_spawner_detection`, `trial_spawner_detection_ominous`, `underwater`, `vault_connection`, `warped_spore`, `wax_off`, `wax_on`, `white_ash`, `white_smoke`, `witch`.
 
 ```lua
-world:particle("minecraft:flame", { x = 0, y = 65, z = 0 })
-world:particle("minecraft:heart", { x = 0, y = 65, z = 0 }, {
-  count = 5,
-  delta = { 0.5, 0.5, 0.5 },
-  speed = 0.1
-})
-world:particle("minecraft:dust", { x = 0, y = 65, z = 0 }, {
-  color = { 1, 0, 0 },
-  scale = 1,
-  count = 5,
-})
+local flame = particle("flame")
+world:emit(flame, vec(0, 65, 0))
+world:emit(particle("heart"), vec(0, 65, 0), { count = 5, spread = 0.5, speed = 0.1 })
+world:emit(particle("dust", { color = { 1, 0, 0 }, scale = 1 }), vec(0, 65, 0), { count = 5 })
+
+-- one end_rod rising
+world:emit(particle("end_rod"), vec(0, 65, 0), { velocity = vec(0, 1, 0) })
+
+-- only one player sees it
+world:emit(flame, vec(0, 65, 0), { viewers = player })
 ```
+
+For shapes, lifetimes and following entities see the [`core:particles`](/libraries/particles) library.
 
 ### `world:playSound(id, pos, volume?, pitch?)`
 

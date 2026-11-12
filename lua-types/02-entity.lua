@@ -74,6 +74,21 @@ Entity.air = nil
 ---@type integer
 Entity.maxAir = nil
 
+---Horizontal rotation in degrees (0 = south, 90 = west). Read/write; living entities turn body and head too.
+---@type number
+Entity.yaw = nil
+
+---Vertical rotation in degrees (positive looks down). Read/write.
+---@type number
+Entity.pitch = nil
+
+---@type boolean
+Entity.noGravity = nil
+
+---Motion in blocks per tick. Read/write; writing sends the new motion to clients (players apply it).
+---@type Vec
+Entity.velocity = nil
+
 ---`true` after `entity:remove()` or chunk unload.
 ---@type boolean
 Entity.removed = nil
@@ -169,3 +184,6 @@ function Entity:hasEffect(effectId) end
 ---Sets the entity on fire for the given ticks.
 ---@param ticks integer
 function Entity:setOnFireFor(ticks) end
+
+---Removes the entity without death, drops or loot. Raises an error for players.
+function Entity:remove() end

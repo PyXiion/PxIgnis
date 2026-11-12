@@ -96,6 +96,7 @@ class ScriptEnvironment(private val vfs: Vfs) {
 
         val globals = state.globals
         globals.set("register", commandRegistrar.registerFunction)
+        globals.set("particle", ru.pyxiion.ignis.api.ParticleLib.constructor { api.registries })
 
         _state = state
         globals.set("mc", api.toTable())

@@ -16,6 +16,7 @@ class Vfs(private val ignisDir: Path) {
         "chestgui" to Module(loadResource("/chestgui.lua"), "@chestgui.lua"),
         "items" to Module(loadResource("/items.lua"), "@items.lua"),
         "demo" to Module(loadResource("/demo.lua"), "@demo.lua"),
+        "particles" to Module(loadResource("/particles.lua"), "@particles.lua"),
     )
 
     /** Корень и проверяемый путь приводятся одним способом — через `toRealPath`. Нет каталога — нет файлов. */

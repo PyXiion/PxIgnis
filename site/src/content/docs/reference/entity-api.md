@@ -100,6 +100,34 @@ Idk what it means, but it exists.
 
 **type:** `boolean`
 
+### `entity.yaw`
+
+**type:** `number` (degrees)
+
+Horizontal rotation; `0` faces south (+Z), `90` faces west. For living entities it also turns the body and head.
+Set it before `entity.pos` when you teleport an entity each tick: the teleport carries the rotation.
+
+### `entity.pitch`
+
+**type:** `number` (degrees)
+
+Vertical rotation; positive looks down.
+
+### `entity.noGravity`
+
+**type:** `boolean`
+
+### `entity.velocity`
+
+**type:** [`Vec`](/reference/vector-api)
+
+Motion in blocks per tick (gravity adds about `-0.08` per tick on top). Assigning it also sends the new motion to
+clients, so players are pushed too. Set it every tick to steer an entity.
+
+### `entity:remove()`
+
+Removes the entity without death, drops or loot. Players cannot be removed (raises an error).
+
 ## Equipment
 
 ### `entity.mainhand`

@@ -10,6 +10,7 @@ local format = require "core:format"
 local simple = require "core:simple"
 local chestgui = require "core:chestgui"
 local items = require "core:items"
+local fx = require "core:particles"
 ```
 
 ## Available Libraries
@@ -20,6 +21,7 @@ local items = require "core:items"
 | [simple](/libraries/simple)     | Concise command registration with built-in formatting |
 | [chestgui](/libraries/chestgui) | Chest-based GUI creation                              |
 | [items](/libraries/items)       | Custom item templates with scripted callbacks         |
+| [particles](/libraries/particles) | Tick-driven particle effects: shapes, sequences, loops |
 
 ## Loading from Subdirectories
 

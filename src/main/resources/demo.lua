@@ -508,7 +508,7 @@ end
 --   - Spawned entities have full property access (health, type, uuid, tags, equipment)
 --   - entity.tags is a boolean proxy table backed by command tags
 --   - Setting equipment on spawned entities uses equipStack internally
---   - world:particle(id, pos, {count?, spread?, speed?, ...}) spawns particles; particle-type fields go directly in opts
+--   - particle(id, data?) builds a particle once; world:emit(particle, pos, {count?, spread?, speed?, velocity?, viewers?, alwaysShow?}) sends it
 
 function spawnmobHandler(ctx, entityId)
     local player = ctx.player
@@ -829,9 +829,9 @@ end
 
 function particleHandler(ctx, id, count)
     local p = ctx.player
-    p.world:particle(id, p.pos, {
+    p.world:emit(particle(id), p.pos, {
         count = count or 10,
-        spread = vec(0.5, 0.5, 0.5),
+        spread = 0.5,
         speed = 0.1,
     })
     p:sendMessage("§aSpawned §f" .. (count or 10) .. " §aof §f" .. id)

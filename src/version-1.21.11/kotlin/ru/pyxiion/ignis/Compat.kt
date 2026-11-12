@@ -59,6 +59,11 @@ object Compat {
         entity.isInvulnerable = value
     }
 
+    /** Makes the tracker send the entity's motion to clients (`needsSync` on 26.x). */
+    fun syncMotion(entity: Entity) {
+        entity.hurtMarked = true
+    }
+
     fun giveItem(player: ServerPlayer, stack: ItemStack) {
         player.inventory.placeItemBackInInventory(stack)
     }

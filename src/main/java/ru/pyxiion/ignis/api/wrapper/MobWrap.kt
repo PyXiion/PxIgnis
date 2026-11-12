@@ -28,6 +28,11 @@ object MobWrap {
         prop("isMob") { LuaValue.TRUE }
         prop("aiActive") { LuaValue.valueOf(MobAIManager.hasAI(this)) }
         prop(
+            "noAi",
+            get = { if (isNoAi) LuaValue.TRUE else LuaValue.FALSE },
+            set = { v -> isNoAi = v.toboolean() }
+        )
+        prop(
             "target",
             get = {
                 target?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL

@@ -25,8 +25,9 @@ config and internals are allowed and expected whenever they make the design simp
 - Run Gradle on JDK 25. Targets are defined by `gradle/versions/<v>.properties`.
 - Artifact: `build/libs/PxIgnis-<mod_version>-fabric-<v>.jar`.
 - Every change must build for both targets.
-- Unit tests cover pure logic only. Anything touching Minecraft classes is verified by booting a real server on both
-  targets with a Lua script in `config/ignis/`. A green build does not show that mixins apply or that the mod starts.
+- Unit tests cover pure logic only. Anything touching Minecraft classes is verified by `smoke/run.sh` (boots a real
+  Fabric server per target with the production jar). A green build does not show that mixins apply or that the mod
+  starts.
 - Test quirks: `agent_docs/testing.md`.
 
 ## Source layout

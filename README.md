@@ -30,10 +30,12 @@ end)
 ```
 
 ```lua
+local totem = particle("totem_of_undying")
+
 mc.on("player_block_break", function(player, pos, blockId)
     if blockId == "minecraft:diamond_ore" then
         player:sendTitle({ title = "Lucky!" })
-        player.world:particle("minecraft:totem_of_undying", pos)
+        player.world:emit(totem, pos)
     end
 end)
 ```

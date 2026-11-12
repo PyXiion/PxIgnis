@@ -132,13 +132,15 @@ end, "admin.kick")
 See [World API](/reference/world-api) and [Vector API](/reference/vector-api) for particle, sound, and vec options:
 
 ```lua
+local heart = particle("heart") -- build a particle once, emit it as often as you like
+
 register("fart", function(ctx)
     local p = ctx.player
     local pos = p.pos
     p.world:playSound("minecraft:entity.player.burp", pos, 1.0, 1.0)
-    p.world:particle("minecraft:heart", vec(pos.x, pos.y + 1, pos.z), {
+    p.world:emit(heart, vec(pos.x, pos.y + 1, pos.z), {
         count = 5,
-        delta = { 0.5, 0.5, 0.5 }
+        spread = 0.5
     })
     p:sendMessage("You farted!")
 end)

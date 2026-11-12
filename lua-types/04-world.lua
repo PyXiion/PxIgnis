@@ -62,11 +62,17 @@ function World:setBlockState(pos, state) end
 ---@param blockId string
 function World:fill(posA, posB, blockId) end
 
----Spawns a particle at a position.
----@param particleId string
+---Sends a particle at a position.
+---@param particle Particle
 ---@param pos Vec|Vec3Like
----@param opts? ParticleOpts
-function World:particle(particleId, pos, opts) end
+---@param opts? EmitOpts
+function World:emit(particle, pos, opts) end
+
+---Sends a particle at each position; opts are parsed once.
+---@param particle Particle
+---@param positions (Vec|Vec3Like)[]
+---@param opts? EmitOpts
+function World:emitMany(particle, positions, opts) end
 
 ---@param soundId string
 ---@param pos Vec|Vec3Like
