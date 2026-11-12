@@ -16,7 +16,8 @@ PxIgnis is a Fabric mod that embeds a hot-swappable Lua runtime into your Minecr
 
 1. Install PxIgnis on your Fabric server.
 2. On first run, `config/ignis/demo.lua` is created with example scripts.
-3. Run `/ignis reload` (requires operator level 4 or `px.ignis` permission) to apply changes.
+3. Settings live in `config/pxignis.json`, see [Configuration](/reference/configuration).
+4. Run `/ignis reload` (requires operator level 4 or `px.ignis` permission) to apply changes.
 
 ## Your First Script
 

@@ -2,6 +2,8 @@ package ru.pyxiion.ignis.events
 
 import net.minecraft.core.BlockPos
 import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.nbt.Tag
+import net.minecraft.resources.Identifier
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.damagesource.DamageSource
@@ -14,6 +16,7 @@ import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.EventBus
 import ru.pyxiion.ignis.EventResult
 import ru.pyxiion.ignis.PxIgnis
+import ru.pyxiion.ignis.api.DialogApi
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
@@ -113,6 +116,14 @@ object GameEvents {
         it["player"] = PlayerWrap.wrap(player)
         it["item"] = ItemStackWrap.wrap(stack)
         it["count"] = LuaValue.valueOf(stack.count)
+    }
+
+    /** A dialog button with a `custom` action. [payload] is the compound of the action's inputs, if any. */
+    @JvmStatic
+    fun customClick(player: ServerPlayer, id: Identifier, payload: Tag?) = post("player.custom_click") {
+        it["player"] = PlayerWrap.wrap(player)
+        it["id"] = LuaValue.valueOf(id.toString())
+        it["payload"] = if (payload == null) LuaValue.NIL else DialogApi.payloadToLua(payload)
     }
 
     @JvmStatic

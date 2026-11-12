@@ -21,6 +21,7 @@ import net.minecraft.world.phys.Vec3
 import org.luaj.vm2.*
 import ru.pyxiion.ignis.*
 import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
+import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.api.manager.*
 import ru.pyxiion.ignis.api.util.ItemBuilder
 import ru.pyxiion.ignis.api.util.ItemStackCodec
@@ -381,6 +382,14 @@ class LuaMcApi(
                 wrapper.toLuaValue()
             },
             "execute" to this::luaExecute.asVarArgFunction(),
+            "decodeDialog" to luaFunction { spec ->
+                DialogApi.check(server.registryAccess(), spec.checktable())
+                LuaValue.NIL
+            },
+            "warn" to luaFunction { context, text ->
+                ScriptErrors.warn(context.checkjstring(), text.checkjstring())
+                LuaValue.NIL
+            },
         )
 
         table.set("on", luaFunction { eventName, a, b ->

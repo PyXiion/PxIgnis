@@ -29,12 +29,13 @@ object LuaJson {
     private val INT_LITERAL = Regex("-?[0-9]+")
     private val IDENT = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
-    fun toJson(value: LuaValue, root: String = "data"): JsonElement =
-        encode(value, root, IdentityHashMap())
+    /** [special] may turn a table (e.g. a wrapped object) into JSON of its own; null falls through to the normal rules. */
+    fun toJson(value: LuaValue, root: String = "data", special: ((LuaTable) -> JsonElement?)? = null): JsonElement =
+        encode(value, root, IdentityHashMap(), special)
 
     /** Top-level files are always objects, even for a table with keys `1..n`. */
     fun toJsonObject(table: LuaTable, root: String = "data"): JsonObject =
-        encodeTable(table, root, IdentityHashMap(), forceObject = true) as JsonObject
+        encodeTable(table, root, IdentityHashMap(), null, forceObject = true) as JsonObject
 
     fun fromJson(element: JsonElement): LuaValue = when {
         element.isJsonNull -> LuaValue.NIL
@@ -66,13 +67,18 @@ object LuaJson {
         }
     }
 
-    private fun encode(value: LuaValue, path: String, stack: IdentityHashMap<LuaTable, Unit>): JsonElement =
+    private fun encode(
+        value: LuaValue,
+        path: String,
+        stack: IdentityHashMap<LuaTable, Unit>,
+        special: ((LuaTable) -> JsonElement?)?,
+    ): JsonElement =
         when (value.type()) {
             LuaValue.TNIL -> JsonNull.INSTANCE
             LuaValue.TBOOLEAN -> JsonPrimitive(value.toboolean())
             LuaValue.TSTRING -> JsonPrimitive(value.tojstring())
             LuaValue.TNUMBER -> encodeNumber(value, path)
-            LuaValue.TTABLE -> encodeTable(value.checktable(), path, stack)
+            LuaValue.TTABLE -> special?.invoke(value.checktable()) ?: encodeTable(value.checktable(), path, stack, special)
             else -> throw LuaError("$path: ${value.typename()}")
         }
 
@@ -90,6 +96,7 @@ object LuaJson {
         table: LuaTable,
         path: String,
         stack: IdentityHashMap<LuaTable, Unit>,
+        special: ((LuaTable) -> JsonElement?)?,
         forceObject: Boolean = false,
     ): JsonElement {
         if (stack.put(table, Unit) != null) throw LuaError("$path: cyclic reference")
@@ -97,7 +104,7 @@ object LuaJson {
             val len = if (forceObject) 0 else listLength(table)
             if (len > 0) {
                 val arr = JsonArray()
-                for (i in 1..len) arr.add(encode(table.rawget(i), "$path[$i]", stack))
+                for (i in 1..len) arr.add(encode(table.rawget(i), "$path[$i]", stack, special))
                 return arr
             }
             val obj = JsonObject()
@@ -107,7 +114,7 @@ object LuaJson {
                 k = n.arg1()
                 if (k.isnil()) break
                 val name = keyName(k, path)
-                obj.add(name, encode(n.arg(2), childPath(path, k), stack))
+                obj.add(name, encode(n.arg(2), childPath(path, k), stack, special))
             }
             return obj
         } finally {

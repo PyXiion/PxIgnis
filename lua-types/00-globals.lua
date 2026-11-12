@@ -36,6 +36,7 @@
 ---| 'player.consume'   # cancellable
 ---| 'player.pickup'    # cancellable
 ---| 'player.drop'      # cancellable
+---| 'player.custom_click'  # a dialog button with a `custom` action
 ---| 'block.break'      # cancellable
 ---| 'block.place'      # cancellable
 ---| 'entity.spawn'

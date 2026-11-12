@@ -113,17 +113,6 @@ function mc.deserialise(type, json) end
 ---@return Inventory
 function mc.createInventory(size) end
 
----Returns the current Yarn mapping namespace (e.g. "named", "intermediary",
----"mojang", or the mod's runtime namespace).
----@type string
-mc.runtimeNamespace = nil
-
----Resolves a class name from the `named` namespace to the current runtime
----namespace. Useful for working with NBT or reflection.
----@param className string
----@return string
-function mc.mapped(className) end
-
 ---Registers a custom mob behaviour handler. See /reference/mob-ai.
 ---@param id string
 ---@param fn fun(entity: Mob, ctx: table)
@@ -140,6 +129,16 @@ function mc.createBossBar(title, color, style) end
 ---@param opts? ExecuteOpts
 ---@return boolean, integer|string
 function mc.execute(command, opts) end
+
+---Checks a dialog spec (as for `player:showDialog`) without showing it; raises the game's error if it is rejected.
+---@param spec table
+function mc.decodeDialog(spec) end
+
+---Reports a warning like the engine does: to the server log and, rate-limited, to operators who have
+---`px.ignis.prompt_errors`.
+---@param context string  -- what was running, e.g. "core:dialog"
+---@param text string
+function mc.warn(context, text) end
 
 ---Creates an ItemStack. Three forms:
 ---  createItem("minecraft:stone", 64)

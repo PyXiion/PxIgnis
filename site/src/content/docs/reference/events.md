@@ -79,33 +79,34 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
 
 ✅ = cancellable.
 
-| Event             | Fields                                                   |    |
-|-------------------|----------------------------------------------------------|:--:|
-| `init`            | —                                                        |    |
-| `uninit`          | —                                                        |    |
-| `server_start`    | —                                                        |    |
-| `server_stop`     | —                                                        |    |
-| `tick`            | —                                                        |    |
-| `player.login`    | `player`                                                 | ✅ |
-| `player.join`     | `player`                                                 |    |
-| `player.leave`    | `player`                                                 |    |
-| `player.respawn`  | `player`, `alive`                                        |    |
-| `player.chat`     | `player`, `message`                                      | ✅ |
-| `player.move`     | `player`, `from`, `to`                                   |    |
-| `player.use_item` | `player`, `hand`, `item`, `itemId`                       | ✅ |
-| `player.attack`   | `player`, `target`                                       | ✅ |
-| `player.interact` | `player`, `target`, `hand`                               | ✅ |
-| `player.kill`     | `player`, `target`, `source`                             |    |
-| `player.consume`  | `player`, `item`                                         | ✅ |
-| `player.pickup`   | `player`, `item`, `count`                                | ✅ |
-| `player.drop`     | `player`, `item`, `count`                                | ✅ |
-| `block.break`     | `player`, `pos`, `block`                                 | ✅ |
-| `block.place`     | `player`, `pos`, `block`                                 | ✅ |
-| `entity.spawn`    | `entity`                                                 |    |
-| `entity.despawn`  | `entity`                                                 |    |
-| `entity.hurt`     | `entity`, `player?`, `source`, `amount`, `attacker`      | ✅ |
-| `entity.damaged`  | `entity`, `player?`, `source`, `amount`, `attacker`, `blocked` |    |
-| `entity.death`    | `entity`, `player?`, `source`, `amount`, `attacker`      | ✅ |
+| Event                 | Fields                                                         |   |
+|-----------------------|----------------------------------------------------------------|:-:|
+| `init`                | —                                                              |   |
+| `uninit`              | —                                                              |   |
+| `server_start`        | —                                                              |   |
+| `server_stop`         | —                                                              |   |
+| `tick`                | —                                                              |   |
+| `player.login`        | `player`                                                       | ✅ |
+| `player.join`         | `player`                                                       |   |
+| `player.leave`        | `player`                                                       |   |
+| `player.respawn`      | `player`, `alive`                                              |   |
+| `player.chat`         | `player`, `message`                                            | ✅ |
+| `player.move`         | `player`, `from`, `to`                                         |   |
+| `player.use_item`     | `player`, `hand`, `item`, `itemId`                             | ✅ |
+| `player.attack`       | `player`, `target`                                             | ✅ |
+| `player.interact`     | `player`, `target`, `hand`                                     | ✅ |
+| `player.kill`         | `player`, `target`, `source`                                   |   |
+| `player.consume`      | `player`, `item`                                               | ✅ |
+| `player.pickup`       | `player`, `item`, `count`                                      | ✅ |
+| `player.drop`         | `player`, `item`, `count`                                      | ✅ |
+| `player.custom_click` | `player`, `id`, `payload`                                      |   |
+| `block.break`         | `player`, `pos`, `block`                                       | ✅ |
+| `block.place`         | `player`, `pos`, `block`                                       | ✅ |
+| `entity.spawn`        | `entity`                                                       |   |
+| `entity.despawn`      | `entity`                                                       |   |
+| `entity.hurt`         | `entity`, `player?`, `source`, `amount`, `attacker`            | ✅ |
+| `entity.damaged`      | `entity`, `player?`, `source`, `amount`, `attacker`, `blocked` |   |
+| `entity.death`        | `entity`, `player?`, `source`, `amount`, `attacker`            | ✅ |
 
 ### Fields
 
@@ -122,6 +123,10 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
 - **item** — an [ItemStack](/reference/itemstack-api) (`nil` on `player.use_item` with an empty hand); **itemId** is
   its ID string.
 - **hand** — `"main"` or `"off"`.
+- **id**, **payload** — on `player.custom_click`: the id of the clicked dialog button's `custom` action and the values of
+  the dialog's inputs as a table (`nil` without inputs; a boolean input arrives as `0`/`1`). It comes from the client and
+  can be forged, so validate it. Only dialogs shown in the game phase are reported; [`core:dialog`](/libraries/dialog)
+  does the routing and validation for its own dialogs.
 - **alive** — on `player.respawn`, `true` when returning from the End, `false` after death.
 
 ### Notes

@@ -17,6 +17,7 @@ class Vfs(private val ignisDir: Path) {
         "items" to Module(loadResource("/items.lua"), "@items.lua"),
         "demo" to Module(loadResource("/demo.lua"), "@demo.lua"),
         "particles" to Module(loadResource("/particles.lua"), "@particles.lua"),
+        "dialog" to Module(loadResource("/dialog.lua"), "@dialog.lua"),
     )
 
     /** Корень и проверяемый путь приводятся одним способом — через `toRealPath`. Нет каталога — нет файлов. */

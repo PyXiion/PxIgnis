@@ -83,6 +83,16 @@ Returns a shared metatable by name. See [MetaTableRegistry](/api/#metatableregis
 local meta = mc.getMetatable("vec")  -- "vec", "entity", "player", "world", "bossbar", ...
 ```
 
+### `mc.decodeDialog(spec)`
+
+Checks a dialog table the way [`player:showDialog`](/reference/player-api#playershowdialogspec) would decode it, without
+a player and without showing anything. Raises the game's error when the spec is rejected.
+
+### `mc.warn(context, text)`
+
+Reports a warning the way the engine does: to the server log and, rate-limited, to operators with the
+`px.ignis.prompt_errors` permission.
+
 ## Scheduling
 
 ### `mc.schedule(delay, callback)`
@@ -130,6 +140,7 @@ local ok, err = mc.execute("kick nonexistent")
 -- Execute as a player at their position
 mc.execute("kill @e[type=pig,distance=..5]", { as = player, at = player.pos })
 ```
+
 ## Items
 
 ### `mc.createItem(id, [count | components])`

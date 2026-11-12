@@ -100,3 +100,19 @@ function Player:getItem(slot) end
 
 ---Clears the player's inventory.
 function Player:clear() end
+
+---Shows a dialog (Minecraft 1.21.6+). `spec` is a registry dialog id (`"minecraft:server_links"`) or a table in the
+---vanilla dialog JSON shape (`type`, `title`, `body`, `inputs`, `actions`, `after_action`, `exit_action`, ...); an Item
+---is accepted wherever the JSON wants an item stack. A spec the game rejects raises an error with the codec's message.
+---Clicks on `custom` actions arrive as `player.custom_click`. `require "core:dialog"` is the convenient layer.
+---@param spec string|table
+function Player:showDialog(spec) end
+
+---Closes the dialog the player is looking at.
+function Player:closeDialog() end
+
+---Runs a command as this player: their own permissions, position and rotation (unlike `mc.execute`, which runs with
+---console permissions). Returns `true, result` or `false, message`, like `mc.execute`.
+---@param command string  -- without the leading slash
+---@return boolean, integer|string
+function Player:runCommand(command) end

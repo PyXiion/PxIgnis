@@ -3,6 +3,22 @@ title: Changelog
 description: Release history for PxIgnis.
 ---
 
+## Unreleased
+
+### Added
+
+- **Dialogs (Minecraft 1.21.6+).** Raw API: `player:showDialog(spec)` (a registry dialog id, or a table in the vanilla
+  dialog JSON shape; an `Item` is accepted where an item stack is expected), `player:closeDialog()` and
+  `player:runCommand(cmd)` (runs with the player's own permissions, unlike `mc.execute`). New event
+  `player.custom_click` (`player`, `id`, `payload`) for `custom` dialog actions. New library `core:dialog`
+  (`dialog.show` with text/number/option/bool inputs, button, command, link and copy buttons, checked input values,
+  `onClose`); see [dialog](/libraries/dialog).
+- **Pause-menu button.** `config/pxignis.json` (`menu.enabled`, `menu.title`, `menu.button`; off by default) adds the
+  dialog `pxignis:menu` to the pause screen and quick actions menu; a click is the `player.custom_click` event with id
+  `pxignis:menu`.
+- `mc.warn(context, text)` reports a script warning to the log and to operators; `mc.decodeDialog(spec)` checks a
+  dialog table against the game's codec without showing it.
+
 ## 0.18.0 — Event model, MC 1.21.11 + 26.3, parallel workers, particles (2026-11-12)
 
 ### Breaking

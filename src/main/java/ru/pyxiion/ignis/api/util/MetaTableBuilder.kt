@@ -39,7 +39,7 @@ class BuiltMeta(val meta: LuaTable, val keys: List<LuaValue>) {
  */
 class MetaTableBuilder<T : Any>(val type: Class<T>) {
     private val entries = linkedMapOf<LuaValue, Entry<T>>()
-    private val methods = mutableListOf<Pair<LuaValue, (Varargs) -> LuaValue>>()
+    private val methods = mutableListOf<Pair<LuaValue, (Varargs) -> Varargs>>()
     private var parent: BuiltMeta? = null
 
     fun prop(name: String, getter: T.() -> LuaValue) {
@@ -84,11 +84,11 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
      * Registers a method. Varargs layout:
      *   arg(1) = self table   arg(2..n) = Lua arguments
      */
-    fun method(name: String, body: (Varargs) -> LuaValue) {
+    fun method(name: String, body: (Varargs) -> Varargs) {
         method(LuaValue.valueOf(name), body)
     }
 
-    fun method(name: LuaValue, body: (Varargs) -> LuaValue) {
+    fun method(name: LuaValue, body: (Varargs) -> Varargs) {
         methods.add(name to body)
     }
 

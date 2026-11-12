@@ -11,6 +11,8 @@
     "ScreenHandlerMixin",
     "StructureTemplateMixin",
     "ServerPlayNetworkHandlerMixin",
+    "ServerCommonPacketListenerMixin",
+    "PackRepositoryMixin",
     "LivingEntityConsumeMixin",
     "ItemEntityPickup",
     "BlockItemMixin"

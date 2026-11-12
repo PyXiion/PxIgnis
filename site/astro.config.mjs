@@ -48,6 +48,7 @@ export default defineConfig({
             { label: "Async API", slug: "reference/async-api" },
             { label: "Events", slug: "reference/events" },
             { label: "Storage", slug: "reference/storage" },
+            { label: "Configuration", slug: "reference/configuration" },
             { label: "Language", slug: "reference/language" },
           ],
         },
@@ -77,6 +78,7 @@ export default defineConfig({
             { label: "Simple", slug: "libraries/simple" },
             { label: "Chest GUI", slug: "libraries/chestgui" },
             { label: "Particles", slug: "libraries/particles" },
+            { label: "Dialog", slug: "libraries/dialog" },
           ],
         },
         {

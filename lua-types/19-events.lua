@@ -56,6 +56,10 @@ function Event:cancel(reason) end
 ---@field target Entity
 ---@field source string  -- damage type, e.g. "player"
 
+---@class PlayerCustomClickEvent : PlayerEvent
+---@field id string      -- the id of the dialog button's `custom` action, e.g. "pxignis:menu"
+---@field payload any    -- the inputs of the dialog as a table (booleans arrive as 0/1), or nil; client data, validate it
+
 ---@class PlayerItemEvent : PlayerEvent
 ---@field item Item
 
@@ -118,6 +122,7 @@ function Event:cancel(reason) end
 ---@overload fun(event: '"player.consume"', handler: fun(e: PlayerItemEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.pickup"', handler: fun(e: PlayerItemCountEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.drop"', handler: fun(e: PlayerItemCountEvent), opts?: EventOptions): integer
+---@overload fun(event: '"player.custom_click"', handler: fun(e: PlayerCustomClickEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"block.break"', handler: fun(e: BlockEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"block.place"', handler: fun(e: BlockEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"entity.spawn"', handler: fun(e: EntityEvent), opts?: EventOptions): integer

@@ -198,3 +198,122 @@ function Async.sleep(ticks) end
 ---@param request string|FetchRequest
 ---@return FetchResult
 function Async.fetch(request) end
+
+-- `require "core:dialog"`: server dialogs (Minecraft 1.21.6+). See /libraries/dialog.
+
+---A piece of a dialog made by the constructors of `DialogLib`.
+---@class DialogEntry
+
+---@class DialogItemOpts
+---@field tooltip? boolean      -- show the item tooltip on hover (default true)
+---@field decorations? boolean  -- show count and durability (default true)
+---@field width? integer
+---@field height? integer
+
+---@class DialogTextOpts
+---@field max? integer      -- maximum length (default 32)
+---@field initial? string
+---@field lines? integer    -- makes the field multi-line, with this many lines at most
+---@field height? integer   -- height of a multi-line field
+---@field width? integer
+---@field hideLabel? boolean
+
+---@class DialogNumberOpts
+---@field step? number
+---@field initial? number
+---@field format? string    -- translation key of the label, e.g. "options.generic_value"
+---@field width? integer
+
+---@class DialogOptionOpts
+---@field initial? string   -- an option id
+---@field width? integer
+---@field hideLabel? boolean
+
+---@class DialogButtonOpts
+---@field tooltip? string
+---@field width? integer
+---@field after? '"wait"'|'"keep"'|'"close"'  -- what happens to the dialog after the click (default "wait" = closed
+---                                           -- unless the handler shows another one; "keep" leaves it open)
+
+---@class DialogSpec
+---@field title string
+---@field externalTitle? string  -- the name on the pause-menu button
+---@field canEscape? boolean     -- default true
+---@field columns? integer       -- button columns
+---@field body? (string|DialogEntry|false)[]
+---@field inputs? (DialogEntry|false)[]
+---@field buttons? (DialogEntry|false|nil)[]
+---Called once when the dialog ends without a button: "escape", "replaced", "leave", "reload", "closed" or "invalid".
+---@field onClose? fun(player: Player, reason: string)
+
+---@class DialogLib
+local Dialog = {}
+
+---Shows a dialog; the previous dialog of this player from this library ends ("replaced").
+---@param player Player
+---@param spec DialogSpec
+function Dialog.show(player, spec) end
+
+---Closes the player's dialog from this library ("closed").
+---@param player Player
+function Dialog.close(player) end
+
+---An item in the body, with an optional description.
+---@param stack Item|string
+---@param text? string
+---@param opts? DialogItemOpts
+---@return DialogEntry
+function Dialog.item(stack, text, opts) end
+
+---@param key string
+---@param label string
+---@param opts? DialogTextOpts
+---@return DialogEntry
+function Dialog.text(key, label, opts) end
+
+---@param key string
+---@param label string
+---@param min number
+---@param max number
+---@param opts? DialogNumberOpts
+---@return DialogEntry
+function Dialog.number(key, label, min, max, opts) end
+
+---@param key string
+---@param label string
+---@param options { [1]: string, [2]: string }[]  -- { id, label } pairs
+---@param opts? DialogOptionOpts
+---@return DialogEntry
+function Dialog.option(key, label, options, opts) end
+
+---@param key string
+---@param label string
+---@param opts? { initial?: boolean }
+---@return DialogEntry
+function Dialog.bool(key, label, opts) end
+
+---A button whose handler gets the player and the checked input values by key.
+---@param label string
+---@param fn fun(player: Player, values: table)
+---@param opts? DialogButtonOpts
+---@return DialogEntry
+function Dialog.button(label, fn, opts) end
+
+---A button that runs a command as the player (their own permissions, no confirmation screen).
+---@param label string
+---@param command string
+---@param opts? DialogButtonOpts
+---@return DialogEntry
+function Dialog.command(label, command, opts) end
+
+---A button that opens a URL on the client.
+---@param label string
+---@param url string
+---@return DialogEntry
+function Dialog.link(label, url) end
+
+---A button that copies text to the client's clipboard.
+---@param label string
+---@param text string
+---@return DialogEntry
+function Dialog.copy(label, text) end

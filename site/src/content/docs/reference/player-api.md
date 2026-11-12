@@ -183,6 +183,44 @@ player:clear()
 
 
 
+## Dialogs
+
+Raw access to Minecraft 1.21.6+ dialogs. Most scripts want [`core:dialog`](/libraries/dialog), which builds the dialog,
+routes the clicks and validates the input.
+
+### `player:showDialog(spec)`
+
+Shows a dialog.
+
+- `spec` (`string` or `table`) — a registry dialog id such as `"minecraft:server_links"`, or a table in the vanilla
+  [dialog JSON](https://minecraft.wiki/w/Dialog) shape (`type`, `title`, `body`, `inputs`, `actions`, `after_action`,
+  `exit_action`, ...). An [ItemStack](/reference/itemstack-api) may stand wherever an item is expected. A spec the game
+  rejects raises an error with the reason.
+
+```lua
+player:showDialog({
+    type = "minecraft:notice",
+    title = "Welcome",
+    body = { { type = "minecraft:plain_message", contents = "Read the rules." } },
+    action = { label = "OK", action = { type = "minecraft:dynamic/custom", id = "myplugin:ok" } },
+})
+
+mc.on("player.custom_click", function(e)
+    if e.id == "myplugin:ok" then e.player:sendMessage("Thanks!") end
+end)
+```
+
+A `custom` action sends its input values with the click in `e.payload`; routing data belongs in the action id.
+
+### `player:closeDialog()`
+
+Closes the dialog the player is looking at.
+
+### `player:runCommand(cmd)`
+
+Runs a command as the player, with their own permissions, position and rotation (`mc.execute(cmd, { as = player })`
+keeps console permissions). Returns `true, result` or `false, message`.
+
 ## Sidebar
 
 Each player has a per-player sidebar.

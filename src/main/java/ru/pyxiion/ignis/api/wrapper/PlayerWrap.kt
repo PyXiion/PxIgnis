@@ -26,6 +26,7 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import me.lucko.fabric.api.permissions.v0.Permissions
 import ru.pyxiion.ignis.PxIgnis
+import ru.pyxiion.ignis.api.DialogApi
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.SidebarManager
 import ru.pyxiion.ignis.lookup
@@ -267,6 +268,20 @@ object PlayerWrap {
         method("clear") { args ->
             args.arg(1).checktable().unwrap<ServerPlayer>().inventory.clearContent()
             LuaValue.NIL
+        }
+
+        method("showDialog") { args ->
+            DialogApi.show(args.arg(1).checktable().unwrap<ServerPlayer>(), args.arg(2))
+            LuaValue.NIL
+        }
+
+        method("closeDialog") { args ->
+            DialogApi.close(args.arg(1).checktable().unwrap<ServerPlayer>())
+            LuaValue.NIL
+        }
+
+        method("runCommand") { args ->
+            DialogApi.runCommand(args.arg(1).checktable().unwrap<ServerPlayer>(), args.arg(2).checkjstring())
         }
     }}
 
