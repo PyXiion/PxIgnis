@@ -20,7 +20,8 @@ description: Release history for PxIgnis.
 - **Unknown registry ids are errors.** `world:spawn`, `world:setBlock`, `world:setBlockState`, `world:fill`,
   `world:getEntities` (type filter), `player:give` and `mc.createItem` throw `<what> '<id>' не найден` instead of
   silently producing air or a pig.
-- **`player_block_break`, `player_block_place`, `player_use_item` and `entity.type`** report namespaced ids
+- **`block.break`, `block.place`, `player.use_item` (formerly `player_block_break`, `player_block_place`,
+  `player_use_item`) and `entity.type`** report namespaced ids
   (`minecraft:stone`); they used to report the numeric registry id.
 - **Vectors:** assigning an unknown field (`v.w = 1`) throws. `{x, y, z}` arrays are accepted everywhere a vector is.
 - **Sandbox:** `load` never loads bytecode (`mode` containing `b` is an error, the default is `"t"`), `string.dump` is
@@ -194,7 +195,6 @@ The fields of each event are listed in [Events](/reference/events#event-referenc
   coroutine twice. `async.run`, `task:wait`, `async.all`, a blocking channel `send` / `receive` and calls of
   `async.parallel` functions outside a coroutine raise an error before starting any work. A parallel function
   that raises a non-string error object reports it as a string.
-- Region `death` / `entity_death` / `player_death` handlers were never called.
 - `throttle` on region handlers only counted down while the region had a `tick` handler; the global bus only while
   some `tick` handler existed.
 
