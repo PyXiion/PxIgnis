@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis.api.wrapper
 
+import ru.pyxiion.ignis.wrapObject
 import com.mojang.brigadier.StringReader
 import com.mojang.brigadier.exceptions.CommandSyntaxException
 import net.minecraft.commands.arguments.selector.EntitySelectorParser
@@ -35,73 +36,56 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
+import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector.Companion.toBlockPos
 import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.api.manager.HologramManager
 import ru.pyxiion.ignis.api.manager.RegionManager
 import ru.pyxiion.ignis.api.resolveOperand
+import ru.pyxiion.ignis.lookup
 import ru.pyxiion.ignis.api.util.BlockStateCodec
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.unwrapOrNull
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.api.util.performRaycast
-import ru.pyxiion.ignis.api.wrappertoLuaValue.PlayerListWrapper
+import ru.pyxiion.ignis.api.util.broadcastTo
+import ru.pyxiion.ignis.api.util.checkOverlay
 import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.unwrap
 import java.util.*
 
 object WorldWrap {
 
-    private class InstanceData(
-        @JvmField val playerCache: MutableMap<UUID, LuaValue>,
-        @JvmField val tickProvider: () -> Long,
-    )
-
-    fun wrap(
-        world: ServerLevel,
-        playerCache: MutableMap<UUID, LuaValue> = mutableMapOf(),
-        tickProvider: () -> Long = { 0L }
-    ): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(MetaTableRegistry.WORLD)
-        t.rawset("__pxrp_type", LuaValue.valueOf("world"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(world))
-        t.rawset("__pxrp_data", LuaValue.userdataOf(InstanceData(playerCache, tickProvider)))
-        return t
+    fun wrap(world: ServerLevel): LuaValue {
+        return wrapObject(MetaTableRegistry.WORLD, "world", world)
     }
 
     private val BUILT = metaTable<ServerLevel> {
         prop("name") { LuaValue.valueOf(dimension().identifier().path) }
         prop(
             "time",
-            get = { LuaValue.valueOf(dayTime.toDouble()) },
-            set = { v -> dayTime = v.tolong() }
+            get = { LuaValue.valueOf(Compat.getDayTime(this).toDouble()) },
+            set = { v -> Compat.setDayTime(this, v.tolong()) }
         )
         prop(
             "raining",
-            get = { if (isRaining) LuaValue.TRUE else LuaValue.FALSE },
+            get = { LuaValue.valueOf(Compat.isRainingFlag(this)) },
             set = { v ->
-                if (v.toboolean()) setWeatherParameters(0, 6000, true, isThundering)
-                else setWeatherParameters(0, 0, false, isThundering)
+                // Без дождя грозы не бывает.
+                if (v.toboolean()) Compat.setWeather(this, 0, 6000, true, Compat.isThunderingFlag(this))
+                else Compat.setWeather(this, 0, 0, false, false)
             }
         )
         prop(
             "thundering",
-            get = { if (isThundering) LuaValue.TRUE else LuaValue.FALSE },
+            get = { LuaValue.valueOf(Compat.isThunderingFlag(this)) },
             set = { v ->
-                if (v.toboolean()) setWeatherParameters(0, 6000, isRaining, true)
-                else setWeatherParameters(0, 0, isRaining, false)
+                if (v.toboolean()) Compat.setWeather(this, 0, 6000, true, true)
+                else Compat.setWeather(this, 0, 0, Compat.isRainingFlag(this), false)
             }
         )
-        propWithTable("players") { self ->
-            val data = self.rawget("__pxrp_data").checkuserdata() as InstanceData
-            PlayerListWrapper(
-                source = { players() },
-                playerCache = data.playerCache,
-                tickProvider = data.tickProvider,
-            ).toLua()
-        }
+        propWithTable("players") { PlayerWrap.wrapAll(players()) }
         prop("regions") {
             RegionManager.all(this).map(RegionWrap::wrap).toLuaArray()
         }
@@ -114,9 +98,7 @@ object WorldWrap {
             val pos = args.arg(3).toVec3d()
             val overrides = if (args.narg() >= 4) args.arg(4).checktable() else null
 
-            val id = resolveBlockId(entityId)
-            val entityType = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse(id))
-                ?: throw LuaError("Сущность '$entityId' не найдена")
+            val entityType = BuiltInRegistries.ENTITY_TYPE.lookup("Сущность", entityId)
 
             val entity = entityType.create(w, EntitySpawnReason.COMMAND)
                 ?: throw LuaError("Не удалось создать сущность '$entityId'")
@@ -137,10 +119,7 @@ object WorldWrap {
             val text = args.arg(3).checkjstring()
             val opts = if (args.narg() >= 4) args.arg(4).checktable() else null
 
-            val entityType = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse("minecraft:text_display"))
-                ?: throw LuaError("Сущность 'minecraft:text_display' не найдена")
-
-            val entity = entityType.create(w, EntitySpawnReason.COMMAND) as? Display.TextDisplay
+            val entity = Compat.textDisplayType().create(w, EntitySpawnReason.COMMAND)
                 ?: throw LuaError("Не удалось создать text_display")
 
             entity.setPos(pos.x, pos.y, pos.z)
@@ -149,36 +128,29 @@ object WorldWrap {
             entity.backgroundColor = HologramDefaults.BACKGROUND
             entity.lineWidth = HologramDefaults.LINE_WIDTH
 
-            opts?.let { o ->
-                o.get("alignment").takeIf { it.isstring() }?.let {
-                    HologramWrapper.applyAlignmentFromLua(entity, it.tojstring())
+            // Registered before it is added: ENTITY_LOAD discards tagged displays this runtime does not know.
+            val hologram = HologramManager.create(entity)
+            val lua = hologram.toLuaValue()
+            // Options go through the same setters as hologram properties. A bad option must not leave a
+            // registered hologram behind.
+            try {
+                opts?.let { o ->
+                    for (key in HologramWrapper.OPTION_KEYS) {
+                        val v = o.get(key)
+                        if (!v.isnil()) lua.set(key, v)
+                    }
                 }
-                o.get("billboard").takeIf { it.isstring() }?.let {
-                    entity.billboardConstraints = HologramWrapper.parseBillboardFromLua(it.tojstring())
-                }
-                o.get("lineWidth").takeIf { it.isnumber() }?.let { entity.lineWidth = it.toint() }
-                o.get("background").takeIf { it.isnumber() }?.let { entity.backgroundColor = it.toint() }
-                o.get("opacity").takeIf { it.isnumber() }?.let { entity.textOpacity = it.toint().toByte() }
-                o.get("shadow").takeIf { it.isboolean() }?.let {
-                    HologramWrapper.applyFlagFromLua(
-                        entity,
-                        Display.TextDisplay.FLAG_SHADOW,
-                        it.toboolean()
-                    )
-                }
-                o.get("seeThrough").takeIf { it.isboolean() }?.let {
-                    HologramWrapper.applyFlagFromLua(
-                        entity,
-                        Display.TextDisplay.FLAG_SEE_THROUGH,
-                        it.toboolean()
-                    )
-                }
-                o.get("glowing").takeIf { it.isboolean() }?.let { entity.setGlowingTag(it.toboolean()) }
+            } catch (e: Throwable) {
+                hologram.destroy()
+                throw e
             }
 
-            if (!w.addFreshEntity(entity)) return@method LuaValue.NIL
+            if (!w.addFreshEntity(entity)) {
+                hologram.destroy()
+                return@method LuaValue.NIL
+            }
 
-            HologramManager.create(entity, w).toLuaValue()
+            lua
         }
 
         // world:setBlock(pos, blockId)
@@ -186,10 +158,7 @@ object WorldWrap {
             val self = args.arg(1).checktable()
             val w = self.unwrap<ServerLevel>()
             val pos = args.arg(2).toBlockPos()
-            val blockId = resolveBlockId(args.arg(3).checkjstring())
-
-            val block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))
-                ?: throw LuaError("Блок '$blockId' не найден")
+            val block = BuiltInRegistries.BLOCK.lookup("Блок", args.arg(3).checkjstring())
 
             w.setBlock(pos, block.defaultBlockState(), 0x03)
             LuaValue.NIL
@@ -220,10 +189,7 @@ object WorldWrap {
             val pos = args.arg(2).toBlockPos()
             val tbl = args.arg(3).checktable()
 
-            val id = tbl.get("id").checkjstring()
-            val blockId = resolveBlockId(id)
-            val block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))
-                ?: throw LuaError("Блок '$blockId' не найден")
+            val block = BuiltInRegistries.BLOCK.lookup("Блок", tbl.get("id").checkjstring())
 
             val state = if (tbl.get("properties").istable()) {
                 BlockStateCodec.applyProperties(block, tbl.get("properties").checktable())
@@ -241,10 +207,7 @@ object WorldWrap {
             val w = self.unwrap<ServerLevel>()
             val pos1 = args.arg(2).toBlockPos()
             val pos2 = args.arg(3).toBlockPos()
-            val blockId = resolveBlockId(args.arg(4).checkjstring())
-
-            val block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))
-                ?: throw LuaError("Блок '$blockId' не найден")
+            val block = BuiltInRegistries.BLOCK.lookup("Блок", args.arg(4).checkjstring())
 
             val minX = Math.min(pos1.x, pos2.x)
             val minY = Math.min(pos1.y, pos2.y)
@@ -339,8 +302,7 @@ object WorldWrap {
             val nearby = w.getEntities(null, box)
 
             val entities = if (typeFilter != null) {
-                val targetType = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse(typeFilter))
-                    ?: throw LuaError("Тип сущности '$typeFilter' не найден")
+                val targetType = BuiltInRegistries.ENTITY_TYPE.lookup("Тип сущности", typeFilter)
                 nearby.filter { it.type == targetType }
             } else {
                 nearby
@@ -380,23 +342,10 @@ object WorldWrap {
             val text = args.arg(2).checkjstring()
             val pos = args.arg(3).toVec3d()
             val range = args.arg(4).checkdouble()
-            val overlay = if (args.narg() >= 5 && args.arg(5).isint()) args.arg(5).toint() else null
+            val overlay = checkOverlay(args.arg(5), "world:broadcastInRange")
 
             val rangeSquare = range * range
-            val players = w.players().filter { it.distanceToSqr(pos) < rangeSquare }
-
-            if (overlay == null) {
-                players.forEach { it.sendSystemMessage(Component.literal(text)) }
-            } else {
-                val timing = ClientboundSetTitlesAnimationPacket(20, overlay, 20)
-                val title = ClientboundSetActionBarTextPacket(Component.literal(text))
-                players.forEach {
-                    with(it.connection) {
-                        send(timing)
-                        send(title)
-                    }
-                }
-            }
+            broadcastTo(w.players().filter { it.distanceToSqr(pos) < rangeSquare }, text, overlay)
             LuaValue.NIL
         }
 
@@ -417,6 +366,13 @@ object WorldWrap {
             val border = w.worldBorder
 
             val meta = LuaTable()
+            // border:setSize(n): arg 1 is the border itself
+            val setSizeFn = object : VarArgFunction() {
+                override fun invoke(va: Varargs): Varargs {
+                    border.setSize(va.arg(2).checkdouble())
+                    return LuaValue.NIL
+                }
+            }
             val indexFn = object : VarArgFunction() {
                 override fun invoke(va: Varargs): Varargs {
                     when (va.arg(2).tojstring()) {
@@ -429,6 +385,7 @@ object WorldWrap {
                         "warningTime" -> return LuaValue.valueOf(border.warningTime)
                         "warningBlocks" -> return LuaValue.valueOf(border.warningBlocks)
                         "damageThreshold" -> return LuaValue.valueOf(border.safeZone)
+                        "setSize" -> return setSizeFn
                     }
                     return LuaValue.NIL
                 }
@@ -452,19 +409,13 @@ object WorldWrap {
                         "warningTime" -> border.warningTime = value.toint()
                         "warningBlocks" -> border.warningBlocks = value.toint()
                         "damageThreshold" -> border.safeZone = value.todouble()
+                        else -> throw LuaError("world border: неизвестное поле '$key'")
                     }
                     return LuaValue.NIL
                 }
             }
             meta.set("__newindex", newIndexFn)
 
-            meta.set("setSize", object : VarArgFunction() {
-                override fun invoke(va: Varargs): Varargs {
-                    val size = va.arg(1).checkdouble()
-                    border.setSize(size)
-                    return LuaValue.NIL
-                }
-            })
             val t = LuaTable()
             t.setmetatable(meta)
             t
@@ -497,7 +448,7 @@ object WorldWrap {
             val pos = args.arg(2).toVec3d()
             val opts = if (args.narg() >= 3 && args.arg(3).istable()) args.arg(3).checktable() else null
 
-            val bolt = EntityType.LIGHTNING_BOLT.create(w, EntitySpawnReason.COMMAND)
+            val bolt = Compat.lightningBoltType().create(w, EntitySpawnReason.COMMAND)
                 ?: throw LuaError("Не удалось создать молнию")
             bolt.setPos(pos.x, pos.y, pos.z)
             bolt.setVisualOnly(opts?.get("effect")?.optboolean(false) ?: false)
@@ -512,10 +463,7 @@ object WorldWrap {
             if (args.narg() < 3) throw LuaError("createRegion: ожидается (posA, posB)")
             val a = args.arg(2).toVec3d()
             val b = args.arg(3).toVec3d()
-            val min = Vec3(minOf(a.x, b.x), minOf(a.y, b.y), minOf(a.z, b.z))
-            val max = Vec3(maxOf(a.x, b.x), maxOf(a.y, b.y), maxOf(a.z, b.z))
-            val region = RegionManager.create(w, AABB(min, max))
-            RegionWrap.wrap(region)
+            RegionWrap.wrap(RegionManager.create(w, a, b))
         }
 
         // world:getRegion(id) -> region?

@@ -3,97 +3,62 @@ package ru.pyxiion.ignis.api
 import org.luaj.vm2.LuaTable
 import ru.pyxiion.ignis.api.wrapper.*
 
+/**
+ * Every wrapper type has one entry here; the named getters, [get] and [init] are all built from [entries].
+ * [init] gives every type a fresh metatable and lets its wrapper fill it. The fill functions are lambdas so that the
+ * wrapper objects (and the Minecraft classes they reference) are only touched by [init].
+ */
 object MetaTableRegistry {
-    private var _entity = LuaTable()
-    private var _player = LuaTable()
-    private var _world = LuaTable()
-    private var _structure = LuaTable()
-    private var _item = LuaTable()
-    private var _vec = LuaTable()
-    private var _inventory = LuaTable()
-    private var _container = LuaTable()
-    private var _sidebar = LuaTable()
-    private var _mob = LuaTable()
-    private var _hologram = LuaTable()
-    private var _region = LuaTable()
-    private var _bossBar = LuaTable()
-
-    val ENTITY: LuaTable get() = _entity
-    val PLAYER: LuaTable get() = _player
-    val WORLD: LuaTable get() = _world
-    val STRUCTURE: LuaTable get() = _structure
-    val ITEM: LuaTable get() = _item
-    val VEC: LuaTable get() = _vec
-    val INVENTORY: LuaTable get() = _inventory
-    val CONTAINER: LuaTable get() = _container
-    val SIDEBAR: LuaTable get() = _sidebar
-    val MOB: LuaTable get() = _mob
-    val HOLOGRAM: LuaTable get() = _hologram
-    val REGION: LuaTable get() = _region
-    val BOSS_BAR: LuaTable get() = _bossBar
-
-    private var byName = mapOf(
-        "entity" to _entity,
-        "player" to _player,
-        "world" to _world,
-        "structure" to _structure,
-        "item" to _item,
-        "vec" to _vec,
-        "inventory" to _inventory,
-        "container" to _container,
-        "sidebar" to _sidebar,
-        "mob" to _mob,
-        "hologram" to _hologram,
-        "region" to _region,
-        "bossbar" to _bossBar
-    )
-
-    fun init() {
-        _entity = LuaTable()
-        _player = LuaTable()
-        _world = LuaTable()
-        _structure = LuaTable()
-        _item = LuaTable()
-        _vec = LuaTable()
-        _inventory = LuaTable()
-        _container = LuaTable()
-        _sidebar = LuaTable()
-        _mob = LuaTable()
-        _hologram = LuaTable()
-        _region = LuaTable()
-        _bossBar = LuaTable()
-
-        byName = mapOf(
-            "entity" to _entity,
-            "player" to _player,
-            "world" to _world,
-            "structure" to _structure,
-            "item" to _item,
-            "vec" to _vec,
-            "inventory" to _inventory,
-            "container" to _container,
-            "sidebar" to _sidebar,
-            "mob" to _mob,
-            "hologram" to _hologram,
-            "region" to _region,
-            "bossbar" to _bossBar
-        )
-
-        initVecMeta(_vec)
-        EntityWrap.initMeta(_entity)
-        PlayerWrap.initMeta(_player)
-        WorldWrap.initMeta(_world)
-        StructureWrap.initMeta(_structure)
-        ItemStackWrap.initMeta(_item)
-        InvWrap.initMeta(_inventory)
-        ContainerWrapper.initMeta(_container)
-        SidebarWrapper.initMeta(_sidebar)
-        MobWrap.initMeta(_mob)
-        HologramWrapper.initMeta(_hologram)
-        RegionWrap.initMeta(_region)
-        BossBarWrapper.initMeta(_bossBar)
+    /** [shared] metatables are read by parallel workers: they are frozen once filled. */
+    private class Entry(val name: String, val shared: Boolean = false, val fill: (LuaTable) -> Unit) {
+        var table = LuaTable()
     }
 
-    fun get(name: String): LuaTable = byName[name]
+    private val entries = listOf(
+        Entry("vec", shared = true) { initVecMeta(it) },
+        Entry("entity") { EntityWrap.initMeta(it) },
+        Entry("player") { PlayerWrap.initMeta(it) },
+        Entry("world") { WorldWrap.initMeta(it) },
+        Entry("structure") { StructureWrap.initMeta(it) },
+        Entry("item") { ItemStackWrap.initMeta(it) },
+        Entry("inventory") { InvWrap.initMeta(it) },
+        Entry("container") { ContainerWrapper.initMeta(it) },
+        Entry("sidebar") { SidebarWrapper.initMeta(it) },
+        Entry("mob") { MobWrap.initMeta(it) },
+        Entry("hologram") { HologramWrapper.initMeta(it) },
+        Entry("region") { RegionWrap.initMeta(it) },
+        Entry("bossbar") { BossBarWrapper.initMeta(it) },
+    )
+
+    private val byName: Map<String, Entry> = entries.associateBy { it.name }
+
+    private fun table(name: String): LuaTable = byName.getValue(name).table
+
+    val ENTITY: LuaTable get() = table("entity")
+    val PLAYER: LuaTable get() = table("player")
+    val WORLD: LuaTable get() = table("world")
+    val STRUCTURE: LuaTable get() = table("structure")
+    val ITEM: LuaTable get() = table("item")
+    val VEC: LuaTable get() = table("vec")
+    val INVENTORY: LuaTable get() = table("inventory")
+    val CONTAINER: LuaTable get() = table("container")
+    val SIDEBAR: LuaTable get() = table("sidebar")
+    val MOB: LuaTable get() = table("mob")
+    val HOLOGRAM: LuaTable get() = table("hologram")
+    val REGION: LuaTable get() = table("region")
+    val BOSS_BAR: LuaTable get() = table("bossbar")
+
+    /** Builds every table first and assigns them together, so a failing fill leaves the previous tables intact. */
+    fun init() {
+        val built = entries.map { e ->
+            LuaTable().also {
+                e.fill(it)
+                if (e.shared) it.freeze()
+            }
+        }
+        entries.forEachIndexed { i, e -> e.table = built[i] }
+    }
+
+    fun get(name: String): LuaTable = byName[name]?.table
         ?: throw IllegalArgumentException("Unknown metatable type: '$name'")
 }

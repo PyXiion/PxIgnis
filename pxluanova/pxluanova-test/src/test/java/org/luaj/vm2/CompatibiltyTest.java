@@ -36,15 +36,10 @@ public class CompatibiltyTest extends TestSuite {
 	private static final String dir = "";
 	
 	abstract protected static class CompatibiltyTestSuite extends ScriptDrivenTest {	
-		LuaValue savedStringMetatable;
 		protected CompatibiltyTestSuite(PlatformType platform) {
 			super(platform,dir);
 		}
-		
-		protected void setUp() throws Exception {
-			savedStringMetatable = LuaString.s_metatable;
-			super.setUp();
-		}
+
 
 		protected void tearDown() throws Exception {
 			super.tearDown();
@@ -53,7 +48,6 @@ public class CompatibiltyTest extends TestSuite {
 			LuaNumber.s_metatable = null;
 			LuaFunction.s_metatable = null;
 			LuaThread.s_metatable = null;
-			LuaString.s_metatable = savedStringMetatable;
 		}
 
 		public void testBaseLib()       { runTest("baselib");   }

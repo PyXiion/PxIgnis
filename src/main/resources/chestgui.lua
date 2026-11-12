@@ -5,10 +5,11 @@
 --
 -- Creates a chest-like GUI using mc.createInventory + container primitives.
 --
--- Click callback receives:
+-- Click callback (per button, see gui:button) receives:
 --   function(player, slot, clickType, slotItem, cursorItem)
---     return false  -- cancel the click (prevents item manipulation)
+--     return true   -- let the click through; anything else (nil, false) cancels it
 --   end
+-- A slot without a callback cancels every click on it.
 --
 -- clickType values (Minecraft SlotActionType):
 --   "pickup"      — left/right click
@@ -67,22 +68,24 @@ function chestgui.create(rows, title)
     function gui:open(player)
         local container = inv:open(player, title)
         if not container then return nil end
-        containers[player] = container
-        container:onClick(function(p, slot, clickType, slotItem, cursorItem)
-            local cb = callbacks[slot]
-            if cb then
-                return cb(p, slot, clickType, slotItem, cursorItem)
+        containers[player.uuid] = container
+        container:onClick(function(p, slot, clickType, slotItem, cursorItem, inGui)
+            if inGui then
+                -- a slot without a callback cancels the click; a button must return true to let it through
+                local cb = callbacks[slot]
+                return cb ~= nil and cb(p, slot, clickType, slotItem, cursorItem) == true
             end
-            return false
+            -- the player's own inventory or outside the window: allowed, except moves that reach into the GUI
+            return clickType ~= "quick_move" and clickType ~= "pickup_all"
         end)
         return container
     end
 
     function gui:close(player)
-        local c = containers[player]
+        local c = containers[player.uuid]
         if c then
             c:close()
-            containers[player] = nil
+            containers[player.uuid] = nil
         end
     end
 

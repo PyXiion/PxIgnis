@@ -1,18 +1,6 @@
 package ru.pyxiion.ignis
 
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import com.sun.net.httpserver.HttpServer
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaTable
@@ -20,1393 +8,482 @@ import org.luaj.vm2.LuaThread
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.jse.JsePlatform
-import ru.pyxiion.ignis.api.AsyncExecutor
-import ru.pyxiion.ignis.api.AsyncExecutorRegistry
+import ru.pyxiion.ignis.parallel.StdlibRegistry
+import ru.pyxiion.ignis.sandbox.Vfs
+import java.nio.file.Files
 import ru.pyxiion.ignis.api.AsyncLib
+import java.net.InetSocketAddress
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
+/**
+ * Lua runs on one thread. The "server thread" here is the test thread: [Env.pump] is one server tick, it drains
+ * the async queue and ticks the scheduler.
+ */
 class AsyncLibTest {
 
-    // Serialized resume gate for the root test coroutine. The initial resume
-    // runs synchronously on the test thread (so busy loops don't block the
-    // executor that runs the task); subsequent resumes are dispatched through
-    // the main executor. Requests that arrive while a resume is in flight are
-    // queued and drained after the initial resume returns.
-    private class RootGate(
-        private val thread: LuaThread,
-        private val executor: AsyncExecutor,
-    ) {
-        private val lock = ReentrantLock()
-        private var running = false
-        private val pending = ArrayDeque<Varargs>()
-        val failures = CopyOnWriteArrayList<Throwable>()
-
-        fun start(initialArgs: Varargs): Varargs {
-            lock.withLock {
-                if (running) return LuaValue.NONE
-                running = true
-            }
-            val result: Varargs
-            try {
-                result = thread.resume(initialArgs)
-            } catch (e: Throwable) {
-                failures.add(e)
-                throw e
-            } finally {
-                val queued: MutableList<Varargs> = ArrayList()
-                lock.withLock {
-                    running = false
-                    if (thread.status == "dead") {
-                        pending.clear()
-                    } else {
-                        queued.addAll(pending)
-                        pending.clear()
-                    }
-                }
-                for (a in queued) dispatch(a)
-            }
-            return result
-        }
-
-        fun requestResume(args: Varargs) {
-            var runNow = false
-            lock.withLock {
-                if (running) {
-                    if (thread.status != "dead") pending.addLast(args)
-                    return
-                }
-                if (thread.status == "dead") return
-                runNow = true
-            }
-            if (runNow) dispatch(args)
-        }
-
-        private fun dispatch(args: Varargs) {
-            executor.dispatch {
-                try {
-                    val r = thread.resume(args)
-                    if (!r.arg1().toboolean()) {
-                        failures.add(
-                            thread.lastError ?: LuaError(r.arg(2).optjstring("test coroutine error"))
-                        )
-                    }
-                } catch (e: Throwable) {
-                    failures.add(e)
-                }
-            }
-        }
-    }
-
-    private class Env(
-        val state: LuaState,
-        val asyncLib: AsyncLib,
-        val mainExecutor: ExecutorService,
-        val poolExecutor: ExecutorService,
-        val latch: CountDownLatch,
-        val registry: AsyncExecutorRegistry,
-        val recordedExecutions: CopyOnWriteArrayList<String>,
-        val scheduler: Scheduler,
-    )
-
-    private fun newEnv(): Env {
-        val state = JsePlatform.standardState()
-        val mainExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "pxrp-test-main") }
-        val poolExecutor = Executors.newFixedThreadPool(2) { r -> Thread(r, "pxrp-test-pool") }
-        val latch = CountDownLatch(1)
+    private class Env {
+        val state: LuaState = JsePlatform.standardState()
+        val queue = ConcurrentLinkedQueue<Runnable>()
         val scheduler = Scheduler { state }
-        val registry = AsyncExecutorRegistry()
-        val recordedExecutions = CopyOnWriteArrayList<String>()
+        val asyncLib = AsyncLib({ state }, scheduler, Vfs(Files.createTempDirectory("ignis")))
+        val failures = mutableListOf<String>()
 
-        registry.register(
-            AsyncExecutor(
-                name = "main",
-                dispatch = { runnable ->
-                    mainExecutor.execute {
-                        recordedExecutions.add("main:${Thread.currentThread().name}")
-                        runnable.run()
-                    }
-                },
-                shutdown = { mainExecutor.shutdown() },
-            )
-        )
-        registry.register(
-            AsyncExecutor(
-                name = "threadpool",
-                dispatch = { runnable ->
-                    poolExecutor.execute {
-                        recordedExecutions.add("threadpool:${Thread.currentThread().name}")
-                        runnable.run()
-                    }
-                },
-                shutdown = { poolExecutor.shutdown() },
-            )
-        )
-
-        val asyncLib = AsyncLib(registry, state, scheduler)
-        state.globals.set("async", asyncLib.buildModule())
-        state.globals.set("block", luaFunctionNil { _ ->
-            try {
-                latch.await()
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-            }
-        })
-        state.globals.set("record", luaFunction { arg ->
-            recordedExecutions.add("record:${arg.optjstring("")}:${Thread.currentThread().name}")
-            LuaValue.NIL
-        })
-        state.globals.set("_result", LuaValue.NIL)
-        LuaState.setCurrent(state)
-        state.getMainThread().executionContext = registry.resolve("main")
-        return Env(state, asyncLib, mainExecutor, poolExecutor, latch, registry, recordedExecutions, scheduler)
-    }
-
-    private fun runScript(env: Env, script: String, contextExecutor: AsyncExecutor? = null): LuaValue {
-        val func = env.state.load(script, "test").checkfunction()
-        val co = LuaThread(env.state, func)
-        val mainExec = env.registry.resolve("main")
-        co.executionContext = contextExecutor ?: mainExec
-
-        val gate = RootGate(co, mainExec)
-        co.resumeHandler = LuaThread.ResumeHandler { _, value ->
-            gate.requestResume(value)
+        init {
+            state.globals.set("async", asyncLib.buildModule(StdlibRegistry(state.globals)))
+            state.globals.set("_result", LuaValue.NIL)
+            LuaState.setCurrent(state)
         }
 
-        val result = gate.start(LuaValue.NONE)
-        check(result.arg1().toboolean()) { "coroutine error: ${result.arg(2)}" }
-        check(gate.failures.isEmpty()) { "coroutine failed: ${gate.failures.firstOrNull()?.message}" }
+        fun resumeRoot(co: LuaThread, args: Varargs) {
+            val r = co.resume(args)
+            if (!r.arg1().toboolean()) failures.add(r.arg(2).optjstring("coroutine error"))
+        }
 
-        if (co.status != "dead") {
-            env.latch.countDown()
-            val deadline = System.currentTimeMillis() + 5000
-            while (co.status != "dead") {
-                if (System.currentTimeMillis() > deadline) {
-                    error("coroutine did not complete: status=${co.status}")
-                }
-                env.scheduler.tick()
-                Thread.sleep(1)
+        /** Runs queued work and scheduler ticks until [until] holds or [maxRounds] pass. */
+        fun pump(maxRounds: Int = 200, until: () -> Boolean = { false }) {
+            repeat(maxRounds) {
+                if (until()) return
+                asyncLib.drain()
+                while (true) (queue.poll() ?: break).run()
+                scheduler.tick()
             }
         }
-        check(gate.failures.isEmpty()) { "coroutine failed: ${gate.failures.firstOrNull()?.message}" }
-        return env.state.globals.get("_result")
     }
 
-    private fun newEnvAndRun(script: String): LuaTable {
-        val env = newEnv()
-        try {
-            return runScript(env, script).checktable()
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
+    private fun root(env: Env, script: String): LuaThread {
+        val co = LuaThread(env.state, env.state.load(script, "test").checkfunction())
+        co.resumeHandler = LuaThread.ResumeHandler { _, value -> env.queue.add { env.resumeRoot(co, value) } }
+        env.resumeRoot(co, LuaValue.NONE)
+        return co
     }
 
-    // ── Task: done ─────────────────────────────────────────────────
+    /** Runs [script] as a coroutine to completion and returns the global `_result` table. */
+    private fun run(script: String): LuaTable {
+        val env = Env()
+        val co = root(env, script)
+        env.pump(until = { co.status == "dead" })
+        assertTrue(env.failures.isEmpty(), "coroutine failed: ${env.failures}")
+        assertEquals("dead", co.status, "coroutine did not complete")
+        return env.state.globals.get("_result").checktable()
+    }
+
+    private fun runExpectingFailure(script: String): String {
+        val env = Env()
+        val co = root(env, script)
+        env.pump(until = { co.status == "dead" })
+        return env.failures.single()
+    }
+
+    // ── tasks ──────────────────────────────────────────────────────
 
     @Test
-    fun `task done is false while pending`() {
-        val env = newEnv()
-        try {
-            val pending = runScript(
-                env,
-                """
-                local t = async.task("main", function() block() return 42 end)
-                _result = { t.done }
-                """.trimIndent()
-            ).checktable()
-            assertFalse(pending.get(1).toboolean())
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
-    }
-
-    @Test
-    fun `task done is true when complete`() {
-        val done = newEnvAndRun(
+    fun `task is pending until the server runs it`() {
+        val r = run(
             """
-            local t = async.task("main", function() return 42 end)
-            while not t.done do end
-            _result = { t.done }
+            local t = async.task(function() return 42 end)
+            _result = { t.done, t.state, t.type }
             """.trimIndent()
         )
-        assertTrue(done.get(1).toboolean())
+        assertFalse(r.get(1).toboolean())
+        assertEquals("pending", r.get(2).tojstring())
+        assertEquals("task", r.get(3).tojstring())
     }
 
-    // ── Task: wait ─────────────────────────────────────────────────
-
     @Test
-    fun `task wait sync returns raw result`() {
-        val result = newEnvAndRun(
+    fun `task wait returns the result`() {
+        val r = run(
             """
-            local t = async.task("main", function() return 42 end)
-            while not t.done do end
-            local r = t:wait()
-            _result = { r }
+            local t = async.task(function(a, b) return a + b end, 40, 2)
+            _result = { t:wait(), t.done }
             """.trimIndent()
         )
-        assertEquals(42, result.get(1).toint())
+        assertEquals(42, r.get(1).toint())
+        assertTrue(r.get(2).toboolean())
     }
 
     @Test
-    fun `task wait async yields and returns raw result`() {
-        val result = newEnvAndRun(
+    fun `task wait returns every value`() {
+        val r = run(
             """
-            local t = async.task("main", function() block() return 42 end)
-            local r = t:wait()
-            _result = { r }
+            local t = async.task(function() return 1, 2, 3 end)
+            _result = { t:wait() }
             """.trimIndent()
         )
-        assertEquals(42, result.get(1).toint())
+        assertEquals(3, r.get(3).toint())
     }
 
     @Test
-    fun `task wait sync throws on error`() {
-        val result = newEnvAndRun(
+    fun `task wait raises the task error`() {
+        val r = run(
             """
-            local t = async.task("main", function() error("boom") end)
-            while not t.done do end
-            local ok, err = pcall(function() return t:wait() end)
+            local t = async.task(function() error("boom") end)
+            local ok, err = pcall(t.wait, t)
             _result = { ok, err }
             """.trimIndent()
         )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
+        assertFalse(r.get(1).toboolean())
+        assertTrue(r.get(2).tojstring().contains("boom"))
     }
 
     @Test
-    fun `task wait async throws on error`() {
-        val result = newEnvAndRun(
+    fun `wait with protect returns ok and result`() {
+        val r = run(
             """
-            local t = async.task("main", function() block() error("boom") end)
-            local ok, err = pcall(function() return t:wait() end)
+            local t = async.task(function() return 7 end)
+            local ok, v = t:wait(true)
+            _result = { ok, v }
+            """.trimIndent()
+        )
+        assertTrue(r.get(1).toboolean())
+        assertEquals(7, r.get(2).toint())
+    }
+
+    @Test
+    fun `wait with protect returns false and message on error`() {
+        val r = run(
+            """
+            local t = async.task(function() error("bad") end)
+            local ok, err = t:wait(true)
             _result = { ok, err }
             """.trimIndent()
         )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
+        assertFalse(r.get(1).toboolean())
+        assertTrue(r.get(2).tojstring().contains("bad"))
     }
 
-    // ── Task: try ──────────────────────────────────────────────────
-
     @Test
-    fun `task try sync returns ok and result`() {
-        val result = newEnvAndRun(
+    fun `wait on a finished task does not yield`() {
+        val r = run(
             """
-            local t = async.task("main", function() return 42 end)
-            while not t.done do end
-            local ok, r = t:try()
-            _result = { ok, r }
+            local t = async.task(function() return 5 end)
+            t:wait()
+            _result = { t:wait(), select('#', t:wait(true)) }
             """.trimIndent()
         )
-        assertTrue(result.get(1).toboolean())
-        assertEquals(42, result.get(2).toint())
+        assertEquals(5, r.get(1).toint())
+        assertEquals(2, r.get(2).toint())
     }
 
     @Test
-    fun `task try async yields and returns ok and result`() {
-        val result = newEnvAndRun(
-            """
-            local t = async.task("main", function() block() return 42 end)
-            local ok, r = t:try()
-            _result = { ok, r }
-            """.trimIndent()
-        )
-        assertTrue(result.get(1).toboolean())
-        assertEquals(42, result.get(2).toint())
+    fun `task rejects a non function`() {
+        val msg = runExpectingFailure("async.task(42)")
+        assertTrue(msg.contains("expected function"), msg)
     }
 
     @Test
-    fun `task try sync returns false and error message`() {
-        val result = newEnvAndRun(
+    fun `wait rejects a non task self`() {
+        val r = run(
             """
-            local t = async.task("main", function() error("boom") end)
-            while not t.done do end
-            local ok, r = t:try()
-            _result = { ok, r }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
-    }
-
-    @Test
-    fun `task try async returns false and error message`() {
-        val result = newEnvAndRun(
-            """
-            local t = async.task("main", function() block() error("boom") end)
-            local ok, r = t:try()
-            _result = { ok, r }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
-    }
-
-    // ── Task: rejects ──────────────────────────────────────────────
-
-    @Test
-    fun `task rejects non-function argument`() {
-        val result = newEnvAndRun(
-            """
-            local ok, err = pcall(async.task, "main", 42)
+            local t = async.task(function() end)
+            local ok, err = pcall(t.wait, 42)
             _result = { ok, err }
             """.trimIndent()
         )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("expected function"))
+        assertFalse(r.get(1).toboolean())
+        assertTrue(r.get(2).tojstring().contains("expected task or promise"))
     }
 
     @Test
-    fun `task wait rejects non-task self`() {
-        val result = newEnvAndRun(
+    fun `try is gone`() {
+        val r = run(
             """
-            local ok, err = pcall(function() return ("nope"):wait() end)
-            _result = { ok, err }
+            local t = async.task(function() end)
+            _result = { t.try == nil, async.allSettled == nil, async.mutex == nil }
             """.trimIndent()
         )
-        assertFalse(result.get(1).toboolean())
+        assertTrue(r.get(1).toboolean())
+        assertTrue(r.get(2).toboolean())
+        assertTrue(r.get(3).toboolean())
     }
 
-    @Test
-    fun `task try rejects non-task self`() {
-        val result = newEnvAndRun(
-            """
-            local ok, err = pcall(function() return ("nope"):try() end)
-            _result = { ok, err }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-    }
-
-    @Test
-    fun `task rejects unknown executor`() {
-        val result = newEnvAndRun(
-            """
-            local ok, err = pcall(async.task, "nonexistent", function() end)
-            _result = { ok, err }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("unknown executor"))
-    }
-
-    @Test
-    fun `task rejects missing executor`() {
-        val result = newEnvAndRun(
-            """
-            local ok, err = pcall(async.task, function() end)
-            _result = { ok, err }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-    }
-
-    // ── Executor dispatch ──────────────────────────────────────────
-
-    @Test
-    fun `main task runs on main executor`() {
-        val env = newEnv()
-        try {
-            runScript(
-                env,
-                """
-                async.task("main", function()
-                    _result = { "ran" }
-                end)
-                """.trimIndent()
-            )
-            val deadline = System.currentTimeMillis() + 5000
-            while (env.state.globals.get("_result").isnil()) {
-                if (System.currentTimeMillis() > deadline) error("main task did not run")
-                Thread.sleep(5)
-            }
-            assertTrue(env.recordedExecutions.any { it.startsWith("main:pxrp-test-main") })
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
-    }
-
-    @Test
-    fun `threadpool task runs on threadpool executor`() {
-        val env = newEnv()
-        try {
-            runScript(
-                env,
-                """
-                async.task("threadpool", function()
-                    _result = { "ran" }
-                end)
-                """.trimIndent()
-            )
-            val deadline = System.currentTimeMillis() + 5000
-            while (env.state.globals.get("_result").isnil()) {
-                if (System.currentTimeMillis() > deadline) error("threadpool task did not run")
-                Thread.sleep(5)
-            }
-            assertTrue(env.recordedExecutions.any { it.startsWith("threadpool:pxrp-test-pool") })
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
-    }
-
-    @Test
-    fun `executor selection preserved after sleep`() {
-        val env = newEnv()
-        try {
-            runScript(
-                env,
-                """
-                async.task("threadpool", function()
-                    async.sleep(1)
-                    _result = { "done" }
-                end)
-                """.trimIndent()
-            )
-            val deadline = System.currentTimeMillis() + 5000
-            while (env.state.globals.get("_result").isnil()) {
-                if (System.currentTimeMillis() > deadline) error("sleep task did not complete")
-                env.scheduler.tick()
-                Thread.sleep(1)
-            }
-            assertTrue(env.recordedExecutions.any { it.startsWith("threadpool:pxrp-test-pool") })
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
-    }
-
-    @Test
-    fun `multiple pool tasks overlap`() {
-        val env = newEnv()
-        try {
-            runScript(
-                env,
-                """
-                for i = 1, 2 do
-                    async.task("threadpool", function()
-                        record("start")
-                        block()
-                        record("end")
-                    end)
-                end
-                """.trimIndent()
-            )
-            val deadline = System.currentTimeMillis() + 5000
-            while (env.recordedExecutions.count { it.startsWith("record:start") } < 2) {
-                if (System.currentTimeMillis() > deadline) error("tasks did not both enter")
-                Thread.sleep(5)
-            }
-            assertTrue(env.recordedExecutions.none { it.startsWith("record:end") })
-            env.latch.countDown()
-            while (env.recordedExecutions.count { it.startsWith("record:end") } < 2) {
-                if (System.currentTimeMillis() > deadline) error("tasks did not both finish")
-                Thread.sleep(5)
-            }
-            assertTrue(
-                env.recordedExecutions.filter { it.startsWith("record:") }
-                    .all { it.contains("pxrp-test-pool") }
-            )
-            assertTrue(env.recordedExecutions.none { it.contains("pxrp-test-main") })
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
-    }
-
-    // ── Promise ────────────────────────────────────────────────────
+    // ── promises ───────────────────────────────────────────────────
 
     @Test
     fun `promise resolve and wait`() {
-        val result = newEnvAndRun(
+        val r = run(
             """
             local p = async.promise()
-            p:resolve(42)
-            local r = p:wait()
-            _result = { r }
+            async.task(function() p:resolve("hi") end)
+            _result = { p:wait() }
             """.trimIndent()
         )
-        assertEquals(42, result.get(1).toint())
+        assertEquals("hi", r.get(1).tojstring())
     }
 
     @Test
-    fun `promise error and try`() {
-        val result = newEnvAndRun(
+    fun `promise error is raised by wait and returned by protected wait`() {
+        val r = run(
             """
             local p = async.promise()
-            p:error("boom")
-            local ok, msg = p:try()
-            _result = { ok, msg }
+            async.task(function() p:error("nope") end)
+            local ok, err = p:wait(true)
+            _result = { ok, err, p.state }
             """.trimIndent()
         )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
+        assertFalse(r.get(1).toboolean())
+        assertTrue(r.get(2).tojstring().contains("nope"))
+        assertEquals("rejected", r.get(3).tojstring())
     }
 
     @Test
-    fun `promise resolve returns true`() {
-        val result = newEnvAndRun(
+    fun `promise settles once`() {
+        val r = run(
             """
             local p = async.promise()
-            local ok = p:resolve(42)
-            _result = { ok }
+            local a = p:resolve(1)
+            local b = p:resolve(2)
+            local c = p:error("x")
+            _result = { a, b, c, p:wait(), p.done }
             """.trimIndent()
         )
-        assertTrue(result.get(1).toboolean())
-    }
-
-    @Test
-    fun `promise double resolve returns false`() {
-        val result = newEnvAndRun(
-            """
-            local p = async.promise()
-            p:resolve(42)
-            local ok = p:resolve(99)
-            _result = { ok }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
+        assertTrue(r.get(1).toboolean())
+        assertFalse(r.get(2).toboolean())
+        assertFalse(r.get(3).toboolean())
+        assertEquals(1, r.get(4).toint())
+        assertTrue(r.get(5).toboolean())
     }
 
     @Test
     fun `promise state transitions`() {
-        val result = newEnvAndRun(
+        val r = run(
             """
             local p = async.promise()
-            local s1 = p.state
-            p:resolve(42)
-            local s2 = p.state
-            _result = { s1, s2 }
+            local before = p.state
+            p:resolve()
+            _result = { before, p.state }
             """.trimIndent()
         )
-        assertEquals("pending", result.get(1).tojstring())
-        assertEquals("resolved", result.get(2).tojstring())
+        assertEquals("pending", r.get(1).tojstring())
+        assertEquals("resolved", r.get(2).tojstring())
+    }
+
+    // ── all ────────────────────────────────────────────────────────
+
+    @Test
+    fun `all returns an entry per task`() {
+        val r = run(
+            """
+            local res = async.all({
+                async.task(function() return "a" end),
+                async.task(function() async.sleep(2) return "b" end),
+            })
+            _result = { res[1].ok, res[1].value, res[2].ok, res[2].value }
+            """.trimIndent()
+        )
+        assertTrue(r.get(1).toboolean())
+        assertEquals("a", r.get(2).tojstring())
+        assertEquals("b", r.get(4).tojstring())
     }
 
     @Test
-    fun `promise done property`() {
-        val result = newEnvAndRun(
+    fun `all raises when a task fails`() {
+        val r = run(
             """
-            local p = async.promise()
-            local d1 = p.done
-            p:resolve(42)
-            local d2 = p.done
-            _result = { d1, d2 }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).toboolean())
-    }
-
-    // ── all / allSettled ───────────────────────────────────────────
-
-    @Test
-    fun `all returns results for all tasks`() {
-        val result = newEnvAndRun(
-            """
-            local t1 = async.task("main", function() return 1 end)
-            local t2 = async.task("main", function() return 2 end)
-            while not t1.done do end
-            while not t2.done do end
-            local results = async.all(t1, t2)
-            _result = { results[1].ok, results[1].value, results[2].ok, results[2].value }
-            """.trimIndent()
-        )
-        assertTrue(result.get(1).toboolean())
-        assertEquals(1, result.get(2).toint())
-        assertTrue(result.get(3).toboolean())
-        assertEquals(2, result.get(4).toint())
-    }
-
-    @Test
-    fun `all rejects when any task fails`() {
-        val result = newEnvAndRun(
-            """
-            local t1 = async.task("main", function() return 1 end)
-            local t2 = async.task("main", function() error("boom") end)
-            while not t1.done do end
-            while not t2.done do end
-            local ok, err = pcall(function() return async.all(t1, t2) end)
+            local ok, err = pcall(async.all, {
+                async.task(function() return 1 end),
+                async.task(function() error("kaput") end),
+            })
             _result = { ok, err }
             """.trimIndent()
         )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
+        assertFalse(r.get(1).toboolean())
+        assertTrue(r.get(2).tojstring().contains("kaput"))
     }
 
     @Test
-    fun `allSettled returns results for all tasks`() {
-        val result = newEnvAndRun(
+    fun `all with settled does not raise`() {
+        val r = run(
             """
-            local t1 = async.task("main", function() return 1 end)
-            local t2 = async.task("main", function() error("boom") end)
-            while not t1.done do end
-            while not t2.done do end
-            local results = async.allSettled(t1, t2)
-            _result = { results[1].ok, results[1].value, results[2].ok, results[2].error }
+            local res = async.all({
+                async.task(function() return 1 end),
+                async.task(function() error("kaput") end),
+            }, { settled = true })
+            _result = { res[1].ok, res[2].ok, res[2].error }
             """.trimIndent()
         )
-        assertTrue(result.get(1).toboolean())
-        assertEquals(1, result.get(2).toint())
-        assertFalse(result.get(3).toboolean())
-        assertTrue(result.get(4).tojstring().contains("boom"))
+        assertTrue(r.get(1).toboolean())
+        assertFalse(r.get(2).toboolean())
+        assertTrue(r.get(3).tojstring().contains("kaput"))
     }
 
     @Test
-    fun `all with empty input returns empty table`() {
-        val result = newEnvAndRun(
+    fun `all accepts tasks as arguments`() {
+        val r = run(
             """
-            local results = async.all()
-            _result = { results }
+            local res = async.all(async.task(function() return 1 end), async.task(function() return 2 end))
+            _result = { res[1].value, res[2].value }
             """.trimIndent()
         )
-        assertTrue(result.get(1).istable())
-        assertEquals(0, result.get(1).checktable().length().toInt())
+        assertEquals(2, r.get(2).toint())
     }
 
-    // ── async.run ──────────────────────────────────────────────────
-
     @Test
-    fun `run returns result`() {
-        val result = newEnvAndRun(
+    fun `all with empty input returns an empty table`() {
+        val r = run(
             """
-            local a, b, c = async.run("main", function()
-                return 1, 2, 3
-            end)
-            _result = { a, b, c }
+            local res = async.all({})
+            _result = { #res }
             """.trimIndent()
         )
-        assertEquals(1, result.get(1).toint())
-        assertEquals(2, result.get(2).toint())
-        assertEquals(3, result.get(3).toint())
+        assertEquals(0, r.get(1).toint())
+    }
+
+    // ── run / sleep ────────────────────────────────────────────────
+
+    @Test
+    fun `run returns the result`() {
+        val r = run(
+            """
+            _result = { async.run(function(x) async.sleep(1) return x * 2 end, 21) }
+            """.trimIndent()
+        )
+        assertEquals(42, r.get(1).toint())
     }
 
     @Test
-    fun `run propagates error`() {
-        val result = newEnvAndRun(
+    fun `run raises the error`() {
+        val r = run(
             """
-            local ok, err = pcall(function()
-                return async.run("main", function()
-                    error("boom")
-                end)
-            end)
+            local ok, err = pcall(async.run, function() error("oops") end)
             _result = { ok, err }
             """.trimIndent()
         )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("boom"))
+        assertFalse(r.get(1).toboolean())
+        assertTrue(r.get(2).tojstring().contains("oops"))
     }
 
     @Test
-    fun `run uses requested executor`() {
-        val env = newEnv()
+    fun `sleep resumes after the requested ticks`() {
+        val env = Env()
+        val co = root(env, "async.sleep(5) _result = { 'done' }")
+        env.pump(maxRounds = 4)
+        assertEquals("suspended", co.status)
+        env.pump(maxRounds = 4, until = { co.status == "dead" })
+        assertEquals("dead", co.status)
+    }
+
+    @Test
+    fun `sleep rejects negative ticks`() {
+        val msg = runExpectingFailure("async.sleep(-1)")
+        assertTrue(msg.contains("non-negative"), msg)
+    }
+
+    // ── fetch ──────────────────────────────────────────────────────
+
+    @Test
+    fun `fetch rejects a url without scheme`() {
+        val msg = runExpectingFailure("async.fetch('example.com/x')")
+        assertTrue(msg.contains("scheme"), msg)
+    }
+
+    @Test
+    fun `fetch rejects a non positive timeout`() {
+        val msg = runExpectingFailure("async.fetch({ url = 'http://127.0.0.1:1/', timeout = 0 })")
+        assertTrue(msg.contains("timeout"), msg)
+    }
+
+    // ── reload ─────────────────────────────────────────────────────
+
+    @Test
+    fun `reload drops tasks that have not started`() {
+        val env = Env()
+        root(env, "async.task(function() _result = { 'ran' } end)")
+        env.asyncLib.invalidate()
+        env.pump(maxRounds = 5)
+        assertTrue(env.state.globals.get("_result").isnil())
+    }
+
+    @Test
+    fun `reload does not resume a waiting coroutine`() {
+        val env = Env()
+        val co = root(env, "local p = async.promise() _G.p = p p:wait() _result = { 'resumed' }")
+        env.pump(maxRounds = 3)
+        assertEquals("suspended", co.status)
+        env.asyncLib.invalidate()
+        env.state.globals.get("p").get("resolve").invoke(env.state.globals.get("p"))
+        env.pump(maxRounds = 5)
+        assertEquals("suspended", co.status)
+        assertTrue(env.state.globals.get("_result").isnil())
+    }
+
+    @Test
+    fun `fetch finishing after reload does not resume the coroutine`() {
+        val release = CountDownLatch(1)
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/") { ex ->
+            release.await(5, TimeUnit.SECONDS)
+            val body = "{}".toByteArray()
+            ex.sendResponseHeaders(200, body.size.toLong())
+            ex.responseBody.use { it.write(body) }
+        }
+        server.start()
         try {
-            runScript(
-                env,
-                """
-                async.run("threadpool", function()
-                    _result = { "done" }
-                end)
-                """.trimIndent()
-            )
+            val env = Env()
+            val url = "http://127.0.0.1:${server.address.port}/"
+            val co = root(env, "local r = async.fetch('$url') _result = { r.status }")
+            assertEquals("suspended", co.status)
+            env.asyncLib.invalidate()
+            release.countDown()
+            Thread.sleep(500)
+            env.pump(maxRounds = 5)
+            assertEquals("suspended", co.status)
+            assertTrue(env.state.globals.get("_result").isnil())
+        } finally {
+            release.countDown()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `fetch finishing in the same generation resumes the coroutine`() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/") { ex ->
+            val body = "{\"n\": 5}".toByteArray()
+            ex.sendResponseHeaders(200, body.size.toLong())
+            ex.responseBody.use { it.write(body) }
+        }
+        server.start()
+        try {
+            val env = Env()
+            val url = "http://127.0.0.1:${server.address.port}/"
+            val co = root(env, "local r = async.fetch('$url') _result = { r.status, r.json.n }")
             val deadline = System.currentTimeMillis() + 5000
-            while (env.state.globals.get("_result").isnil()) {
-                if (System.currentTimeMillis() > deadline) error("run task did not complete")
+            while (co.status != "dead" && System.currentTimeMillis() < deadline) {
+                env.pump(maxRounds = 1)
                 Thread.sleep(5)
             }
-            assertTrue(env.recordedExecutions.any { it.startsWith("threadpool:pxrp-test-pool") })
+            assertTrue(env.failures.isEmpty(), env.failures.toString())
+            assertEquals("dead", co.status)
+            val r = env.state.globals.get("_result").checktable()
+            assertEquals(200, r.get(1).toint())
+            assertEquals(5, r.get(2).toint())
         } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
+            server.stop(0)
         }
     }
 
-    // ── Mutex ──────────────────────────────────────────────────────
+    // ── resume plumbing ────────────────────────────────────────────
 
     @Test
-    fun `uncontended mutex with executes immediately`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local val = m:with(function()
-                return 42
-            end)
-            _result = { val }
-            """.trimIndent()
-        )
-        assertEquals(42, result.get(1).toint())
+    fun `resumeThread without a handler fails clearly`() {
+        val env = Env()
+        val thread = LuaThread(env.state, env.state.load("return 1", "t").checkfunction())
+        val e = assertFailsWith<LuaError> { env.asyncLib.resumeThread(thread, LuaValue.NONE, "ctx", 0) }
+        assertTrue(e.message!!.contains("no resume handler"), e.message)
     }
 
     @Test
-    fun `mutex with preserves return values`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local a, b = m:with(function()
-                return 10, 20
-            end)
-            _result = { a, b }
-            """.trimIndent()
-        )
-        assertEquals(10, result.get(1).toint())
-        assertEquals(20, result.get(2).toint())
-    }
-
-    @Test
-    fun `mutex with passes arguments to callback`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local val = m:with(function(x)
-                return x * 2
-            end, 21)
-            _result = { val }
-            """.trimIndent()
-        )
-        assertEquals(42, result.get(1).toint())
-    }
-
-    @Test
-    fun `mutex with catches callback error`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local ok, err = pcall(function()
-                return m:with(function()
-                    error("mutex boom")
-                end)
-            end)
-            _result = { ok, err }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("mutex boom"))
-    }
-
-    @Test
-    fun `mutex next waiter runs after error`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local order = {}
-
-            async.task("main", function()
-                m:with(function()
-                    table.insert(order, "error")
-                    error("fail")
-                end)
-            end)
-
-            async.task("main", function()
-                async.sleep(1)
-                m:with(function()
-                    table.insert(order, "second")
-                    return "ok"
-                end)
-            end)
-
-            async.task("main", function()
-                while #order < 2 do async.sleep(1) end
-                _result = order
-            end)
-
-            while _result == nil do async.sleep(1) end
-            """.trimIndent()
-        )
-        assertEquals("error", result.get(1).tojstring())
-        assertEquals("second", result.get(2).tojstring())
-    }
-
-    @Test
-    fun `mutex contended with waits`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local order = {}
-
-            async.task("main", function()
-                m:with(function()
-                    table.insert(order, "first")
-                    async.sleep(5)
-                end)
-            end)
-
-            async.task("main", function()
-                async.sleep(1)
-                m:with(function()
-                    table.insert(order, "second")
-                end)
-            end)
-
-            async.task("main", function()
-                while #order < 2 do async.sleep(1) end
-                _result = order
-            end)
-
-            while _result == nil do async.sleep(1) end
-            """.trimIndent()
-        )
-        assertEquals("first", result.get(1).tojstring())
-        assertEquals("second", result.get(2).tojstring())
-    }
-
-    @Test
-    fun `mutex critical sections never overlap`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local active = 0
-            local max_active = 0
-
-            for i = 1, 3 do
-                async.task("main", function()
-                    m:with(function()
-                        active = active + 1
-                        if active > max_active then max_active = active end
-                        async.sleep(2)
-                        active = active - 1
-                    end)
-                end)
-            end
-
-            async.task("main", function()
-                async.sleep(20)
-                _result = { max_active }
-            end)
-
-            while _result == nil do async.sleep(1) end
-            """.trimIndent()
-        )
-        assertEquals(1, result.get(1).toint())
-    }
-
-    @Test
-    fun `multiple mutexes remain independent`() {
-        val result = newEnvAndRun(
-            """
-            local m1 = async.mutex()
-            local m2 = async.mutex()
-            local order = {}
-
-            async.task("main", function()
-                m1:with(function()
-                    table.insert(order, "m1")
-                    async.sleep(5)
-                end)
-            end)
-
-            async.task("main", function()
-                async.sleep(1)
-                m2:with(function()
-                    table.insert(order, "m2")
-                end)
-            end)
-
-            async.task("main", function()
-                while #order < 2 do async.sleep(1) end
-                _result = order
-            end)
-
-            while _result == nil do async.sleep(1) end
-            """.trimIndent()
-        )
-        assertEquals("m1", result.get(1).tojstring())
-        assertEquals("m2", result.get(2).tojstring())
-    }
-
-    @Test
-    fun `mutex rejects non-function argument`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local ok, err = pcall(function()
-                return m:with("not a function")
-            end)
-            _result = { ok, err }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("expected function"))
-    }
-
-    @Test
-    fun `mutex rejects non-mutex self`() {
-        val result = newEnvAndRun(
-            """
-            local ok, err = pcall(function()
-                return ("nope"):with(function() end)
-            end)
-            _result = { ok, err }
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-    }
-
-    // ── Resumer serialization ────────────────────────────────────────
-
-    @Test
-    fun `run repeated on threadpool does not race`() {
-        val result = newEnvAndRun(
-            """
-            local sum = 0
-            for i = 1, 50 do
-                local v = async.run("threadpool", function()
-                    return 1
-                end)
-                sum = sum + v
-            end
-            _result = { sum }
-            """.trimIndent()
-        )
-        assertEquals(50, result.get(1).toint())
-    }
-
-    @Test
-    fun `run repeated on main does not race`() {
-        val result = newEnvAndRun(
-            """
-            local sum = 0
-            for i = 1, 50 do
-                sum = sum + async.run("main", function()
-                    return 1
-                end)
-            end
-            _result = { sum }
-            """.trimIndent()
-        )
-        assertEquals(50, result.get(1).toint())
-    }
-
-    @Test
-    fun `threadpool task yields and resumes`() {
-        val result = newEnvAndRun(
-            """
-            local t = async.task("threadpool", function()
-                async.sleep(1)
-                return 5
-            end)
-            local v = t:wait()
-            _result = { v }
-            """.trimIndent()
-        )
-        assertEquals(5, result.get(1).toint())
-    }
-
-    @Test
-    fun `multiple resume requests for one coroutine`() {
-        val result = newEnvAndRun(
-            """
-            local t = async.task("threadpool", function()
-                local p1 = async.promise()
-                local p2 = async.promise()
-                async.run("threadpool", function()
-                    p1:resolve(1)
-                    p2:resolve(2)
-                end)
-                local a = p1:wait()
-                local b = p2:wait()
-                return a + b
-            end)
-            local v = t:wait()
-            _result = { v }
-            """.trimIndent()
-        )
-        assertEquals(3, result.get(1).toint())
-    }
-
-    @Test
-    fun `mutex callback yields and resumes`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local val = m:with(function()
-                async.sleep(1)
-                return 7
-            end)
-            _result = { val }
-            """.trimIndent()
-        )
-        assertEquals(7, result.get(1).toint())
-    }
-
-    @Test
-    fun `contended mutex returns callback values`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local results = {}
-
-            async.task("main", function()
-                local a, b = m:with(function()
-                    async.sleep(3)
-                    return 1, 2
-                end)
-                results[1] = a
-                results[2] = b
-            end)
-
-            async.task("main", function()
-                async.sleep(1)
-                results[3] = m:with(function()
-                    return 99
-                end)
-            end)
-
-            async.task("main", function()
-                while #results < 3 do async.sleep(1) end
-                _result = results
-            end)
-
-            while _result == nil do async.sleep(1) end
-            """.trimIndent()
-        )
-        assertEquals(1, result.get(1).toint())
-        assertEquals(2, result.get(2).toint())
-        assertEquals(99, result.get(3).toint())
-    }
-
-    @Test
-    fun `queued mutex callback errors are propagated`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local captured = {}
-
-            async.task("main", function()
-                m:with(function()
-                    async.sleep(2)
-                    return "first"
-                end)
-            end)
-
-            async.task("main", function()
-                async.sleep(1)
-                local ok, err = pcall(function()
-                    return m:with(function()
-                        error("queued boom")
-                    end)
-                end)
-                captured[1] = ok
-                captured[2] = err
-            end)
-
-            async.task("main", function()
-                while captured[1] == nil do async.sleep(1) end
-                _result = captured
-            end)
-
-            while _result == nil do async.sleep(1) end
-            """.trimIndent()
-        )
-        assertFalse(result.get(1).toboolean())
-        assertTrue(result.get(2).tojstring().contains("queued boom"))
-    }
-
-    @Test
-    fun `mutex releases after async callback error`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local order = {}
-
-            async.task("main", function()
-                m:with(function()
-                    async.sleep(2)
-                    table.insert(order, "first")
-                    error("async fail")
-                end)
-            end)
-
-            async.task("main", function()
-                async.sleep(1)
-                m:with(function()
-                    table.insert(order, "second")
-                end)
-            end)
-
-            async.task("main", function()
-                while #order < 2 do async.sleep(1) end
-                _result = order
-            end)
-
-            while _result == nil do async.sleep(1) end
-            """.trimIndent()
-        )
-        assertEquals("first", result.get(1).tojstring())
-        assertEquals("second", result.get(2).tojstring())
-    }
-
-    @Test
-    fun `mutex waiters complete in FIFO order`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local order = {}
-
-            async.task("main", function()
-                m:with(function()
-                    table.insert(order, 1)
-                    async.sleep(3)
-                end)
-            end)
-
-            async.task("main", function()
-                m:with(function()
-                    table.insert(order, 2)
-                    async.sleep(3)
-                end)
-            end)
-
-            async.task("main", function()
-                m:with(function()
-                    table.insert(order, 3)
-                    async.sleep(3)
-                end)
-            end)
-
-            async.task("main", function()
-                while #order < 3 do async.sleep(1) end
-                _result = order
-            end)
-
-            while _result == nil do async.sleep(1) end
-            """.trimIndent()
-        )
-        assertEquals(1, result.get(1).toint())
-        assertEquals(2, result.get(2).toint())
-        assertEquals(3, result.get(3).toint())
-    }
-
-    // ── Resumer hardening ───────────────────────────────────────────
-
-    @Test
-    fun `resumer callback failure does not block later resumes`() {
-        val state = JsePlatform.standardState()
-        val func = state.load("return coroutine.yield(0)", "t").checkfunction()
-        val co = LuaThread(state, func)
-        val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "pxrp-test-resumer") }
-        val registry = AsyncExecutorRegistry()
-        registry.register(AsyncExecutor("main", dispatch = { exec.execute(it) }))
-        try {
-            val executor = registry.resolve("main")
-            val failures = CopyOnWriteArrayList<Throwable>()
-            val calls = CopyOnWriteArrayList<Int>()
-            val throwOnFirst = AtomicBoolean(true)
-            val resumer = AsyncLib.SerializedResumer(
-                co,
-                executor,
-                resume = { args ->
-                    if (throwOnFirst.getAndSet(false)) throw LuaError("callback boom")
-                    calls.add(args.arg(1).toint())
-                },
-                onFailure = { failures.add(it) },
-            )
-            resumer.requestResume(LuaValue.valueOf(1))
-            val deadline = System.currentTimeMillis() + 5000
-            while (failures.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(1)
-            assertEquals(1, failures.size)
-            assertTrue(failures[0].message!!.contains("callback boom"))
-
-            // A later resume request on the same coroutine must be dropped
-            // cleanly (not stuck, not re-dispatching the failed callback).
-            resumer.requestResume(LuaValue.valueOf(2))
-            Thread.sleep(100)
-            assertEquals(0, calls.size)
-            assertEquals(1, failures.size)
-        } finally {
-            registry.shutdown()
-        }
-    }
-
-    @Test
-    fun `executor rejects dispatch and task is rejected not hung`() {
-        val env = newEnv()
-        try {
-            env.registry.register(
-                AsyncExecutor(
-                    name = "closed",
-                    dispatch = { throw RejectedExecutionException("executor shut down") },
-                )
-            )
-            runScript(
-                env,
-                """
-                local t = async.task("closed", function() return 1 end)
-                _result = { t.state }
-                """.trimIndent()
-            )
-            assertEquals("rejected", env.state.globals.get("_result").checktable().get(1).tojstring())
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
-    }
-
-    @Test
-    fun `async run on rejected dispatch fails clearly`() {
-        val env = newEnv()
-        try {
-            env.registry.register(
-                AsyncExecutor(
-                    name = "closed",
-                    dispatch = { throw RejectedExecutionException("executor shut down") },
-                )
-            )
-            runScript(
-                env,
-                """
-                local ok, err = pcall(function()
-                    return async.run("closed", function() return 1 end)
-                end)
-                _result = { ok, err }
-                """.trimIndent()
-            )
-            val result = env.state.globals.get("_result").checktable()
-            assertFalse(result.get(1).toboolean())
-            assertTrue(result.get(2).tojstring().contains("executor shut down"))
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
-    }
-
-    @Test
-    fun `resumeThread without resume handler fails clearly`() {
-        val env = newEnv()
-        try {
-            val func = env.state.load("return 1", "t").checkfunction()
-            val co = LuaThread(env.state, func)
-            co.resumeHandler = null
-            val err = assertFailsWith<LuaError> {
-                env.asyncLib.resumeThread(co, LuaValue.NONE, "test")
-            }
-            assertTrue(err.message!!.contains("resume handler"))
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
-    }
-
-    @Test
-    fun `mutex callback failure releases the mutex for a fresh waiter`() {
-        val result = newEnvAndRun(
-            """
-            local m = async.mutex()
-            local order = {}
-
-            async.task("main", function()
-                local ok = pcall(function()
-                    m:with(function()
-                        table.insert(order, "fail")
-                        error("boom")
-                    end)
-                end)
-                order[1] = not ok
-            end)
-
-            async.task("main", function()
-                while order[1] == nil do async.sleep(1) end
-                local val = m:with(function()
-                    return 42
-                end)
-                order[2] = val
-            end)
-
-            async.task("main", function()
-                while order[2] == nil do async.sleep(1) end
-                _result = order
-            end)
-
-            while _result == nil do async.sleep(1) end
-            """.trimIndent()
-        )
-        assertTrue(result.get(1).toboolean())
-        assertEquals(42, result.get(2).toint())
-    }
-
-    @Test
-    fun `mutex completion during parent unwinding does not re-enter parent`() {
-        val env = newEnv()
-        try {
-            env.registry.register(AsyncExecutor("sync", dispatch = { it.run() }))
-            val syncExec = env.registry.resolve("sync")
-            runScript(
-                env,
-                """
-                local m = async.mutex()
-                local val = m:with(function()
-                    return 42
-                end)
-                _result = { val }
-                """.trimIndent(),
-                contextExecutor = syncExec,
-            )
-            assertEquals(42, env.state.globals.get("_result").checktable().get(1).toint())
-        } finally {
-            env.registry.shutdown()
-            env.latch.countDown()
-        }
-    }
-
-    @Test
-    fun `multiple queued resume requests remain ordered`() {
-        val state = JsePlatform.standardState()
-        val func = state.load(
-            "local a = coroutine.yield(1); local b = coroutine.yield(2); local c = coroutine.yield(3); return a+b+c",
-            "t",
-        ).checkfunction()
-        val co = LuaThread(state, func)
-        val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "pxrp-test-order") }
-        val registry = AsyncExecutorRegistry()
-        registry.register(AsyncExecutor("main", dispatch = { exec.execute(it) }))
-        try {
-            val executor = registry.resolve("main")
-            val resumed = CopyOnWriteArrayList<Int>()
-            val firstEntered = CountDownLatch(1)
-            val release = CountDownLatch(1)
-            val failures = CopyOnWriteArrayList<Throwable>()
-            val resumer = AsyncLib.SerializedResumer(
-                co,
-                executor,
-                resume = { args ->
-                    resumed.add(args.arg(1).toint())
-                    if (resumed.size == 1) {
-                        firstEntered.countDown()
-                        release.await()
-                    }
-                    co.resume(args)
-                },
-                onFailure = { failures.add(it) },
-            )
-            resumer.requestResume(LuaValue.valueOf(1))
-            firstEntered.await()
-            resumer.requestResume(LuaValue.valueOf(2))
-            resumer.requestResume(LuaValue.valueOf(3))
-            release.countDown()
-
-            val deadline = System.currentTimeMillis() + 5000
-            while (resumed.size < 3 && System.currentTimeMillis() < deadline) Thread.sleep(1)
-            assertEquals(listOf(1, 2, 3), resumed.toList())
-            assertTrue(failures.isEmpty())
-        } finally {
-            registry.shutdown()
-        }
-    }
-
-    @Test
-    fun `registry rejects register and resolve after shutdown`() {
-        val registry = AsyncExecutorRegistry()
-        val exec = Executors.newSingleThreadExecutor()
-        registry.register(AsyncExecutor("main", dispatch = { exec.execute(it) }))
-        registry.shutdown()
-        try {
-            registry.register(AsyncExecutor("late", dispatch = { }))
-            error("expected register to fail after shutdown")
-        } catch (e: IllegalStateException) {
-            assertTrue(e.message!!.contains("shutdown"))
-        }
-        val err = assertFailsWith<LuaError> { registry.resolve("main") }
-        assertTrue(err.message!!.contains("shut down"))
+    fun `a stale generation is not resumed`() {
+        val env = Env()
+        val thread = LuaThread(env.state, env.state.load("return 1", "t").checkfunction())
+        env.asyncLib.invalidate()
+        env.asyncLib.resumeThread(thread, LuaValue.NONE, "ctx", 0)
     }
 }

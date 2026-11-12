@@ -1,12 +1,13 @@
 package ru.pyxiion.ignis.api
 
 import net.minecraft.core.BlockPos
+import net.minecraft.util.Mth
 import net.minecraft.world.phys.Vec3
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaUserdata
 import org.luaj.vm2.LuaValue
-import ru.pyxiion.ignis.Compat
+import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.toLua
 import ru.pyxiion.ignis.luaFunction
 import ru.pyxiion.ignis.luaFunctionNil
@@ -19,11 +20,21 @@ class Vector private constructor(
     var y: Double,
     @JvmField
     var z: Double,
-) : LuaUserdata(this) {
+) : LuaUserdata(Unit) {
 
     init {
+        // `LuaUserdata(this)` в заголовке класса компилируется в ссылку на Companion: все векторы
+        // оказывались равны между собой, а checkuserdata(Vector) падал.
+        m_instance = this
         setmetatable(MetaTableRegistry.VEC)
     }
+
+    // m_instance == this, поэтому унаследованные от LuaUserdata hashCode/equals/tojstring зациклились бы.
+    override fun hashCode(): Int = System.identityHashCode(this)
+
+    override fun equals(other: Any?): Boolean = this === other
+
+    override fun tojstring(): String = "($x,$y,$z)"
 
     fun toLuaValue(): LuaValue {
         return this
@@ -38,14 +49,7 @@ class Vector private constructor(
         val Y = valueOf("y")
         val Z = valueOf("z")
 
-        val ZERO by lazy { Vector(0.0, 0.0, 0.0) }
-
-        fun of(x: Double, y: Double, z: Double): Vector {
-            if (x == 0.0 && y == 0.0 && z == 0.0) {
-                return ZERO
-            }
-            return Vector(x, y, z)
-        }
+        fun of(x: Double, y: Double, z: Double): Vector = Vector(x, y, z)
 
         fun fromMc(vec: Vec3): Vector {
             return of(vec.x, vec.y, vec.z)
@@ -54,24 +58,22 @@ class Vector private constructor(
         fun fromRotation(yaw: Float, pitch: Float): Vector {
             val f = pitch * (Math.PI / 180.0).toDouble()
             val g = -yaw * (Math.PI / 180.0).toDouble()
-            val h = Compat.fastCos(g)
-            val i = Compat.fastSin(g)
-            val j = Compat.fastCos(f)
-            val k = Compat.fastSin(f)
+            val h = Mth.cos(g).toDouble()
+            val i = Mth.sin(g).toDouble()
+            val j = Mth.cos(f).toDouble()
+            val k = Mth.sin(f).toDouble()
             return of((i * j).toDouble(), -k.toDouble(), (h * j).toDouble())
         }
 
 
+        /** `Vector`, `{x=, y=, z=}` или `{x, y, z}`. */
         fun LuaValue.toVec3d(): Vec3 {
-            if (this is Vector) {
-                return Vec3(this.x, this.y, this.z)
-            }
+            if (this is Vector) return Vec3(x, y, z)
             if (istable()) {
                 val t = checktable()
-                val x = t.get("x").let { if (it.isnumber()) it.todouble() else t.get(1).checkdouble() }
-                val y = t.get("y").let { if (it.isnumber()) it.todouble() else t.get(2).checkdouble() }
-                val z = t.get("z").let { if (it.isnumber()) it.todouble() else t.get(3).checkdouble() }
-                return Vec3(x, y, z)
+                val named = !t.rawget("x").isnil()
+                fun c(name: String, i: Int) = t.get(if (named) valueOf(name) else valueOf(i)).checkdouble()
+                return Vec3(c("x", 1), c("y", 2), c("z", 3))
             }
 
             throw LuaError("$this is not a Vector. Vector must be either Vector type, {x=x, y=y, z=z} table, or {x, y, z} array.")
@@ -88,21 +90,15 @@ internal fun vecTable(x: Double, y: Double, z: Double): LuaValue {
     return Vector.of(x, y, z)
 }
 
+/** Операнд арифметики: вектор в любой форме [toVec3d] либо число (покомпонентно). */
 internal fun resolveOperand(v: LuaValue): Vector {
-    if (v is Vector) {
-        return v
-    }
-    if (v.istable()) {
-        val x = v.get("x")
-        if (x.isnumber()) {
-            return Vector.of(x.checkdouble(), v.get("y").checkdouble(), v.get("z").checkdouble())
-        }
-    }
-    if (v.isnumber()) {
+    if (v is Vector) return v
+    if (v.type() == LuaValue.TNUMBER) {
         val n = v.todouble()
         return Vector.of(n, n, n)
     }
-    throw LuaError("Операнд должен быть вектором (таблица с x,y,z) или числом")
+    val vec = v.toVec3d()
+    return Vector.of(vec.x, vec.y, vec.z)
 }
 
 internal fun initVecMeta(meta: LuaTable) {
@@ -126,6 +122,7 @@ internal fun initVecMeta(meta: LuaTable) {
                 Vector.X -> s.x = v
                 Vector.Y -> s.y = v
                 Vector.Z -> s.z = v
+                else -> throw LuaError("Vector не имеет поля '${key.tojstring()}'")
             }
         })
 

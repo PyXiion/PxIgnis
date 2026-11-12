@@ -26,21 +26,21 @@
 ---| 'player_join'            -- (player)                                not cancellable
 ---| 'player_respawn'         -- (player, alive: boolean)                not cancellable
 ---| 'player_leave'           -- (player)                                not cancellable
----| 'player_death'           -- (player, damageType: string)            not cancellable
+---| 'player_death'           -- (player, amount: number, msgId: string, attacker: Entity|nil) cancellable
 ---| 'player_chat'            -- (player, message: string)               cancellable
 ---| 'player_block_break'     -- (player, pos: Vec, blockId: string)     cancellable
 ---| 'player_block_place'     -- (player, pos: Vec, blockId: string)     cancellable
 ---| 'player_use_item'        -- (player, hand: string, item: Item|nil, itemId: string) cancellable
 ---| 'player_attack_entity'   -- (player, entity: Entity)                cancellable
 ---| 'player_interact_entity' -- (player, entity: Entity, hand: string)  cancellable
----| 'player_hurt'            -- (player, damageType: string, amount: number) cancellable
----| 'entity_hurt'            -- (entity: Entity, damageType: string, amount: number, source: Entity|nil) cancellable
+---| 'player_hurt'            -- (player, amount: number, msgId: string, attacker: Entity|nil) cancellable
+---| 'entity_hurt'            -- (entity: Entity, amount: number, msgId: string, attacker: Entity|nil) cancellable
 ---| 'player_damage'          -- (player, damageType: string, amount: number, blocked: boolean) not cancellable
 ---| 'entity_damage'          -- (entity: Entity, damageType: string, amount: number, source: Entity|nil, blocked: boolean) not cancellable
 ---| 'player_kill'            -- (player, target: Entity, damageSource: string) not cancellable
 ---| 'entity_spawn'           -- (entity: Entity)                        not cancellable
 ---| 'entity_despawn'         -- (entity: Entity)                        not cancellable
----| 'entity_death'           -- (entity: Entity, damageType: string, amount: number) cancellable
+---| 'entity_death'           -- (entity: Entity, amount: number, msgId: string, attacker: Entity|nil) cancellable
 ---| 'tick'                   -- ()                                       not cancellable
 
 ---@alias RegionEventName

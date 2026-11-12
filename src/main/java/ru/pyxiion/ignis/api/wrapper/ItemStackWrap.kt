@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis.api.wrapper
 
+import ru.pyxiion.ignis.wrapObject
 import net.minecraft.core.component.DataComponents
 import net.minecraft.world.item.component.CustomModelData
 import net.minecraft.world.item.component.ItemLore
@@ -7,6 +8,7 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
 import net.minecraft.util.Unit
+import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.api.MetaTableRegistry
@@ -22,7 +24,11 @@ object ItemStackWrap {
         prop(
             "count",
             get = { LuaValue.valueOf(count) },
-            set = { v -> count = v.toint() }
+            set = { v ->
+                val n = v.checkint()
+                if (n !in 0..99) throw LuaError("item.count: ожидается число от 0 до 99, получено $n")
+                count = n
+            }
         )
 
         prop(
@@ -101,11 +107,7 @@ object ItemStackWrap {
     }
 
     fun wrap(stack: ItemStack): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(MetaTableRegistry.ITEM)
-        t.rawset("__pxrp_type", LuaValue.valueOf("item"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(stack))
-        return t
+        return wrapObject(MetaTableRegistry.ITEM, "item", stack)
     }
 
     fun unwrap(value: LuaValue): ItemStack? =

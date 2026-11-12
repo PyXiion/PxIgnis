@@ -331,9 +331,9 @@ local holo = world:spawnHologram(vec(0, 70, 0), "&6Welcome!", {
 Broadcasts a message to players within range of a position.
 
 - `text` (`string`) — Message text
-- `pos` (`table`) — `{x, y, z}` origin position
+- `pos` ([`Vector`](/reference/vector-api) or `{x, y, z}`) — Origin position
 - `range` (`number`) — Radius in blocks
-- `overlay` (`number`, optional) — If provided, sends as title overlay with the given duration in ticks
+- `overlay` (`boolean`, optional) — `true` sends it to the action bar instead of chat
 
 ```lua
 world:broadcastInRange("&cDanger nearby!", vec(0, 64, 0), 20)

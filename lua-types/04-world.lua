@@ -94,7 +94,7 @@ function World:raycast(start, dir, range, includeFluids, includeEntities) end
 ---@param text string
 ---@param pos Vec|Vec3Like
 ---@param range number
----@param overlay? integer  -- if set, shows as overlay (action bar) for N ticks
+---@param overlay? boolean  -- true: action bar instead of chat
 function World:broadcastInRange(text, pos, range, overlay) end
 
 ---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}

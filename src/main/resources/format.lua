@@ -8,17 +8,27 @@ local function resolve_dot_path(path)
     return table.concat(chunks)
 end
 
-local function compile_expression(expr)
+-- Returns Lua source for one `{expr}`. A plain dotted path is inlined; anything else is compiled once, here, into a
+-- function stored in `exprs`, so rendering never calls `load`.
+local function compile_expression(expr, exprs)
     local dot_expr = expr:match("^%a[%w_.]*$")
     if dot_expr then
         return string.format("tostring(args%s)", resolve_dot_path(dot_expr))
-    else
-        return string.format("(function(args) local env = setmetatable({}, {__index = args}) return tostring(assert(load('return ' .. %q, 'expr', 't', env))()) end)(args)", expr)
     end
+
+    local current_args
+    local env = setmetatable({}, {__index = function(_, key) return current_args[key] end})
+    local chunk = assert(load("return " .. expr, "expr", "t", env))
+    exprs[#exprs + 1] = function(args)
+        current_args = args
+        return tostring(chunk())
+    end
+    return string.format("exprs[%d](args)", #exprs)
 end
 
 local function compile_template(pattern)
     local lua_parts = {}
+    local exprs = {}
     local last_end = 1
 
     while true do
@@ -37,13 +47,13 @@ local function compile_template(pattern)
         end
 
         local expr = string.sub(pattern, start_pos + 1, end_pos - 1)
-        table.insert(lua_parts, compile_expression(expr))
+        table.insert(lua_parts, compile_expression(expr, exprs))
 
         last_end = end_pos + 1
     end
 
     local body = "return function(args) return " .. table.concat(lua_parts, " .. ") .. " end"
-    local chunk = assert(load(body, "template", "t"))
+    local chunk = assert(load(body, "template", "t", {tostring = tostring, exprs = exprs}))
     return chunk()
 end
 

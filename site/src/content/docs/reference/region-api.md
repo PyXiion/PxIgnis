@@ -11,7 +11,9 @@ Metatable name: `"region"`
 
 ### `world:createRegion(posA, posB)`
 
-Creates a new region spanning between two corners.
+Creates a new region spanning between two corners. A region may cover at most 1024 chunks (for example
+512 × 512 blocks); a larger one is an error, as are non-finite coordinates. Entities that are already inside when
+it is created are members without an `entity_enter`; only later transitions produce events.
 
 ```lua
 local r = world:createRegion(vec(0, 0, 0), vec(100, 64, 100))
@@ -203,7 +205,9 @@ r:off(id)  -- unsubscribes
 
 ### `region:destroy()`
 
-Destroys the region. No `entity_leave` events fire on destruction.
+Destroys the region. No `entity_leave` events fire on destruction. After this every method and property of the
+region handle (except `id`) raises an error, including a second `destroy()`. A script reload destroys all regions
+the same way.
 
 ```lua
 r:destroy()

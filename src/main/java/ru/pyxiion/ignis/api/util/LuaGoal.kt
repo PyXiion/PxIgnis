@@ -14,7 +14,7 @@ class LuaGoal(private val mob: Mob) : Goal() {
 
     override fun canUse(): Boolean = alive
     override fun canContinueToUse(): Boolean = alive
-    override fun stop() = MobAIManager.onGoalStopped(mob)
+    // stop() is the selector pausing the goal (a higher priority goal took the flags): that is not the end of the AI.
     override fun tick() = MobAIManager.tickMob(mob)
 
     class Target(private val mob: Mob) : Goal() {

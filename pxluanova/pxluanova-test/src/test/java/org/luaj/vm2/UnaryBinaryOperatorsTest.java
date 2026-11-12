@@ -243,12 +243,13 @@ public class UnaryBinaryOperatorsTest extends TestCase {
 		LuaValue oneb = LuaValue.valueOf( LuaValue.ONE.toboolean() );
 		assertEquals( LuaValue.FALSE, nilb );
 		assertEquals( LuaValue.TRUE, oneb );
-		LuaValue smt = LuaString.s_metatable;
+		LuaState st = LuaState.current() != null ? LuaState.current() : new LuaState();
+		LuaTable smt = st.stringMetatable;
 		try {
 			// always return nil0
 			LuaBoolean.s_metatable = LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_NIL, } );
 			LuaNumber.s_metatable = LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_NIL, } );
-			LuaString.s_metatable = LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_NIL, } );
+			st.stringMetatable = LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_NIL, } );
 			tbl.setmetatable(LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_NIL, } ));
 			tbl2.setmetatable(LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_NIL, } ));
 			uda.setmetatable(LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_NIL, } ));
@@ -302,7 +303,7 @@ public class UnaryBinaryOperatorsTest extends TestCase {
 			// always use right argument
 			LuaBoolean.s_metatable = LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_ONE, } );
 			LuaNumber.s_metatable = LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_ONE, } );
-			LuaString.s_metatable = LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_ONE, } );
+			st.stringMetatable = LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_ONE, } );
 			tbl.setmetatable(LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_ONE, } ));
 			tbl2.setmetatable(LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_ONE, } ));
 			uda.setmetatable(LuaValue.tableOf( new LuaValue[] { LuaValue.EQ, RETURN_ONE, } ));
@@ -356,7 +357,7 @@ public class UnaryBinaryOperatorsTest extends TestCase {
 		} finally { 
 			LuaBoolean.s_metatable = null;
 			LuaNumber.s_metatable = null;
-			LuaString.s_metatable = smt;
+			st.stringMetatable = smt;
 		}
 	}
 		

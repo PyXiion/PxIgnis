@@ -1,6 +1,8 @@
 package ru.pyxiion.ignis.api.wrapper
 
+import ru.pyxiion.ignis.wrapObject
 import net.minecraft.world.entity.EntitySpawnReason
+import net.minecraft.world.entity.Mob
 import net.minecraft.nbt.DoubleTag
 import net.minecraft.nbt.ListTag
 import net.minecraft.server.level.ServerLevel
@@ -23,11 +25,7 @@ import ru.pyxiion.ignis.unwrap
 object StructureWrap {
 
     fun wrap(template: StructureTemplate): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(MetaTableRegistry.STRUCTURE)
-        t.rawset("__pxrp_type", LuaValue.valueOf("structure"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(template))
-        return t
+        return wrapObject(MetaTableRegistry.STRUCTURE, "structure", template)
     }
 
     private val BUILT = metaTable<StructureTemplate> {
@@ -66,7 +64,7 @@ object StructureWrap {
 
             val result = if (entityCallback != null) {
                 data.setIgnoreEntities(true)
-                val blockResult = template.placeInWorld(world, pos, pivot, data, world.random, 0x03)
+                val blockResult = template.placeInWorld(world, pos, pos, data, world.random, 0x03)
 
                 val accessor = template as? StructureTemplateMixin
                     ?: throw LuaError("Не удалось получить доступ к сущностям структуры")
@@ -100,6 +98,10 @@ object StructureWrap {
                     val callbackResult = entityCallback.call(entityWrapper)
                     if (callbackResult.isboolean() && !callbackResult.toboolean()) continue
 
+                    // placeInWorld finalizes mobs itself when entities are not ignored; this branch spawns them by hand.
+                    if (entity is Mob) {
+                        entity.finalizeSpawn(world, world.getCurrentDifficultyAt(entity.blockPosition()), EntitySpawnReason.STRUCTURE, null)
+                    }
                     world.addFreshEntityWithPassengers(entity)
                     anySpawned = true
                 }
@@ -107,7 +109,7 @@ object StructureWrap {
                 blockResult || anySpawned
             } else {
                 data.setIgnoreEntities(false)
-                template.placeInWorld(world, pos, pivot, data, world.random, 0x03)
+                template.placeInWorld(world, pos, pos, data, world.random, 0x03)
             }
 
             LuaValue.valueOf(result)

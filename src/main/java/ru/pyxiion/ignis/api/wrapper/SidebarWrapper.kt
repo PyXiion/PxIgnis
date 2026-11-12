@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis.api.wrapper
 
+import ru.pyxiion.ignis.wrapObject
 import net.minecraft.network.protocol.game.ClientboundSetObjectivePacket
 import net.minecraft.network.protocol.game.ClientboundResetScorePacket
 import net.minecraft.network.protocol.game.ClientboundSetScorePacket
@@ -42,11 +43,7 @@ class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
     }
 
     fun toLuaValue(): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(MetaTableRegistry.SIDEBAR)
-        t.rawset("__pxrp_type", LuaValue.valueOf("sidebar"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(this))
-        return t
+        return wrapObject(MetaTableRegistry.SIDEBAR, "sidebar", this)
     }
 
     fun setTitle(text: String) {
@@ -61,8 +58,9 @@ class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
 
     fun setLine(line: Int, text: String) {
         if (line < 1) throw LuaError("Номер строки должен быть >= 1")
-        lines[line] = text
-        if (visible) resendLines()
+        val previous = lines.put(line, text)
+        if (!visible || previous == text) return
+        if (previous != null) resendLine(line) else resendLines()
     }
 
     fun setLinesFromTable(table: LuaTable) {
@@ -130,18 +128,26 @@ class SidebarWrapper(val player: ServerPlayer, initialTitle: String) {
         val sorted = lines.entries.sortedBy { it.key }
         val size = sorted.size
         for ((idx, entry) in sorted.withIndex()) {
-            val (lineNum, text) = entry
-            val score = size - idx
-            player.connection.send(
-                ClientboundSetScorePacket(
-                    slotName(lineNum),
-                    objectiveName,
-                    score,
-                    Optional.of(Component.literal(text)),
-                    Optional.empty()
-                )
-            )
+            sendScore(entry.key, entry.value, size - idx)
         }
+    }
+
+    /** The slot set is unchanged, so every score stays where it is: only this line's text goes out. */
+    private fun resendLine(line: Int) {
+        val sorted = lines.keys.sorted()
+        sendScore(line, lines.getValue(line), sorted.size - sorted.indexOf(line))
+    }
+
+    private fun sendScore(line: Int, text: String, score: Int) {
+        player.connection.send(
+            ClientboundSetScorePacket(
+                slotName(line),
+                objectiveName,
+                score,
+                Optional.of(Component.literal(text)),
+                Optional.empty()
+            )
+        )
     }
 
     companion object {

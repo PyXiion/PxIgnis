@@ -1,5 +1,4 @@
 buildscript {
-    ext.kotlin_version = '2.3.21'
     repositories {
         mavenCentral()
     }
@@ -12,7 +11,6 @@ plugins {
     // Minecraft version (obfuscated 1.21.x vs. unobfuscated 26.x) is applied below.
     id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
     id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
-    id 'maven-publish'
 
     id 'com.gradleup.shadow' version '9.4.1'
 }
@@ -44,14 +42,9 @@ base {
 loom {
     accessWidenerPath = file("src/version-${buildTarget}/resources/pxignis.accesswidener")
 
-    splitEnvironmentSourceSets()
-
     mods {
         "pxignis" {
             sourceSet sourceSets.main
-        }
-        "pxignis" {
-            sourceSet sourceSets.client
         }
     }
 
@@ -59,7 +52,6 @@ loom {
 }
 
 repositories {
-    mavenLocal()
     mavenCentral()
 }
 
@@ -72,7 +64,7 @@ dependencies {
     // Unobfuscated (26.x) Loom has no mod* configurations: plain `implementation` is enough.
     def modImpl = obfuscated ? 'modImplementation' : 'implementation'
     add(modImpl, "net.fabricmc:fabric-loader:${project.loader_version}")
-    add(modImpl, "net.fabricmc:fabric-language-kotlin:1.13.11+kotlin.2.3.21")
+    add(modImpl, "net.fabricmc:fabric-language-kotlin:${project.flk_version}")
 
     add(modImpl, "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}")
 
@@ -103,7 +95,6 @@ test {
 shadowJar {
     configurations = [project.configurations.shadow]
     from sourceSets.main.output
-    from sourceSets.client.output
 
     relocate 'org.luaj', 'ru.pyxiion.luanova'
     relocate 'me.lucko.fabric.api.permissions', 'ru.pyxiion.lib.fabric.api.permissions'
@@ -135,10 +126,8 @@ if (obfuscated) {
 sourceSets {
     main {
         kotlin.srcDirs = ["src/version-${buildTarget}/kotlin", "src/main/java"]
+        java.srcDirs += "src/version-${buildTarget}/java"
         resources.srcDirs += "src/version-${buildTarget}/resources"
-    }
-    client {
-        kotlin.srcDirs = ["src/version-${buildTarget}/client-kotlin", "src/client/java"]
     }
 }
 
@@ -187,23 +176,6 @@ jar {
     }
 }
 
-// configure the maven publication
-publishing {
-    publications {
-        create("mavenJava", MavenPublication) {
-            artifactId = project.archives_base_name
-            from components.java
-        }
-    }
-
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-    repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
-    }
-}
 kotlin {
     jvmToolchain(targetJavaVersion)
 }

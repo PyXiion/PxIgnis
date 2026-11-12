@@ -589,7 +589,7 @@ end
 function yellHandler(ctx, msg)
     local player = ctx.player
     local pos = player.pos
-    player.world:broadcastInRange(msg, pos.x, pos.y, pos.z, 50)
+    player.world:broadcastInRange(msg, pos, 50)
     player:sendMessage("§aYelled within 50 blocks.")
 end
 
@@ -1303,10 +1303,10 @@ mc.on("player_interact_entity", function(player, target)
     player:sendMessage("§eYou interacted with §f" .. target.name)
 end)
 
-mc.on("player_hurt", function(player, source, amount)
+mc.on("player_hurt", function(player, amount, msgId, attacker)
 end)
 
-mc.on("entity_hurt", function(entity, source, amount)
+mc.on("entity_hurt", function(entity, amount, msgId, attacker)
 end)
 
 mc.on("player_damage", function(player, source, amount)

@@ -31,7 +31,7 @@ command <name:type> [name:type] [name:choice=a,b]
 | `cmd` `sub`         | Literal path tokens                  |
 | `<name:type>`       | Required argument                    |
 | `[name:type]`       | Optional trailing argument           |
-| `<name:choice=a,b>` | Choice argument with tab completions |
+| `<name:choice=a,b>` | Choice argument (one literal per option) |
 
 Optional `[<name:type>]` is also supported, because i think both of them are pretty.
 
@@ -40,18 +40,26 @@ may appear after optional arguments. Omitting any optional arg removes all later
 
 ## Argument types
 
-| Type         | Lua type  | Description                                        |
-|--------------|-----------|----------------------------------------------------|
-| `text`       | `string`  | Greedy: consumes the rest of the command line.     |
-| `word`       | `string`  | Single word (`abc` or `"abc abc"`)                 |
-| `player`     | `player`  | Player                                             |
-| `target`     | `player`  | Alias for `player`                                 |
-| `int`        | `number`  | Integer                                            |
-| `double`     | `number`  | Double-precision float                             |
-| `float`      | `number`  | Single-precision float                             |
-| `bool`       | `boolean` | Boolean                                            |
-| `block_pos`  | `table`   | Vector                                             |
-| `choice=a,b` | `string`  | Multi-choice — runtime validation + tab completion |
+| Type         | Lua type  | Description                                                    |
+|--------------|-----------|----------------------------------------------------------------|
+| `text`       | `string`  | Greedy: consumes the rest of the command line.                 |
+| `word`       | `string`  | Single word (`abc` or `"abc abc"`)                             |
+| `player`     | `player`  | Player                                                         |
+| `entity`     | `entity`  | Entity (selector)                                              |
+| `int`        | `number`  | Integer (an integer in Lua, not a float)                       |
+| `double`     | `number`  | Double-precision float                                         |
+| `float`      | `number`  | Single-precision float                                         |
+| `bool`       | `boolean` | Boolean                                                        |
+| `block_pos`  | `Vector`  | Block position as a [Vector](/reference/vector-api)            |
+| `choice=a,b` | `string`  | One of the listed words; each is a command literal (see below) |
+
+### Choice
+
+`<mode:choice=creative,survival>` registers one command literal per option, so parsing, error messages and tab
+completion are exactly vanilla, and non-ASCII options (`choice=да,нет`) work. The handler receives the matched word.
+An option must be a single word: an option with a space, an empty option or a duplicate is an error at `register`.
+
+An argument name may be used only once in a syntax string; repeating it is an error at `register`.
 
 ## Handler arguments
 
@@ -59,10 +67,9 @@ The handler receives `ctx` as the first argument, followed by each argument valu
 order.
 
 ```lua
---# nova syntax
-register("warn <target:player> <reason:text>") \{ctx, target, reason ->
+register("warn <target:player> <reason:text>", function(ctx, target, reason)
     target:sendMessage("Warning: " .. reason)
-}
+end)
 ```
 
 ### Context object
@@ -92,16 +99,14 @@ These cannot be registered (for safety):
 ## Examples
 
 ```lua
---# nova syntax
-
 -- Simple command, no arguments, no permission
-register("healme") \{ ctx ->
+register("healme", function(ctx)
     ctx.player:heal(20)
     ctx.player:sendMessage("Healed!")
-}
+end)
 
 -- Player argument with permission
-register("fly <target:player>") \{ ctx, target ->
+register("fly <target:player>", function(ctx, target)
     target:setFlySpeed(0.1)
 end, "myplugin.fly")
 

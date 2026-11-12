@@ -27,19 +27,13 @@
         "adapter": "kotlin",
         "value": "ru.pyxiion.ignis.PxIgnis"
       }
-    ],
-    "client": [
-      {
-        "adapter": "kotlin",
-        "value": "ru.pyxiion.ignis.client.PxIgnisClient"
-      }
     ]
   },
   "depends": {
     "fabricloader": ">=${loader_version}",
-    "fabric": "*",
+    "fabric-api": "*",
     "minecraft": "${minecraft_version}",
-    "fabric-language-kotlin": ">=1.10.8+kotlin.1.9.0"
+    "fabric-language-kotlin": ">=1.13.8+kotlin.2.3.0"
   },
   "accessWidener" : "pxignis.accesswidener",
   "mixins": [

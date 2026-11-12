@@ -22,7 +22,7 @@ object BlockStateCodec {
             val value: Any = state.getValue(prop)
             val luaValue = when (prop) {
                 is BooleanProperty -> LuaValue.valueOf(value as Boolean)
-                is IntegerProperty -> LuaValue.valueOf((value as Int).toDouble())
+                is IntegerProperty -> LuaValue.valueOf(value as Int)
                 else -> LuaValue.valueOf((prop as Property<Comparable<Any>>).getName(value as Comparable<Any>))
             }
             propsTable.set(prop.name, luaValue)
@@ -59,10 +59,20 @@ object BlockStateCodec {
         val p = prop as Property<Comparable<Any>>
 
         if (type == Boolean::class.java) {
+            if (!value.isboolean()) {
+                throw LuaError("Свойство '${p.name}' ожидает boolean, получено ${value.typename()}")
+            }
             return state.setValue(p, value.toboolean() as Comparable<Any>)
         }
         if (type == Int::class.javaPrimitiveType || type == Int::class.java) {
-            return state.setValue(p, value.toint() as Comparable<Any>)
+            if (value.type() != LuaValue.TNUMBER || value.todouble() != Math.floor(value.todouble())) {
+                throw LuaError("Свойство '${p.name}' ожидает целое число, получено ${value.typename()}")
+            }
+            val n = value.toint()
+            if (n as Comparable<Any> !in p.possibleValues) {
+                throw LuaError("Недопустимое значение $n для свойства '${p.name}' (допустимо: ${p.possibleValues.joinToString()})")
+            }
+            return state.setValue(p, n as Comparable<Any>)
         }
         val strValue = value.tojstring()
         val parsed = p.getValue(strValue).orElseThrow {

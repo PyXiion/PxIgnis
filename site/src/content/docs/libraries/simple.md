@@ -18,7 +18,7 @@ local registerSimple = require "simple"
 | `cmd` | `string` | Command syntax string |
 | `template` | `string` | Format string passed to `format` |
 | `range` | `number?` | If > 0, uses `world:broadcastInRange` instead of global broadcast |
-| `overlay` | `bool\|number?` | If `true`, sends as title overlay. If a number, acts as both range and overlay flag |
+| `overlay` | `bool?` | If `true`, sends to the action bar instead of chat |
 
 Argument names are extracted automatically from the syntax string. The `p` variable is
 automatically set to `ctx.player`.

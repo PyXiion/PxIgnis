@@ -9,6 +9,7 @@ import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
+import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.util.LuaGoal
 import ru.pyxiion.ignis.api.wrapper.MobWrap
@@ -50,17 +51,6 @@ object MobAIManager {
         }
     }
 
-    private fun tryClearBrain(mob: Mob) {
-        try {
-            val brainMethod = mob.javaClass.getMethod("getBrain")
-            val brain = brainMethod.invoke(mob) as? Brain<*>
-            brain?.removeAllBehaviors()
-        } catch (_: NoSuchMethodException) {
-        } catch (_: Throwable) {
-            PxIgnis.logger.warn("Не удалось очистить Brain моба: ${mob.type}")
-        }
-    }
-
     fun setAI(mob: Mob, idOrFn: LuaValue) {
         clearAI(mob)
 
@@ -84,7 +74,7 @@ object MobAIManager {
 
         applyBehaviour(mob, id, fn)
 
-        mob.tags.filter { it.startsWith("pxrp_behaviour:") }.forEach {
+        Compat.entityTags(mob).filter { it.startsWith("pxrp_behaviour:") }.forEach {
             mob.removeTag(it)
         }
         tag?.let { mob.addTag(it) }
@@ -96,7 +86,8 @@ object MobAIManager {
         mixin.goalSelector.availableGoals.toList().forEach { mixin.goalSelector.removeGoal(it.goal) }
         mixin.targetSelector.availableGoals.toList().forEach { mixin.targetSelector.removeGoal(it.goal) }
 
-        tryClearBrain(mob)
+        // The Brain is left alone: Brain.removeAllBehaviors() is not undone when the AI is detached, so a villager
+        // or piglin would stay without behaviour for good. Brain-driven mobs get the Lua goal next to their own.
 
         val goal = LuaGoal(mob)
         val targetGoal = LuaGoal.Target(mob)
@@ -110,20 +101,26 @@ object MobAIManager {
         activeMobs[mob.uuid] = ActiveMobAI(id, fn, state, goal, targetGoal, mob)
     }
 
-    fun clearAI(mob: Mob): Boolean {
+    /** Takes the AI off the mob and forgets the wrapper; the persistent tag stays. */
+    private fun detach(mob: Mob): Boolean {
         val entry = activeMobs.remove(mob.uuid) ?: return false
 
         val mixin = mob as MobEntityMixin
         mixin.goalSelector.removeGoal(entry.goal)
         mixin.targetSelector.removeGoal(entry.targetGoal)
         mixin.invokeInitGoals()
-
-        mob.tags.filter { it.startsWith("pxrp_behaviour:") }.forEach {
-            mob.removeTag(it)
-        }
         mobWrappers.remove(mob.uuid)
 
         return true
+    }
+
+    /** `mob:clearAI()`: detaches and also forgets the behaviour tag, so the mob stays vanilla after a reload. */
+    fun clearAI(mob: Mob): Boolean {
+        val detached = detach(mob)
+        Compat.entityTags(mob).filter { it.startsWith("pxrp_behaviour:") }.forEach {
+            mob.removeTag(it)
+        }
+        return detached
     }
 
     fun hasAI(mob: Mob): Boolean = mob.uuid in activeMobs
@@ -145,12 +142,8 @@ object MobAIManager {
         try {
             entry.fn.call(wrapper, entry.state)
         } catch (e: Throwable) {
-            PxIgnis.logger.warn("Ошибка в AI-поведении моба ${mob.type}: ${e.message}", e)
+            PxIgnis.logger.warn("Ошибка в AI-поведении ${entry.behaviourId ?: "<функция>"} моба ${mob.type}: ${e.message}", e)
         }
-    }
-
-    fun onGoalStopped(mob: Mob) {
-        cleanUp(mob.uuid)
     }
 
     fun onEntityRemove(mob: Mob) {
@@ -166,7 +159,7 @@ object MobAIManager {
     fun onEntityLoad(entity: Entity, world: ServerLevel) {
         if (entity !is Mob) return
 
-        val behaviourTag = entity.tags.firstOrNull { it.startsWith("pxrp_behaviour:") }
+        val behaviourTag = Compat.entityTags(entity).firstOrNull { it.startsWith("pxrp_behaviour:") }
             ?: return
 
         val id = behaviourTag.removePrefix("pxrp_behaviour:")
@@ -184,25 +177,30 @@ object MobAIManager {
         }
     }
 
+    /**
+     * Reload: detach every mob (goals restored, wrappers forgotten) but keep the `pxrp_behaviour:*` tags so
+     * [scanAndReapply] can re-attach them. Registered behaviours are dropped; scripts register them again.
+     */
     fun restoreAll() {
         activeMobs.values.toList().forEach { entry ->
             try {
                 val mob = entry.mob
                 if (!mob.isRemoved && mob.isAlive) {
-                    clearAI(mob)
+                    detach(mob)
                 }
             } catch (_: Throwable) {}
         }
         activeMobs.clear()
         mobWrappers.clear()
         pendingAttachments.clear()
+        behaviours.clear()
     }
 
     fun scanAndReapply(server: MinecraftServer) {
         for (world in server.allLevels) {
             for (entity in world.allEntities) {
                 if (entity is Mob) {
-                    val tag = entity.tags.firstOrNull { it.startsWith("pxrp_behaviour:") }
+                    val tag = Compat.entityTags(entity).firstOrNull { it.startsWith("pxrp_behaviour:") }
                         ?: continue
                     val id = tag.removePrefix("pxrp_behaviour:")
                     val fn = behaviours[id] ?: continue

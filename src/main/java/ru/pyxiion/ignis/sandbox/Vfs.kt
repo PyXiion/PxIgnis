@@ -18,10 +18,11 @@ class Vfs(private val ignisDir: Path) {
         "demo" to Module(loadResource("/demo.lua"), "@demo.lua"),
     )
 
-    private val canonicalIgnisDir: Path = try {
+    /** Корень и проверяемый путь приводятся одним способом — через `toRealPath`. Нет каталога — нет файлов. */
+    private fun realRoot(): Path? = try {
         ignisDir.toRealPath()
     } catch (e: IOException) {
-        ignisDir.toAbsolutePath().normalize()
+        null
     }
 
     fun resolve(name: String): Module? {
@@ -40,30 +41,33 @@ class Vfs(private val ignisDir: Path) {
     }
 
     private fun resolveUserFile(relPath: String): Module? {
+        val root = realRoot() ?: return null
         val file1 = safeFile("$relPath.lua")
         val file2 = safeFile("$relPath/init.lua")
 
         return when {
             file1 != null && file2 != null -> {
                 logger.warn("Ambiguous module '$relPath': both $relPath.lua and $relPath/init.lua exist; preferring init.lua")
-                Module(file2.readBytes(), "@${canonicalIgnisDir.relativize(file2.toPath())}")
+                Module(file2.readBytes(), "@${root.relativize(file2.toPath())}")
             }
 
-            file1 != null -> Module(file1.readBytes(), "@${canonicalIgnisDir.relativize(file1.toPath())}")
-            file2 != null -> Module(file2.readBytes(), "@${canonicalIgnisDir.relativize(file2.toPath())}")
+            file1 != null -> Module(file1.readBytes(), "@${root.relativize(file1.toPath())}")
+            file2 != null -> Module(file2.readBytes(), "@${root.relativize(file2.toPath())}")
             else -> null
         }
     }
 
-    private fun safeFile(relPath: String): File? {
+    /** Обычный файл внутри `config/ignis` либо null. Выход за корень (в том числе симлинком) — null. */
+    fun safeFile(relPath: String): File? {
+        val root = realRoot() ?: return null
         val resolved = try {
-            // Symlinks shall work (i love symlinks)
-            // was: toRealPath()
-            ignisDir.resolve(relPath).toAbsolutePath().normalize()
+            ignisDir.resolve(relPath).toRealPath()
         } catch (e: IOException) {
             return null
+        } catch (e: java.nio.file.InvalidPathException) {
+            return null
         }
-        if (!resolved.startsWith(canonicalIgnisDir)) return null
+        if (!resolved.startsWith(root)) return null
         val f = resolved.toFile()
         return if (f.isFile) f else null
     }

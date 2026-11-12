@@ -1,32 +1,63 @@
 package ru.pyxiion.ignis.storage
 
-import java.util.concurrent.ConcurrentHashMap
+import com.google.gson.JsonObject
+import org.luaj.vm2.LuaTable
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
-class StorageManager(private val backend: DataBackend) {
-    private val playerCache = ConcurrentHashMap<String, DataTable>()
-    private val globalData = DataTable(backend, "__global__")
+/**
+ * Persistent tables: plain [LuaTable]s read from disk on first access. Values are validated and
+ * written by [save]; an invalid value fails there with its path, not at assignment.
+ * Lua runs on the server thread only, so there is no locking here.
+ */
+class StorageManager(private val backend: JsonBackend) {
+    private class Entry(val table: LuaTable, var lastSaved: JsonObject)
 
-    fun getPlayerData(uuid: String): DataTable {
-        return playerCache.computeIfAbsent(uuid) { DataTable(backend, uuid) }
-    }
+    private val entries = HashMap<String, Entry>()
 
+    fun getPlayerData(uuid: String): LuaTable = entry(uuid).table
+
+    fun getGlobalData(): LuaTable = entry(JsonBackend.GLOBAL_KEY).table
+
+    /** Saves and forgets the player's table. A failed save is logged and the table is dropped anyway. */
     fun removePlayerData(uuid: String) {
-        playerCache.remove(uuid)?.save()
-    }
-
-    fun getGlobalData(): DataTable = globalData
-
-    fun saveAll() {
-        playerCache.values.forEach {
-            it.ensureLoaded()
-            it.save()
+        try {
+            save(uuid)
+        } catch (e: Exception) {
+            logger.error("Не удалось сохранить данные игрока $uuid", e)
         }
-        globalData.ensureLoaded()
-        globalData.save()
+        entries.remove(uuid)
     }
 
-    fun close() {
-        saveAll()
-        backend.close()
+    /** One failing table does not stop the others. */
+    fun saveAll() {
+        for (key in entries.keys.toList()) {
+            try {
+                save(key)
+            } catch (e: Exception) {
+                logger.error("Не удалось сохранить данные '$key'", e)
+            }
+        }
+    }
+
+    fun close() = saveAll()
+
+    private fun entry(key: String): Entry = entries.getOrPut(key) {
+        val table = LuaJson.fromJson(backend.load(key)).checktable()
+        Entry(table, LuaJson.toJsonObject(table, rootName(key)))
+    }
+
+    private fun save(key: String) {
+        val entry = entries[key] ?: return
+        val json = LuaJson.toJsonObject(entry.table, rootName(key))
+        if (json == entry.lastSaved) return
+        backend.save(key, json)
+        entry.lastSaved = json
+    }
+
+    private fun rootName(key: String) = if (key == JsonBackend.GLOBAL_KEY) "mc.data" else "player.data"
+
+    companion object {
+        private val logger: Logger = LoggerFactory.getLogger("PxRP/Storage")
     }
 }

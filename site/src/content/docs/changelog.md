@@ -5,6 +5,123 @@ description: Release history for PxIgnis.
 
 ## Unreleased
 
+### Breaking
+
+- **Supported Minecraft versions are now 1.21.11 and 26.3.** Minecraft 1.21.10 is no longer built or published.
+  One jar per version (`PxIgnis-<version>-fabric-1.21.11.jar`, `PxIgnis-<version>-fabric-26.3.jar`).
+- **Unknown registry ids are errors.** `world:spawn`, `world:setBlock`, `world:setBlockState`, `world:fill`,
+  `world:getEntities` (type filter), `player:give` and `mc.createItem` throw `<what> '<id>' не найден` instead of
+  silently producing air or a pig.
+- **`player_block_break`, `player_block_place`, `player_use_item` and `entity.type`** report namespaced ids
+  (`minecraft:stone`); they used to report the numeric registry id.
+- **Vectors:** assigning an unknown field (`v.w = 1`) throws. `{x, y, z}` arrays are accepted everywhere a vector is.
+- **Sandbox:** `load` never loads bytecode (`mode` containing `b` is an error, the default is `"t"`), `string.dump` is
+  removed. `mc.loadStructureFile` takes a path relative to `config/ignis` and rejects anything outside it.
+  Modules and structure files reached through a symlink that leaves `config/ignis` are no longer found.
+- **`world.raining` / `world.thundering`** read the level's weather flags. `thundering = true` also turns rain on,
+  `raining = false` also turns thunder off.
+- **Async:** Lua runs on the server thread only. `async.task(fn, ...)` and `async.run(fn, ...)` no longer take an
+  executor; the `"threadpool"` executor and `async.mutex` are removed. `task:try()` is `task:wait(true)`;
+  `async.allSettled(list)` is `async.all(list, { settled = true })`. A reload cancels pending tasks, waiters and
+  `fetch` requests. `async.fetch` rejects a URL without scheme and a timeout <= 0.
+- **GUI containers:** while `container:onClick` is set, every click in the menu (GUI slots, the player's own slots
+  with `inGui = false`, clicks outside the window with `slot = nil`) goes through the callback and passes only if it
+  returns `true`; `nil`/`false`/an error cancel it. The callback gets a sixth argument `inGui`. `LockableInventory` is
+  gone (`mc.createInventory` returns a plain inventory); `inv:getItem`/`setItem` with a slot out of range and
+  `inv:open` with a size that is not 9 × 1..6 raise errors. `chestgui` keys its containers by `player.uuid`, a button
+  must return `true` to let a click through and shift-click from the player's inventory is cancelled.
+- **Events:** `player_hurt`, `entity_hurt`, `player_death` and `entity_death` take `(victim, amount, msgId, attacker)`
+  with the full `msgId`; `player_hurt`/`entity_hurt` used to be `(victim, damageType, amount[, source])` with a
+  shortened type. `player_block_place` reports the placement position and the placed block and fires inside the
+  placement (once, cancellable), not on every right-click with a block item. `player_pickup_item` fires once per
+  pickup attempt, after the pickup delay; `player_consume_item` is for players only and a cancel resends the inventory.
+- **`mc.broadcast(text, overlay)` / `world:broadcastInRange(text, pos, range, overlay)`:** `overlay` is a boolean
+  (action bar); a number is an error and the title timings are not touched. `simple.defaultOverlay` is removed.
+- `entity.pos = v` teleports (a player gets the position packet) instead of `setPos`; `player.gamemode = "typo"`,
+  an unknown boss bar colour/style and an out-of-range `item.count` raise errors; boss bar players are removed on
+  leave; the sidebar is keyed by UUID; block state properties take strictly typed values (`boolean` for flags, an
+  integer within range for numbers).
+- **Regions:** a region covers at most 1024 chunks (`world:createRegion`/`region:setBounds` raise an error beyond
+  that); a destroyed region's methods raise errors. The client wireframe debugging (`/ignis debug regions`, the five
+  `Region*Payload` packets, the client entrypoint) is removed until real rendering exists. `entity_enter` /
+  `entity_leave` follow region membership, so a teleport across dimensions produces one of each; chunks are computed
+  with `floor`, so negative coordinates land in the right chunk; region `entity_death` / `player_death` now actually
+  fire (they were never called).
+- **Commands:** `choice=a,b` registers one Brigadier literal per option (vanilla parsing, errors and completion;
+  non-ASCII options work); an option with a space, an empty or a duplicate option is an error at `register`.
+  The `target` argument type is removed (use `player`). `int` arguments arrive as integers, `block_pos` as a `Vector`.
+  Repeating an argument name in one syntax string is an error at `register`.
+- **Persistent data** (`mc.data`, `player.data`) are plain Lua tables; invalid values (functions, userdata, cycles,
+  `NaN`, keys that are not strings or integers) fail when the table is **saved**, with a path such as
+  `data.shop.items[3]: function`, not at assignment. A table with keys exactly `1..n` is a JSON list, any other
+  table an object. A corrupt file is renamed to `<name>.corrupt-<time>`. Data is also saved every 5 minutes.
+- **`world.players`** returns a fresh wrapper table for each player on every access (the per-world cache is gone).
+- **`nova.sync` is removed.** Use `async.parallel` for heavy calculations.
+- **The `\{ … }` lambda syntax and the `--# nova syntax` pragma are removed.** Write `function(...) ... end`.
+- **Reading an undefined global is an error** (`global 'x' is not defined`). Test for an optional global with
+  `rawget(_G, "x")`.
+- **The `vec` metatable is frozen**, so workers can share it: `getmetatable(v).name = ...` raises
+  `attempt to modify a frozen table`.
+- **Wrappers are strict.** Assigning an unknown field, a read-only field or a method on any wrapper (entity, player,
+  world, item stack, inventory, container, boss bar, sidebar, hologram, region, structure) raises an error instead
+  of silently storing the value. Keep per-object state in your own table.
+- **`mob:setAI` keeps the mob's Brain.** It no longer wipes it (`removeAllBehaviors` was not undone by `clearAI`, so
+  villagers and piglins stayed without behaviour for good): brain-driven mobs get the Lua goal next to their own
+  behaviour, so vanilla behaviour keeps running while the goal runs. A goal pausing (`Goal.stop()`) no longer ends
+  the Lua AI; a Lua AI error is logged with the behaviour id.
+
+### New API
+
+- **`async.parallel(fn)`** runs a Lua function on a pool thread in an isolated state and waits for the result.
+  Captures and arguments are copied on every call; `table.freeze(t)` tables, `vec` and the shared objects
+  `async.map()`, `async.counter()` and `async.channel()` cross by reference or copy as described in the Async API.
+  `/ignis reload` cancels running and queued calls.
+- **`table.freeze(t)` / `table.isfrozen(t)`**: deep, permanent read-only tables.
+
+### Bugfixes
+
+- `Vector`: all vectors compared equal to each other and field access threw `Vector expected, got userdata`
+  (`LuaUserdata(this)` was compiled to a reference to the companion object).
+- The string metatable belonged to the first Lua state that loaded the string library, so `s:method()` kept using
+  that state's `string` table after a script reload. Every state now has its own.
+- `Vector.ZERO` was a shared mutable singleton; writing to a "zero" vector changed every other one.
+- A script error at server start no longer leaves the server without a runtime: `/ignis reload` keeps working and
+  event handlers of the mod and its mixins behave like vanilla until a runtime exists.
+- `EventBus`: adding or removing handlers from inside a handler no longer skips or double-calls neighbours; a handler
+  removed by a neighbour is not called later in the same dispatch.
+- Coroutine resume wrote one register too many (`FIXME cc - 1`), which could throw `ArrayIndexOutOfBoundsException`
+  when the resumed call sat at the top of the frame.
+- Yielding from a Lua callback inside a Java library function (`string.gsub`, `table.sort`) or inside a Lua closure
+  called through `pcall` / `xpcall` / a metamethod used to continue the Java function and return a corrupted
+  result. It now raises `attempt to yield across a C-call boundary` (`pcall(coroutine.yield, ...)` and
+  `pcall(continuableFn)` still suspend).
+- Persistent data: a numeric-looking string no longer turns into a number, `2^40` and `{[1001] = 1}` survive a
+  reload, and a corrupt data file is renamed instead of silently emptied and overwritten.
+- `init` fired twice at server start (once from the script load, once more after `server_start`).
+- `player_block_place` fires, and can be cancelled, for every block item. It was hooked inside
+  `BlockItem.placeBlock`: beds override that method without calling `super` (no event at all), and doors and other
+  tall blocks set their upper half first, so a cancel left it standing.
+- `world:spawnHologram` with an invalid option (`{ billboard = "typo" }`) raised the error but left a registered
+  hologram behind.
+- Async callbacks (`fetch` results, parallel results, task starts, coroutine resumes, channel wake-ups) never run
+  inline any more: they are queued and run from the server tick, so a callback cannot re-enter the code that
+  registered it (`promise:resolve()` returns before the waiting coroutine continues). A chain of wake-ups is still
+  worked off within the same tick. A channel `receive` that was woken while registering no longer resumes its
+  coroutine twice. `async.run`, `task:wait`, `async.all`, a blocking channel `send` / `receive` and calls of
+  `async.parallel` functions outside a coroutine raise an error before starting any work. A parallel function
+  that raises a non-string error object reports it as a string.
+
+### Internal
+
+- Multi-version build: `-PtargetVersion=1.21.11|26.3` selects `gradle/versions/<v>.properties`. 1.21.11 is built with
+  Loom remapping, 26.3 uses the unobfuscated Loom flavour (no mappings, Java 25).
+- All sources now use Mojang mappings (previously Yarn). Version-specific code lives in `src/version-<v>/`
+  (`Compat`, per-version mixins and access widener).
+- Gradle 9.8, Fabric Loom 1.19, Kotlin Gradle plugin 2.3.21.
+- `ContainerManager` is no longer a singleton: `IgnisRuntime` owns it and GUI inventories hold a reference to it.
+  `EntityWrap.sharedPlayerCache` / `sharedTickProvider` and `PlayerListWrapper` are gone; see the `world.players` note.
+- Build: Loom pinned to release 1.19.4 (was `1.19-SNAPSHOT`), the Kotlin and fabric-language-kotlin versions live in `gradle.properties` / `gradle/versions/*.properties` once, `mavenLocal()` and the unused maven publication are gone, the `fabric.mod.json` Kotlin dependency requires 1.13.8+kotlin.2.3.0, CI uploads only the two versioned jars. `ServerPlayNetworkHandlerMixin` is shared (`Compat.isThrowClick` / `isOutsideClick`); `Compat.fastCos/fastSin/isAdmin` are replaced by `Mth` / `ServerPlayer.isAdmin()`.
+
 ## 0.17.1 — CI and bootstrap fixes (2026-08-01)
 
 ### Bugfixes

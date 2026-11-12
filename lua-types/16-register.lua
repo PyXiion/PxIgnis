@@ -14,13 +14,12 @@
 ---   text        -- chat component (string)
 ---   word        -- single word (string)
 ---   player      -- online player name (Player wrapper)
----   target      -- alias of player
 ---   entity      -- entity selector (Entity wrapper)
 ---   int         -- integer
 ---   double      -- double
 ---   float       -- float
 ---   bool        -- boolean
----   block_pos   -- block position ({x,y,z} table)
+---   block_pos   -- block position (Vector)
 ---   choice=...  -- constrained choice
 ---
 ---@param syntax string

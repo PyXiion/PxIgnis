@@ -1,6 +1,5 @@
 package ru.pyxiion.ignis
 
-import kotlinx.coroutines.cancel
 import me.lucko.fabric.api.permissions.v0.Permissions
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
@@ -12,348 +11,254 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.event.player.*
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
-import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.world.item.BlockItem
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.commands.Commands
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.network.chat.Component
 import net.minecraft.world.InteractionHand
+import net.minecraft.world.InteractionResult
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaValue
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import ru.pyxiion.ignis.api.PlayerMoveDispatcher
 import ru.pyxiion.ignis.api.Vector
-import ru.pyxiion.ignis.api.manager.ContainerManager
+import ru.pyxiion.ignis.api.manager.BossBarManager
+import ru.pyxiion.ignis.api.manager.HologramManager
 import ru.pyxiion.ignis.api.manager.MobAIManager
 import ru.pyxiion.ignis.api.manager.RegionManager
 import ru.pyxiion.ignis.api.manager.SidebarManager
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
-import ru.pyxiion.ignis.network.RegionCapWarningPayload
-import ru.pyxiion.ignis.network.RegionInterestPayload
-import ru.pyxiion.ignis.network.RegionRemovePayload
-import ru.pyxiion.ignis.network.RegionSyncPayload
-import ru.pyxiion.ignis.network.RegionUpsertPayload
-import ru.pyxiion.ignis.storage.JsonBackend
-import ru.pyxiion.ignis.storage.StorageManager
 
 class PxIgnis : ModInitializer {
     companion object {
         const val MOD_ID = "pxignis"
 
+        /** 5 minutes at 20 TPS. */
+        private const val AUTOSAVE_TICKS = 6000
+
         @JvmField
         val logger: Logger = LoggerFactory.getLogger(MOD_ID)
-        lateinit var instance: PxIgnis
-        var storageManager: StorageManager? = null
+
+        /**
+         * Рантайм, пока сервер запущен. Все обработчики (Fabric и миксины) начинаются с проверки на null
+         * и без рантайма ведут себя как ваниль.
+         */
+        @JvmStatic
+        @Volatile
+        var runtimeOrNull: IgnisRuntime? = null
     }
 
-    lateinit var runtime: IgnisRuntime
-
-
     override fun onInitialize() {
-        instance = this
-
-        PayloadTypeRegistry.playS2C().register(RegionSyncPayload.ID, RegionSyncPayload.CODEC)
-        PayloadTypeRegistry.playS2C().register(RegionUpsertPayload.ID, RegionUpsertPayload.CODEC)
-        PayloadTypeRegistry.playS2C().register(RegionRemovePayload.ID, RegionRemovePayload.CODEC)
-        PayloadTypeRegistry.playS2C().register(RegionCapWarningPayload.ID, RegionCapWarningPayload.CODEC)
-        PayloadTypeRegistry.playC2S().register(RegionInterestPayload.ID, RegionInterestPayload.CODEC)
-
-        ServerPlayNetworking.registerGlobalReceiver(RegionInterestPayload.ID) { payload, ctx ->
-            val player = ctx.player()
-            if (!Compat.isAdmin(player)) {
-                logger.debug("rejected region-interest from non-admin {}", player.name.string)
-                return@registerGlobalReceiver
-            }
-            RegionManager.setOptedIn(player.uuid, payload.enabled)
-        }
 
         ServerLifecycleEvents.SERVER_STARTED.register(fun(server) {
-            try {
-                val storagePath = FabricLoader.getInstance().configDir.resolve("ignis/storage")
-                storageManager = StorageManager(JsonBackend(storagePath))
-                runtime = IgnisRuntime(server, storageManager!!)
-                runtime.reload()
-                PlayerMoveDispatcher.handler = { player, from, to ->
-                    runtime.eventManager.fire(
-                        "player_move",
-                        PlayerWrap.wrap(player),
-                        Vector.fromMc(from).toLuaValue(),
-                        Vector.fromMc(to).toLuaValue()
-                    )
-                }
-                runtime.eventManager.fire("server_start")
-                runtime.eventManager.fire("init")
-
+            val rt = try {
+                IgnisRuntime(server)
             } catch (e: Throwable) {
                 logger.error("Ошибка при запуске PxIgnis: ${e.message}", e)
+                return
+            }
+            runtimeOrNull = rt
+            PlayerMoveDispatcher.handler = { player, from, to ->
+                runtimeOrNull?.eventManager?.fire("player_move") {
+                    arrayOf(
+                        PlayerWrap.wrap(player),
+                        Vector.fromMc(from).toLuaValue(),
+                        Vector.fromMc(to).toLuaValue(),
+                    )
+                }
+            }
+            // Ошибка скрипта не должна лишать сервер рантайма и `/ignis reload`.
+            try {
+                rt.reload()
+                rt.eventManager.fire("server_start")
+            } catch (e: Throwable) {
+                logger.error("Ошибка при запуске скриптов PxIgnis: ${e.message}", e)
             }
         })
 
-        ServerLifecycleEvents.SERVER_STOPPING.register(fun(server) {
-            try {
-                runtime.modScope.cancel()
-            } catch (_: UninitializedPropertyAccessException) {
-            }
-            try {
-                if (storageManager != null) {
-                    runtime.scheduler.clear()
-                    runtime.eventManager.fire("uninit")
-                    runtime.eventManager.fire("server_stop")
-                }
-            } catch (_: UninitializedPropertyAccessException) {
-            }
-            try {
-                runtime.api.shutdownAsync()
-            } catch (_: UninitializedPropertyAccessException) {
-            }
-            storageManager?.close()
+        // SERVER_STOPPING срабатывает в начале stopServer, игроки отключаются уже после него:
+        // ссылку на рантайм держим до SERVER_STOPPED, чтобы DISCONNECT выполнил очистку.
+        ServerLifecycleEvents.SERVER_STOPPING.register(fun(_) {
+            runtimeOrNull?.shutdown()
         })
 
         ServerLifecycleEvents.SERVER_STOPPED.register(fun(server) {
-            RegionManager.closeAll(server)
+            PlayerMoveDispatcher.handler = null
+            runtimeOrNull = null
         })
 
-        ServerTickEvents.END_SERVER_TICK.register(fun(server) {
-            if (::runtime.isInitialized) {
-                runtime.scheduler.tick()
-                val em = runtime.eventManager
-                if (em.hasHandlers("tick")) {
-                    em.fire("tick")
-                    em.tick()
-                }
-                RegionManager.tick()
-                RegionManager.tickClientSync(server)
+        // Ванильный /reload пересобирает дерево команд, поэтому Lua-команды регистрируются заново вместе со скриптами.
+        ServerLifecycleEvents.END_DATA_PACK_RELOAD.register { _, _, success ->
+            if (!success) return@register
+            val rt = runtimeOrNull ?: return@register
+            try {
+                rt.reload()
+            } catch (e: Throwable) {
+                logger.error("Ошибка при перезагрузке скриптов PxIgnis: ${e.message}", e)
             }
+        }
+
+        ServerTickEvents.END_SERVER_TICK.register(fun(server) {
+            HologramManager.tick()
+            val rt = runtimeOrNull ?: return
+            // After the scheduler, so a coroutine whose sleep ends this tick resumes this tick.
+            rt.scheduler.tick()
+            rt.api.asyncLib.drain()
+            rt.eventManager.fire("tick")
+            RegionManager.tick()
+            if (server.tickCount % AUTOSAVE_TICKS == 0) rt.storage.saveAll()
         })
 
         ServerEntityEvents.ENTITY_LOAD.register { entity, world ->
-            if (::runtime.isInitialized) {
-                MobAIManager.onEntityLoad(entity, world)
-                RegionManager.onEntityChunkLoad(entity)
-                runtime.eventManager.fire("entity_spawn", EntityFactory.wrap(entity))
-            }
+            // До создания рантайма держателей голограмм нет, поэтому оставшиеся с прошлого запуска удаляются здесь.
+            HologramManager.onEntityLoad(entity)
+            val rt = runtimeOrNull ?: return@register
+            if (entity.isRemoved) return@register
+            MobAIManager.onEntityLoad(entity, world)
+            RegionManager.onEntityChunkLoad(entity)
+            rt.eventManager.fire("entity_spawn") { arrayOf(EntityFactory.wrap(entity)) }
         }
 
         ServerEntityEvents.ENTITY_UNLOAD.register { entity, world ->
-            if (::runtime.isInitialized) {
-                RegionManager.onEntityChunkUnload(entity)
-                runtime.eventManager.fire("entity_despawn", EntityFactory.wrap(entity))
-            }
+            val rt = runtimeOrNull ?: return@register
+            RegionManager.onEntityChunkUnload(entity)
+            rt.eventManager.fire("entity_despawn") { arrayOf(EntityFactory.wrap(entity)) }
         }
 
         ServerPlayConnectionEvents.INIT.register(fun(handler, server) {
-            if (storageManager != null) {
-                val luaPlayer = PlayerWrap.wrap(handler.player)
-                val results = runtime.eventManager.fireWithResults("player_join_init", luaPlayer)
-                if (results.any { it.isboolean() && !it.toboolean() }) {
-                    handler.disconnect(Component.literal("You are not allowed to join this server"))
-                }
+            val rt = runtimeOrNull ?: return
+            if (rt.eventManager.fireCancellable("player_join_init") { arrayOf(PlayerWrap.wrap(handler.player)) }) {
+                handler.disconnect(Component.literal("You are not allowed to join this server"))
             }
         })
 
         ServerPlayerEvents.JOIN.register { player ->
-            if (::runtime.isInitialized) {
-                runtime.eventManager.fire("player_join", PlayerWrap.wrap(player))
-            }
+            val rt = runtimeOrNull ?: return@register
+            rt.eventManager.fire("player_join") { arrayOf(PlayerWrap.wrap(player)) }
         }
 
         ServerPlayerEvents.AFTER_RESPAWN.register { oldPlayer, newPlayer, alive ->
-            if (::runtime.isInitialized) {
-                runtime.api.invalidatePlayer(newPlayer.uuid)
-                runtime.eventManager.fire("player_respawn", PlayerWrap.wrap(newPlayer), LuaValue.valueOf(alive))
-            }
+            val rt = runtimeOrNull ?: return@register
+            rt.eventManager.fire("player_respawn") { arrayOf(PlayerWrap.wrap(newPlayer), LuaValue.valueOf(alive)) }
         }
 
         ServerPlayConnectionEvents.DISCONNECT.register(fun(handler, server) {
-            runtime.api.invalidatePlayer(handler.player.uuid)
-            ContainerManager.closeAll(handler.player)
-            if (storageManager != null) {
-                val luaPlayer = PlayerWrap.wrap(handler.player)
-                runtime.eventManager.fire("player_leave", luaPlayer)
-            }
-            storageManager?.removePlayerData(handler.player.uuid.toString())
+            val rt = runtimeOrNull ?: return
+            rt.containers.closeAll(handler.player)
+            rt.eventManager.fire("player_leave") { arrayOf(PlayerWrap.wrap(handler.player)) }
+            rt.storage.removePlayerData(handler.player.uuid.toString())
             SidebarManager.removeForPlayer(handler.player)
-            MobAIManager.mobWrappers.remove(handler.player.uuid)
-            RegionManager.onPlayerLeft(handler.player.uuid)
+            BossBarManager.onPlayerLeft(handler.player)
         })
 
         ServerLivingEntityEvents.ALLOW_DEATH.register { entity, source, amount ->
-            if (::runtime.isInitialized) {
-                val entityW = EntityFactory.wrap(entity)
-                val name = LuaValue.valueOf(source.msgId)
-                val damage = LuaValue.valueOf(amount.toDouble())
-
-                val results = runtime.eventManager.fireWithResults(
-                    "entity_death",
-                    entityW,
-                    name,
-                    damage,
-                )
-                if (results.any { it.isboolean() && !it.toboolean() }) return@register false
-
-                if (entity is ServerPlayer) {
-                    val results = runtime.eventManager.fireWithResults(
-                        "player_death",
-                        entityW,
-                        name,
-                        damage,
-                    )
-
-                    if (results.any { it.isboolean() && !it.toboolean() }) return@register false
-                }
-            }
-            true
+            val rt = runtimeOrNull ?: return@register true
+            val args by lazy { damageArgs(entity, source, amount) }
+            val bus = rt.eventManager
+            val cancelled = bus.fireCancellable("entity_death") { args } ||
+                (entity is ServerPlayer && bus.fireCancellable("player_death") { args })
+            if (!cancelled) RegionManager.onEntityDeath(entity, source.msgId, amount.toDouble())
+            !cancelled
         }
 
         ServerMessageEvents.ALLOW_CHAT_MESSAGE.register(fun(message, sender, networkHandler): Boolean {
-            if (storageManager != null) {
-                val luaPlayer = PlayerWrap.wrap(sender)
-                val text = message.signedBody.content
-                val results = runtime.eventManager.fireWithResults("player_chat", luaPlayer, LuaValue.valueOf(text))
-                if (results.any { it.isboolean() && !it.toboolean() }) return false
+            val rt = runtimeOrNull ?: return true
+            return !rt.eventManager.fireCancellable("player_chat") {
+                arrayOf(PlayerWrap.wrap(sender), LuaValue.valueOf(message.signedBody.content))
             }
-            return true
         })
 
         PlayerBlockBreakEvents.BEFORE.register { world, player, pos, state, _ ->
-            if (storageManager != null && player is ServerPlayer) {
-                val luaPlayer = PlayerWrap.wrap(player)
-                val posTable = Vector.of(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
-                val blockId = LuaValue.valueOf(BuiltInRegistries.BLOCK.getId(state.block).toString())
-                val results = runtime.eventManager.fireWithResults("player_block_break", luaPlayer, posTable, blockId)
-                if (results.any { it.isboolean() && !it.toboolean() }) return@register false
+            val rt = runtimeOrNull ?: return@register true
+            if (player !is ServerPlayer) return@register true
+            !rt.eventManager.fireCancellable("player_block_break") {
+                arrayOf(
+                    PlayerWrap.wrap(player),
+                    Vector.of(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue(),
+                    LuaValue.valueOf(BuiltInRegistries.BLOCK.getKey(state.block).toString()),
+                )
             }
-            true
-        }
-
-        UseBlockCallback.EVENT.register { player, world, hand, hitResult ->
-            if (storageManager != null && player is ServerPlayer && !world.isClientSide) {
-                val stack = player.getItemInHand(hand)
-                if (stack.item is BlockItem) {
-                    val luaPlayer = PlayerWrap.wrap(player)
-                    val pos = hitResult.blockPos
-                    val posTable = Vector.of(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
-                    val blockId = LuaValue.valueOf(BuiltInRegistries.BLOCK.getId((stack.item as BlockItem).block).toString())
-                    val results =
-                        runtime.eventManager.fireWithResults("player_block_place", luaPlayer, posTable, blockId)
-                    if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.world.InteractionResult.FAIL
-                }
-            }
-            net.minecraft.world.InteractionResult.PASS
         }
 
         UseItemCallback.EVENT.register { player, world, hand ->
-            if (storageManager != null && player is ServerPlayer && !world.isClientSide) {
-                val luaPlayer = PlayerWrap.wrap(player)
-                val handStr = if (hand == InteractionHand.MAIN_HAND) "main" else "off"
+            val rt = runtimeOrNull ?: return@register InteractionResult.PASS
+            if (player !is ServerPlayer || world.isClientSide) return@register InteractionResult.PASS
+            val cancelled = rt.eventManager.fireCancellable("player_use_item") {
                 val itemStack = player.getItemInHand(hand)
-                val itemWrapper = if (itemStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(itemStack)
-                val itemId = LuaValue.valueOf(BuiltInRegistries.ITEM.getId(itemStack.item).toString())
-                val results = runtime.eventManager.fireWithResults(
-                    "player_use_item",
-                    luaPlayer,
-                    LuaValue.valueOf(handStr),
-                    itemWrapper,
-                    itemId
+                arrayOf(
+                    PlayerWrap.wrap(player),
+                    LuaValue.valueOf(if (hand == InteractionHand.MAIN_HAND) "main" else "off"),
+                    if (itemStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(itemStack),
+                    LuaValue.valueOf(BuiltInRegistries.ITEM.getKey(itemStack.item).toString()),
                 )
-                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.world.InteractionResult.FAIL
             }
-            net.minecraft.world.InteractionResult.PASS
+            if (cancelled) InteractionResult.FAIL else InteractionResult.PASS
         }
 
         AttackEntityCallback.EVENT.register { player, world, hand, entity, hitResult ->
-            if (storageManager != null && player is ServerPlayer && !world.isClientSide) {
-                val luaPlayer = PlayerWrap.wrap(player)
-                val luaEntity = EntityFactory.wrap(entity)
-                val results = runtime.eventManager.fireWithResults("player_attack_entity", luaPlayer, luaEntity)
-                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.world.InteractionResult.FAIL
+            val rt = runtimeOrNull ?: return@register InteractionResult.PASS
+            if (player !is ServerPlayer || world.isClientSide) return@register InteractionResult.PASS
+            val cancelled = rt.eventManager.fireCancellable("player_attack_entity") {
+                arrayOf(PlayerWrap.wrap(player), EntityFactory.wrap(entity))
             }
-            net.minecraft.world.InteractionResult.PASS
+            if (cancelled) InteractionResult.FAIL else InteractionResult.PASS
         }
 
         UseEntityCallback.EVENT.register { player, world, hand, entity, hitResult ->
-            if (storageManager != null && player is ServerPlayer && !world.isClientSide) {
-                val luaPlayer = PlayerWrap.wrap(player)
-                val luaEntity = EntityFactory.wrap(entity)
-                val handStr = if (hand == InteractionHand.MAIN_HAND) "main" else "off"
-                val results = runtime.eventManager.fireWithResults(
-                    "player_interact_entity",
-                    luaPlayer,
-                    luaEntity,
-                    LuaValue.valueOf(handStr)
+            val rt = runtimeOrNull ?: return@register InteractionResult.PASS
+            if (player !is ServerPlayer || world.isClientSide) return@register InteractionResult.PASS
+            val cancelled = rt.eventManager.fireCancellable("player_interact_entity") {
+                arrayOf(
+                    PlayerWrap.wrap(player),
+                    EntityFactory.wrap(entity),
+                    LuaValue.valueOf(if (hand == InteractionHand.MAIN_HAND) "main" else "off"),
                 )
-                if (results.any { it.isboolean() && !it.toboolean() }) return@register net.minecraft.world.InteractionResult.FAIL
             }
-            net.minecraft.world.InteractionResult.PASS
+            if (cancelled) InteractionResult.FAIL else InteractionResult.PASS
         }
 
         ServerLivingEntityEvents.ALLOW_DAMAGE.register { entity, source, amount ->
-            if (storageManager != null) {
-                if (entity is ServerPlayer) {
-                    val luaPlayer = PlayerWrap.wrap(entity)
-                    val results = runtime.eventManager.fireWithResults(
-                        "player_hurt",
-                        luaPlayer,
-                        LuaValue.valueOf(source.msgId.substringAfterLast(".")),
-                        LuaValue.valueOf(amount.toDouble())
-                    )
-                    if (results.any { it.isboolean() && !it.toboolean() }) return@register false
-                } else {
-                    val luaEntity = EntityFactory.wrap(entity)
-                    val sourceEntity = source.entity?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL
-                    val results = runtime.eventManager.fireWithResults(
-                        "entity_hurt",
-                        luaEntity,
-                        LuaValue.valueOf(source.msgId.substringAfterLast(".")),
-                        LuaValue.valueOf(amount.toDouble()),
-                        sourceEntity
-                    )
-                    if (results.any { it.isboolean() && !it.toboolean() }) return@register false
-                }
-            }
-            true
+            val rt = runtimeOrNull ?: return@register true
+            val event = if (entity is ServerPlayer) "player_hurt" else "entity_hurt"
+            !rt.eventManager.fireCancellable(event) { damageArgs(entity, source, amount) }
         }
 
         ServerLivingEntityEvents.AFTER_DAMAGE.register { entity, source, _, damageTaken, blocked ->
-            if (storageManager != null) {
-                if (entity is ServerPlayer) {
-                    val luaPlayer = PlayerWrap.wrap(entity)
-                    runtime.eventManager.fire(
-                        "player_damage", luaPlayer,
+            val rt = runtimeOrNull ?: return@register
+            if (entity is ServerPlayer) {
+                rt.eventManager.fire("player_damage") {
+                    arrayOf(
+                        PlayerWrap.wrap(entity),
                         LuaValue.valueOf(source.msgId.substringAfterLast(".")),
                         LuaValue.valueOf(damageTaken.toDouble()),
-                        LuaValue.valueOf(blocked)
+                        LuaValue.valueOf(blocked),
                     )
-                } else {
-                    val luaEntity = EntityFactory.wrap(entity)
-                    val sourceEntity = source.entity?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL
-                    runtime.eventManager.fire(
-                        "entity_damage", luaEntity,
+                }
+            } else {
+                rt.eventManager.fire("entity_damage") {
+                    arrayOf(
+                        EntityFactory.wrap(entity),
                         LuaValue.valueOf(source.msgId.substringAfterLast(".")),
                         LuaValue.valueOf(damageTaken.toDouble()),
-                        sourceEntity,
-                        LuaValue.valueOf(blocked)
+                        source.entity?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL,
+                        LuaValue.valueOf(blocked),
                     )
                 }
             }
         }
 
         ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register { world, entity, killedEntity, damageSource ->
-            if (storageManager != null && entity is ServerPlayer) {
-                val luaPlayer = PlayerWrap.wrap(entity)
-                val luaKilled = EntityFactory.wrap(killedEntity)
-                runtime.eventManager.fire(
-                    "player_kill",
-                    luaPlayer,
-                    luaKilled,
-                    LuaValue.valueOf(damageSource.msgId.substringAfterLast("."))
+            val rt = runtimeOrNull ?: return@register
+            if (entity !is ServerPlayer) return@register
+            rt.eventManager.fire("player_kill") {
+                arrayOf(
+                    PlayerWrap.wrap(entity),
+                    EntityFactory.wrap(killedEntity),
+                    LuaValue.valueOf(damageSource.msgId.substringAfterLast(".")),
                 )
             }
         }
@@ -364,8 +269,13 @@ class PxIgnis : ModInitializer {
                     .requires(Permissions.require("px.ignis", 4))
                     .then(
                         Commands.literal("reload").executes { ctx ->
+                            val rt = runtimeOrNull
+                            if (rt == null) {
+                                ctx.source.sendSuccess({ Component.literal("PxIgnis не запущен") }, false)
+                                return@executes 0
+                            }
                             try {
-                                runtime.reload()
+                                rt.reload()
                                 ctx.source.sendSuccess({
                                     Component.literal("Перезагрузилось")
                                 }, false)
@@ -386,6 +296,13 @@ class PxIgnis : ModInitializer {
                     ))
         })
     }
-
-
 }
+
+/** Arguments of `player_hurt`, `entity_hurt`, `player_death`, `entity_death`: victim, amount, full msgId, attacker or nil. */
+private fun damageArgs(victim: net.minecraft.world.entity.LivingEntity, source: net.minecraft.world.damagesource.DamageSource, amount: Float): Array<LuaValue> =
+    arrayOf(
+        EntityFactory.wrap(victim),
+        LuaValue.valueOf(amount.toDouble()),
+        LuaValue.valueOf(source.msgId),
+        source.entity?.let { EntityFactory.wrap(it) } ?: LuaValue.NIL,
+    )

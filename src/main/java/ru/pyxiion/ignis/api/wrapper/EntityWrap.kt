@@ -1,9 +1,12 @@
 package ru.pyxiion.ignis.api.wrapper
 
+import ru.pyxiion.ignis.wrapObject
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.EquipmentSlot
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.ai.attributes.Attributes
+import net.minecraft.core.Holder
+import net.minecraft.world.effect.MobEffect
 import net.minecraft.world.effect.MobEffectInstance
 import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
@@ -11,30 +14,26 @@ import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
+import net.minecraft.world.level.portal.TeleportTransition
 import net.minecraft.world.phys.Vec3
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 import org.luaj.vm2.lib.VarArgFunction
+import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.api.util.performRaycast
 import ru.pyxiion.ignis.unwrap
+import ru.pyxiion.ignis.unwrapOrNull
 import java.util.*
 
 object EntityWrap {
-    var sharedPlayerCache: MutableMap<UUID, LuaValue> = mutableMapOf()
-    var sharedTickProvider: () -> Long = { 0L }
-
     fun wrap(entity: Entity): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(MetaTableRegistry.ENTITY)
-        t.rawset("__pxrp_type", LuaValue.valueOf("entity"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(entity))
-        return t
+        return wrapObject(MetaTableRegistry.ENTITY, "entity", entity)
     }
 
     private val attributeAccessors = mapOf(
@@ -64,7 +63,7 @@ object EntityWrap {
 
     internal val BUILT = metaTable<Entity> {
         prop("uuid") { LuaValue.valueOf(uuid.toString()) }
-        prop("type") { LuaValue.valueOf(BuiltInRegistries.ENTITY_TYPE.getId(type).toString()) }
+        prop("type") { LuaValue.valueOf(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString()) }
         prop("name") { LuaValue.valueOf(name.tryCollapseToString() ?: name.string) }
         prop("displayName") { LuaValue.valueOf(displayName?.string ?: name.string) }
         prop(
@@ -75,14 +74,16 @@ object EntityWrap {
             },
             set = { v -> customName = if (v.isnil()) null else Component.literal(v.tojstring()) }
         )
-        prop("world") { WorldWrap.wrap(level() as ServerLevel, sharedPlayerCache, sharedTickProvider) }
+        prop("world") { WorldWrap.wrap(level() as ServerLevel) }
 
         prop(
             "pos",
             get = { Vector.fromMc(position()).toLuaValue() },
             set = { v ->
                 val vec = v.toVec3d()
-                setPos(vec.x, vec.y, vec.z)
+                // A real teleport: for a player it sends the position packet, for others it resets riding and tracking.
+                val level = level() as? ServerLevel ?: throw LuaError("entity.pos: сущность не в серверном мире")
+                teleport(TeleportTransition(level, Vec3(vec.x, vec.y, vec.z), deltaMovement, yRot, xRot, TeleportTransition.DO_NOTHING))
             }
         )
 
@@ -107,7 +108,7 @@ object EntityWrap {
         prop(
             "invulnerable",
             get = { if (isInvulnerable) LuaValue.TRUE else LuaValue.FALSE },
-            set = { v -> isInvulnerable = v.toboolean() }
+            set = { v -> Compat.setInvulnerable(this, v.toboolean()) }
         )
         prop(
             "isSneaking",
@@ -216,10 +217,7 @@ object EntityWrap {
             val e = self.unwrap<Entity>()
             val amount = args.arg(2).checkdouble().toFloat()
             val world = e.level() as ServerLevel
-            val sourceEntity = if (args.narg() >= 3 && args.arg(3).istable()) {
-                val uuid = args.arg(3).checktable().get("uuid")
-                if (uuid.isstring()) world.getEntity(UUID.fromString(uuid.tojstring())) else null
-            } else null
+            val sourceEntity = args.arg(3).unwrapOrNull<Entity>()
             val damageSource = when (sourceEntity) {
                 is Player -> world.damageSources().playerAttack(sourceEntity)
                 is LivingEntity -> world.damageSources().mobAttack(sourceEntity)
@@ -253,8 +251,7 @@ object EntityWrap {
             val particles = args.arg(5).optboolean(true)
             val icon = args.arg(6).optboolean(true)
 
-            val effect = BuiltInRegistries.MOB_EFFECT.get(Identifier.parse(effectId))
-                .orElseThrow { LuaError("Эффект '$effectId' не найден") }
+            val effect = effectHolder(effectId)
             val instance = MobEffectInstance(effect, duration, amplifier, false, particles, icon)
             LuaValue.valueOf(liv.addEffect(instance))
         }
@@ -264,8 +261,7 @@ object EntityWrap {
             val e = self.unwrap<Entity>()
             val liv = e as? LivingEntity ?: return@method LuaValue.NIL
             val effectId = args.arg(2).checkjstring()
-            val effect = BuiltInRegistries.MOB_EFFECT.get(Identifier.parse(effectId))
-                .orElseThrow { LuaError("Эффект '$effectId' не найден") }
+            val effect = effectHolder(effectId)
             LuaValue.valueOf(liv.removeEffect(effect))
         }
 
@@ -274,8 +270,7 @@ object EntityWrap {
             val e = self.unwrap<Entity>()
             val liv = e as? LivingEntity ?: return@method LuaValue.FALSE
             val effectId = args.arg(2).checkjstring()
-            val effect = BuiltInRegistries.MOB_EFFECT.get(Identifier.parse(effectId))
-                .orElseThrow { LuaError("Эффект '$effectId' не найден") }
+            val effect = effectHolder(effectId)
             LuaValue.valueOf(liv.hasEffect(effect))
         }
 
@@ -295,12 +290,18 @@ object EntityWrap {
         BUILT.apply(meta)
     }
 
+    /** The one effect lookup: a bad id is an error naming the id, not an exception from the registry. */
+    private fun effectHolder(id: String): Holder<MobEffect> {
+        val key = Identifier.tryParse(id) ?: throw LuaError("Эффект '$id' не найден")
+        return BuiltInRegistries.MOB_EFFECT.get(key).orElseThrow { LuaError("Эффект '$id' не найден") }
+    }
+
     private fun tagsTable(entity: Entity): LuaValue {
         val meta = LuaTable()
         meta.set("__index", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val tag = args.arg(2).tojstring()
-                return valueOf(entity.tags.contains(tag))
+                return valueOf(Compat.entityTags(entity).contains(tag))
             }
         })
         meta.set("__newindex", object : VarArgFunction() {
@@ -317,7 +318,7 @@ object EntityWrap {
         })
         meta.set("__pairs", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
-                val tags = entity.tags.toList()
+                val tags = Compat.entityTags(entity).toList()
                 val iterator = object : VarArgFunction() {
                     private var index = 0
                     override fun invoke(args: Varargs): Varargs {

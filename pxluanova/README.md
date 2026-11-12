@@ -1,13 +1,12 @@
 # PxLuaNova
 
-A modernized, maintained fork of LuaJ 3.0.2 with bug fixes from [wagyourtail/luaj](https://github.com/wagyourtail/luaj), [Cobalt](https://github.com/cc-tweaked/Cobalt), and a lambda literal extension. Distributed as a composite build subproject of [PxIgnis](https://github.com/PxRP/PxIgnis).
+A modernized, maintained fork of LuaJ 3.0.2 with bug fixes from [wagyourtail/luaj](https://github.com/wagyourtail/luaj) and [Cobalt](https://github.com/cc-tweaked/Cobalt). Distributed as a composite build subproject of [PxIgnis](https://github.com/PxRP/PxIgnis).
 
 ## Features
 
 - **Modern Java**: Requires Java 21+ — virtual threads for coroutines by default
 - **Bug fixes**: Comprehensive fixes from wagyourtail/luaj and Cobalt
 - **Enhanced stdlib**: Lua 5.3+ additions (`math.type`, multi-arg `math.min`/`max`, `math.atan(y, x)`)
-- **Lambda literal extension**: Opt-in per-file `\{ ... }` syntax (see below)
 - **API compatible**: Drop-in replacement for LuaJ 3.0.2 (`org.luaj.vm2.*` packages)
 
 ## Quick Start
@@ -27,60 +26,6 @@ globals.load("print('hello, world')").call();
 LuaValue result = globals.load("return 2 + 2").call();
 System.out.println(result.toint()); // prints 4
 ```
-
-## Lambda Literal Extension
-
-PxLuaNova adds a non-standard `\{ ... }` syntax for inline anonymous functions. Opt-in per file **on line 1**:
-
-```lua
---# nova syntax
-```
-
-This pragma enables the `\` + `{` two-character sequence to synthesize a lambda literal. Without it, `\` outside a string is a syntax error.
-
-### Forms
-
-**Named-arg lambda** — the body is an expression; it is implicitly returned:
-
-```lua
-local double = \{ x -> x * 2 }
-print(double(21))  -- 42
-```
-
-**Zero-arg expression** — no arrow, a single expression is implicitly returned:
-
-```lua
-local answer = \{ 40 + 2 }
-print(answer())    -- 42
-```
-
-**Zero-arg chunk** — use `return` for explicit values:
-
-```lua
-local get = \{
-  print("side effects OK")
-  return 42
-}
-```
-
-**Multi-arg lambda**:
-
-```lua
-local sum = \{ a, b, c -> a + b + c }
-print(sum(1, 2, 3))  -- 6
-```
-
-**Trailing-block sugar** — `\{ ... }` after a function call appends the lambda as the last argument. The body is always parsed as a chunk (no implicit return):
-
-```lua
-register("greet") \{ ctx ->
-  ctx.player:send("hello!")
-}
-```
-
-Desugars to `register("greet", function(ctx) ctx.player:send("hello!") end)`.
-
-Implementation: lexer-level synthesis in `LexState.java` (`TK_LAMBDA`/`TK_DARROW` tokens, per-file `lambdaSyntax` flag).
 
 ## Coroutines & Virtual Threads
 
@@ -129,11 +74,6 @@ globals.coroutineThreadFactory = LuaThread.PLATFORM_THREAD_FACTORY;
 - `synchronized`/`wait()`/`notify()` replaced with `ReentrantLock`/`Condition` for deadlock-free handoff
 - Configurable `coroutineThreadFactory` on `Globals` (virtual or platform threads)
 - `globals.running` made `volatile` for cross-thread visibility
-
-### Language extensions
-- Lambda literal `\{ ... }` syntax (opt-in per file via `--# nova syntax` pragma)
-- Named-arg (`->`), zero-arg expression, zero-arg chunk, and trailing-block forms
-- Per-file `lambdaSyntax` flag in `LexState` (no global toggle)
 
 ### Standard library
 - `math.type` — Lua 5.3+ type classification for numbers
@@ -184,4 +124,4 @@ PxLuaNova is API-compatible with LuaJ 3.0.2. The package names remain `org.luaj.
 
 ## License
 
-The LuaJ 3.0.2 base is MIT licensed — see the [upstream LICENSE](https://github.com/luaj/luaj/blob/master/LICENSE). My bug fixes and new features (virtual thread coroutines, lambda literal extension, etc.) are released under the GNU LGPL v3.0.
+The LuaJ 3.0.2 base is MIT licensed — see the [upstream LICENSE](https://github.com/luaj/luaj/blob/master/LICENSE). My bug fixes and new features (virtual thread coroutines, etc.) are released under the GNU LGPL v3.0.

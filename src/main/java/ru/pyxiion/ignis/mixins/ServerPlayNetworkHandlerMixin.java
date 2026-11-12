@@ -5,7 +5,6 @@ import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.network.protocol.game.ClientboundSetCursorItemPacket;
-import net.minecraft.world.inventory.ClickType;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.level.ServerPlayer;
 import org.luaj.vm2.LuaValue;
@@ -15,6 +14,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import ru.pyxiion.ignis.Compat;
 import ru.pyxiion.ignis.PxIgnis;
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap;
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap;
@@ -58,7 +58,7 @@ public abstract class ServerPlayNetworkHandlerMixin {
         var handler = player.containerMenu;
         int syncSlot;
 
-        if (packet.clickType() == ClickType.THROW) {
+        if (Compat.INSTANCE.isThrowClick(packet)) {
             int slot = packet.slotNum();
             if (slot == -1) {
                 syncSlot = -1;
@@ -67,7 +67,7 @@ public abstract class ServerPlayNetworkHandlerMixin {
                 if (handler.getSlot(slot).getItem().isEmpty()) return;
                 syncSlot = slot;
             }
-        } else if (packet.clickType() == ClickType.PICKUP && packet.slotNum() == -999) {
+        } else if (Compat.INSTANCE.isOutsideClick(packet)) {
             syncSlot = -1;
         } else {
             return;
@@ -95,11 +95,12 @@ public abstract class ServerPlayNetworkHandlerMixin {
 
     @Unique
     private boolean fireDropEvent(ItemStack stack, int count) {
-        var results = PxIgnis.instance.runtime.getEventManager()
-            .fireWithResults("player_drop_item",
-                PlayerWrap.INSTANCE.wrap(player),
-                ItemStackWrap.INSTANCE.wrap(stack),
-                LuaValue.valueOf(count));
-        return results.stream().anyMatch(r -> r.isboolean() && !r.toboolean());
+        var rt = PxIgnis.getRuntimeOrNull();
+        if (rt == null) return false;
+        return rt.getEventManager().fireCancellable("player_drop_item", () -> new LuaValue[]{
+            PlayerWrap.INSTANCE.wrap(player),
+            ItemStackWrap.INSTANCE.wrap(stack),
+            LuaValue.valueOf(count)
+        });
     }
 }

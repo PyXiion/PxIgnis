@@ -6,7 +6,7 @@ import net.minecraft.world.item.component.ItemLore
 import net.minecraft.world.item.ItemStack
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
-import net.minecraft.resources.Identifier
+import ru.pyxiion.ignis.lookup
 import net.minecraft.util.Unit
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
@@ -20,8 +20,7 @@ object ItemBuilder {
         customModelData: Int? = null,
         lore: List<String>? = null,
     ): ItemStack {
-        val item = BuiltInRegistries.ITEM.getValue(Identifier.parse(id))
-            ?: throw IllegalArgumentException("Item '$id' not found")
+        val item = BuiltInRegistries.ITEM.lookup("Item", id)
         val stack = ItemStack(item, count)
 
         if (name != null) stack.set(DataComponents.CUSTOM_NAME, Component.literal(name))

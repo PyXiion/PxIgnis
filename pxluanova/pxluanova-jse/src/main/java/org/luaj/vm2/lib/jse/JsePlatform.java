@@ -110,7 +110,6 @@ public class JsePlatform {
 		state.globals.load(new JseIoLib());
 		state.globals.load(new JseOsLib());
 		state.globals.load(new LuajavaLib());
-		state.globals.load(new NovaLib());
 		LoadState.install(state);
 		LuaC.install(state);
 		return state;

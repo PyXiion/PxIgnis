@@ -51,7 +51,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: jar-${{ matrix.version }}
-          path: build/libs/*.jar
+          path: build/libs/PxIgnis-*-fabric-*.jar
           if-no-files-found: error
 
   release:

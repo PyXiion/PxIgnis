@@ -55,7 +55,6 @@ public class MetatableTest extends TestCase {
 		LuaFunction.s_metatable = null;
 		LuaNil.s_metatable = null;
 		LuaNumber.s_metatable = null;
-//		LuaString.s_metatable = null;
 		LuaThread.s_metatable = null;
 	}
 
@@ -114,7 +113,6 @@ public class MetatableTest extends TestCase {
 		assertEquals( null, function.getmetatable() );
 		assertEquals( null, thread.getmetatable() );
 		assertEquals( null, closure.getmetatable() );
-//		LuaString.s_metatable = mt;
 //		assertEquals( mt, string.getmetatable() );
 		assertEquals( null, function.getmetatable() );
 		assertEquals( null, thread.getmetatable() );
@@ -142,7 +140,6 @@ public class MetatableTest extends TestCase {
 		LuaFunction.s_metatable = mt;
 		LuaNil.s_metatable = mt;
 		LuaNumber.s_metatable = mt;
-//		LuaString.s_metatable = mt;
 		LuaThread.s_metatable = mt;
 		assertEquals( mt, table.getmetatable() );
 		assertEquals( mt, userdata.getmetatable() );

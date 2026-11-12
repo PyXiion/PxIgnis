@@ -57,8 +57,7 @@ class FrameInterpreter {
 							int cc = (ci >> 14) & 0x1ff;
 							Varargs ra = s.resumeArgs;
 							if (cc > 0) {
-								// FIXME: idk it should be cc - 1 or just cc
-								ra.copyto(frame.stack, ca, cc);
+								ra.copyto(frame.stack, ca, cc - 1);
 								frame.v = LuaValue.NONE;
 							} else {
 								frame.top = ca + ra.narg();
@@ -372,12 +371,15 @@ class FrameInterpreter {
 					frames.push(newFrame);
 					return true;
 				}
-				if (state != null) state.enteringJavaCall();
+				if (state != null)
+					state.enteringJavaCall();
 				try {
 					Varargs ret;
 					try {
 						ret = func.invoke(callArgs);
 } catch (YieldContinuationException yce) {
+					if (yce.func != func)
+						throw new LuaError("attempt to yield across a C-call boundary");
 					frame.storedFunc = yce.func;
 					frame.storedCallArgs = yce.callArgs;
 					frame.storedContinuation = yce.continuation;
@@ -399,7 +401,8 @@ class FrameInterpreter {
 						frame.v = ret.dealias();
 					}
 				} finally {
-					if (state != null) state.leavingJavaCall();
+					if (state != null)
+						state.leavingJavaCall();
 				}
 			}
 			return true;
@@ -450,6 +453,8 @@ class FrameInterpreter {
 				try {
 					tcResult = tfunc.invoke(tcArgs);
 				} catch (YieldContinuationException yce) {
+					if (yce.func != tfunc)
+						throw new LuaError("attempt to yield across a C-call boundary");
 					frame.storedFunc = yce.func;
 					frame.storedCallArgs = yce.callArgs;
 					frame.storedContinuation = yce.continuation;

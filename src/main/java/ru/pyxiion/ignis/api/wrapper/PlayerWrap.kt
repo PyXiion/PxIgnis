@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis.api.wrapper
 
+import ru.pyxiion.ignis.wrapObject
 import ru.pyxiion.ignis.Compat
 import net.minecraft.world.entity.EquipmentSlot
 import net.minecraft.world.entity.player.Inventory
@@ -27,22 +28,26 @@ import me.lucko.fabric.api.permissions.v0.Permissions
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.SidebarManager
+import ru.pyxiion.ignis.lookup
 import ru.pyxiion.ignis.api.util.metaTable
+import ru.pyxiion.ignis.toLuaArray
+import ru.pyxiion.ignis.isAdmin
 import ru.pyxiion.ignis.unwrap
 
 object PlayerWrap {
 
+    fun wrapAll(players: List<ServerPlayer>): LuaValue =
+        players.filterNot { it.isRemoved }.map { wrap(it) }.toLuaArray()
+
     fun wrap(entity: ServerPlayer): LuaValue {
-        val t = EntityWrap.wrap(entity)
-        t.setmetatable(MetaTableRegistry.PLAYER)
-        t.rawset("__pxrp_type", LuaValue.valueOf("player"))
-        t.rawset("data", PxIgnis.storageManager?.getPlayerData(entity.uuid.toString())
+        val t = wrapObject(MetaTableRegistry.PLAYER, "player", entity)
+        t.rawset("data", PxIgnis.runtimeOrNull?.storage?.getPlayerData(entity.uuid.toString())
             ?: throw IllegalStateException("PxIgnis not initialized"))
         return t
     }
 
     private val BUILT by lazy { metaTable<ServerPlayer> {
-        inherit { MetaTableRegistry.ENTITY }
+        inherit(EntityWrap.BUILT)
 
         prop(
             "food",
@@ -53,12 +58,17 @@ object PlayerWrap {
         prop(
             "gamemode",
             get = { LuaValue.valueOf(gameMode().getName()) },
-            set = { v -> GameType.byName(v.tojstring())?.let { setGameMode(it) } }
+            set = { v ->
+                val name = v.checkjstring()
+                val mode = GameType.entries.firstOrNull { it.getName() == name }
+                    ?: throw LuaError("Неизвестный режим игры '$name' (допустимо: ${GameType.entries.joinToString { it.getName() }})")
+                setGameMode(mode)
+            }
         )
         prop("ping") { LuaValue.valueOf(connection.latency()) }
         prop("xpLevel") { LuaValue.valueOf(experienceLevel) }
         prop("xpProgress") { LuaValue.valueOf(experienceProgress.toDouble()) }
-        prop("isOp") { LuaValue.valueOf(Compat.isAdmin(this)) }
+        prop("isOp") { LuaValue.valueOf(isAdmin()) }
         prop("selectedSlot") { LuaValue.valueOf(inventory.selectedSlot) }
         prop("isFlying") { LuaValue.valueOf(abilities.flying) }
         prop(
@@ -94,55 +104,6 @@ object PlayerWrap {
         )
         propWithTable("data") { self -> self.rawget("data") }
 
-        prop(
-            "head",
-            get = {
-                val stack = getItemBySlot(EquipmentSlot.HEAD)
-                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
-            },
-            set = { v -> setSlot(this, EquipmentSlot.HEAD.getIndex(Inventory.INVENTORY_SIZE), v) }
-        )
-        prop(
-            "chest",
-            get = {
-                val stack = getItemBySlot(EquipmentSlot.CHEST)
-                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
-            },
-            set = { v -> setSlot(this, EquipmentSlot.CHEST.getIndex(Inventory.INVENTORY_SIZE), v) }
-        )
-        prop(
-            "legs",
-            get = {
-                val stack = getItemBySlot(EquipmentSlot.LEGS)
-                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
-            },
-            set = { v -> setSlot(this, EquipmentSlot.LEGS.getIndex(Inventory.INVENTORY_SIZE), v) }
-        )
-        prop(
-            "feet",
-            get = {
-                val stack = getItemBySlot(EquipmentSlot.FEET)
-                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
-            },
-            set = { v -> setSlot(this, EquipmentSlot.FEET.getIndex(Inventory.INVENTORY_SIZE), v) }
-        )
-        prop(
-            "mainhand",
-            get = {
-                val stack = getItemBySlot(EquipmentSlot.MAINHAND)
-                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
-            },
-            set = { v -> setSlot(this, inventory.selectedSlot, v) }
-        )
-        prop(
-            "offhand",
-            get = {
-                val stack = getItemBySlot(EquipmentSlot.OFFHAND)
-                if (!stack.isEmpty) ItemStackWrap.wrap(stack) else LuaValue.NIL
-            },
-            set = { v -> setSlot(this, Inventory.SLOT_OFFHAND, v) }
-        )
-
         method("hasPermission") { args ->
             val self = args.arg(1).checktable()
             LuaValue.valueOf(Permissions.check(self.unwrap<ServerPlayer>(), args.arg(2).checkjstring()))
@@ -167,27 +128,17 @@ object PlayerWrap {
             val e = self.unwrap<ServerPlayer>()
             val arg2 = args.arg(2)
 
-            if (arg2.istable()) {
-                val t = arg2.checktable()
-                val title = t.get("title").optjstring("")
-                val subtitle = t.get("subtitle").optjstring("")
-                val fadeIn = t.get("fadeIn").optint(20)
-                val stay = t.get("stay").optint(60)
-                val fadeOut = t.get("fadeOut").optint(20)
-                e.connection.send(ClientboundSetTitlesAnimationPacket(fadeIn, stay, fadeOut))
-                if (subtitle.isNotEmpty()) {
-                    e.connection.send(ClientboundSetSubtitleTextPacket(Component.literal(subtitle)))
-                }
-                e.connection.send(ClientboundSetTitleTextPacket(Component.literal(title)))
-            } else {
-                val title = arg2.checkjstring()
-                val subtitle = args.arg(3).optjstring(null)
-                e.connection.send(ClientboundSetTitlesAnimationPacket(20, 60, 20))
-                if (subtitle != null) {
-                    e.connection.send(ClientboundSetSubtitleTextPacket(Component.literal(subtitle)))
-                }
-                e.connection.send(ClientboundSetTitleTextPacket(Component.literal(title)))
-            }
+            // sendTitle(title, subtitle?) and sendTitle { title, subtitle?, fadeIn?, stay?, fadeOut? } share one path
+            val opts = if (arg2.istable()) arg2.checktable() else null
+            val title = opts?.get("title")?.optjstring("") ?: arg2.checkjstring()
+            val subtitle = (opts?.get("subtitle") ?: args.arg(3)).optjstring(null)?.takeIf { it.isNotEmpty() }
+            val fadeIn = opts?.get("fadeIn")?.optint(20) ?: 20
+            val stay = opts?.get("stay")?.optint(60) ?: 60
+            val fadeOut = opts?.get("fadeOut")?.optint(20) ?: 20
+
+            e.connection.send(ClientboundSetTitlesAnimationPacket(fadeIn, stay, fadeOut))
+            if (subtitle != null) e.connection.send(ClientboundSetSubtitleTextPacket(Component.literal(subtitle)))
+            e.connection.send(ClientboundSetTitleTextPacket(Component.literal(title)))
             LuaValue.NIL
         }
 
@@ -229,14 +180,6 @@ object PlayerWrap {
             LuaValue.NIL
         }
 
-        method("damage") { args ->
-            val self = args.arg(1).checktable()
-            val e = self.unwrap<ServerPlayer>()
-            val amount = args.arg(2).checkdouble().toFloat()
-            e.hurtServer(e.level(), e.level().damageSources().generic(), amount)
-            LuaValue.NIL
-        }
-
         method("heal") { args ->
             val self = args.arg(1).checktable()
             val e = self.unwrap<ServerPlayer>()
@@ -271,8 +214,7 @@ object PlayerWrap {
                 first.isstring() -> {
                     val id = first.tojstring()
                     val count = args.arg(3).optint(1)
-                    val item = BuiltInRegistries.ITEM.getValue(Identifier.parse(id))
-                        ?: throw LuaError("Предмет '$id' не найден")
+                    val item = BuiltInRegistries.ITEM.lookup("Предмет", id)
                     ItemStack(item, count)
                 }
 
@@ -283,7 +225,7 @@ object PlayerWrap {
 
                 else -> throw LuaError("give: ожидается строка (ID предмета) или ItemStack от mc.createItem")
             }
-            e.inventory.placeItemBackInInventory(stack)
+            Compat.giveItem(e, stack)
             LuaValue.NIL
         }
 
@@ -328,16 +270,5 @@ object PlayerWrap {
 
     fun initMeta(meta: LuaTable) {
         BUILT.apply(meta)
-    }
-
-    private fun setSlot(e: ServerPlayer, slot: Int, value: LuaValue) {
-        val stack = if (value.isnil()) {
-            ItemStack.EMPTY
-        } else {
-            ItemStackWrap.unwrap(value)
-                ?: throw LuaError("setItem: ожидается ItemStack от mc.createItem")
-        }
-        e.inventory.setItem(slot, stack)
-        e.containerMenu.broadcastChanges()
     }
 }

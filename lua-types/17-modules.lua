@@ -20,15 +20,13 @@ function Format.broadcastFormat(template, args) end
 ---@class SimpleLib
 local Simple = {}
 
----@field defaultOverlay integer  -- ticks; default 140 (7s)
-
 ---Concise command registration. The template is rendered with `args.ctx` set
 ---to the command context (so `{ctx.player.name}` works), and `args.x` etc.
 ---for each declared argument.
 ---@param syntax string       -- must contain at least one <name:type> argument
 ---@param template string     -- Format template
 ---@param range? number       -- broadcast range; nil for global
----@param overlay? boolean|integer  -- true = default overlay; integer = ticks
+---@param overlay? boolean  -- true = action bar instead of chat
 function Simple.register(syntax, template, range, overlay) end
 
 ---@class ChestGui

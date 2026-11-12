@@ -236,5 +236,82 @@ class EventBusTest {
         bus.off(id)
         assertFalse(bus.hasHandlers("test"))
     }
+    private fun handler(block: () -> LuaValue = { LuaValue.NIL }) = object : VarArgFunction() {
+        override fun invoke(args: Varargs): Varargs = block()
+    }
+
+    @Test
+    fun `handler can off itself during fire without skipping neighbours`() {
+        val bus = EventBus("", logger)
+        var first = 0
+        var second = 0
+        var id = 0
+        id = bus.on("test", handler { first++; bus.off(id); LuaValue.NIL })
+        bus.on("test", handler { second++; LuaValue.NIL })
+        bus.fire("test")
+        bus.fire("test")
+        assertEquals(1, first)
+        assertEquals(2, second)
+    }
+
+    @Test
+    fun `handler added during fire runs from the next fire`() {
+        val bus = EventBus("", logger)
+        var added = 0
+        var registered = false
+        bus.on("test", handler {
+            if (!registered) {
+                registered = true
+                bus.on("test", handler { added++; LuaValue.NIL })
+            }
+            LuaValue.NIL
+        })
+        bus.fire("test")
+        assertEquals(0, added)
+        bus.fire("test")
+        assertEquals(1, added)
+    }
+
+    @Test
+    fun `handler removed by a neighbour is not called in the same fire`() {
+        val bus = EventBus("", logger)
+        var victimCalls = 0
+        var victim = 0
+        bus.on("test", handler { bus.off(victim); LuaValue.NIL })
+        victim = bus.on("test", handler { victimCalls++; LuaValue.NIL })
+        bus.fire("test")
+        assertEquals(0, victimCalls)
+    }
+
+    @Test
+    fun `args builder is not called without subscribers`() {
+        val bus = EventBus("", logger)
+        var built = 0
+        bus.fire("test") { built++; arrayOf() }
+        assertFalse(bus.fireCancellable("test") { built++; arrayOf() })
+        assertEquals(0, built)
+    }
+
+    @Test
+    fun `args builder is called once for all subscribers`() {
+        val bus = EventBus("", logger)
+        var built = 0
+        bus.on("test", handler())
+        bus.on("test", handler())
+        bus.fire("test") { built++; arrayOf() }
+        assertEquals(1, built)
+    }
+
+    @Test
+    fun `fireCancellable is true only when a handler returns false`() {
+        val bus = EventBus("", logger)
+        bus.on("test", handler { LuaValue.NIL })
+        assertFalse(bus.fireCancellable("test"))
+        var ranAfter = false
+        bus.on("test", handler { LuaValue.FALSE })
+        bus.on("test", handler { ranAfter = true; LuaValue.TRUE })
+        assertTrue(bus.fireCancellable("test"))
+        assertTrue(ranAfter)
+    }
 
 }

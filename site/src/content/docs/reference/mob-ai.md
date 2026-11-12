@@ -36,6 +36,10 @@ end)
 mob:clearAI()
 ```
 
+`setAI` does not touch the mob's Brain. Brain-driven mobs (villagers, piglins, ...) get the Lua behaviour next to
+their own, so vanilla behaviour keeps running while it is assigned. An error inside a behaviour is logged with the
+behaviour id and does not stop the AI.
+
 ## Properties
 
 | Property | Type | Description |

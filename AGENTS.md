@@ -1,70 +1,67 @@
 # PxIgnis — Agent instructions
 
-Fabric mod — Lua scripting API for Minecraft server. Kotlin 2.3.21, Fabric Loom 1.19, Gradle 9.8, Java 21 (1.21.x) / 25 (26.x).
-Entry points: `PxIgnis.kt` (ModInitializer) → `IgnisRuntime.kt` (orchestrator).
-Subproject `pxluanova/` has its own `AGENTS.md`.
+Fabric server mod: Lua scripting API for Minecraft. Kotlin, two MC targets (1.21.11 and 26.3).
+Entry points: `PxIgnis.kt` (ModInitializer) → `IgnisRuntime.kt`.
+`pxluanova/` is a luaj fork built as an included build; it has its own `AGENTS.md`. Read its diffs, not the whole VM.
 
-## Bumping version
+## Project status: unstable
 
-Update `mod_version` in `gradle.properties`, the badge in `README.md:3`, add changelog entry in
-`site/src/content/docs/changelog.md`, commit & tag `v<version>`.
+PxIgnis is pre-1.0 and promises no compatibility. Breaking changes to the Lua API, event arguments, storage format,
+config and internals are allowed and expected whenever they make the design simpler or more correct.
 
-**Do NOT commit version bump or changelog without user review first.** Stage the files and let the user decide when to
-commit and tag.
+- Do not add compatibility shims, deprecated aliases or migration layers. Remove the old path.
+- Change every caller in the same commit: built-in Lua modules (`src/main/resources/*.lua`), demo scripts, tests,
+  `agent_docs/`, site docs.
+- List each break under "Breaking" in `site/src/content/docs/changelog.md`.
 
 ## Build & test
 
 ```
-./gradlew build                           # build for 1.21.11 (default)
-./gradlew build -PtargetVersion=26.3      # build for 26.3 (unobfuscated)
-./gradlew test                            # unit tests only, no MC runtime
-./gradlew runServer
+./gradlew build                           # 1.21.11 (default)
+./gradlew build -PtargetVersion=26.3      # 26.3
+./gradlew test                            # unit tests, no MC runtime
 ```
 
-Two MC versions (`-PtargetVersion=1.21.11` / `26.3`, one `gradle/versions/<v>.properties` each). Run Gradle on JDK 25.
-Source is written against **Mojang mappings** for both targets (1.21.11 is remapped by Loom, 26.x ships unobfuscated);
-shared code is `src/main/java` + `src/client/java`, version-specific code lives in `src/version-<v>/{kotlin,client-kotlin,resources}`
-(`Compat`/`ClientCompat`, per-version `pxignis.accesswidener`). Add a new target by adding a properties file and a `src/version-<v>` dir.
-CI: `.github/workflows/build.yml` — both versions on push/PR to `master`; auto-publishes to Modrinth on tag push.
+- Run Gradle on JDK 25. Targets are defined by `gradle/versions/<v>.properties`.
+- Artifact: `build/libs/PxIgnis-<mod_version>-fabric-<v>.jar`.
+- Every change must build for both targets.
+- Unit tests cover pure logic only. Anything touching Minecraft classes is verified by booting a real server on both
+  targets with a Lua script in `config/ignis/`. A green build does not show that mixins apply or that the mod starts.
+- Test quirks: `agent_docs/testing.md`.
 
-## Testing quirks → see `agent_docs/testing.md`
+## Source layout
 
-JUnit 5 via `kotlin-test-junit5`. Pure logic, no MC runtime. Two tests have quirks: `BrigadierTreeTest` (reflection on
-`CommandNode.children`) and `MetaTableRegistryTest` (must NOT call `init()`).
+- Source uses Mojang mappings on both targets (Loom remaps 1.21.11; 26.x is unobfuscated).
+- Shared: `src/main/java` (Kotlin and Java). There is no client source set: the mod is common/server code only.
+- Per version: `src/version-<v>/{kotlin,java,resources}` — a `Compat` object with the same API on each target,
+  mixins whose target signatures differ, and `pxignis.accesswidener`.
+- Anything that differs between MC versions goes behind `Compat`. No version checks in shared code.
+- New target: add a properties file and a `src/version-<v>` directory.
 
-## Conventions & gotchas
+## Gotchas
 
-- `Utils.kt` (root) and `types/Utils.kt` are separate files with distinct helpers.
-- After `setmetatable()`, `LuaTable.set()` goes through `__newindex`. Always use `rawset` for new keys.
-- `__index`/`__newindex` via Lua `:` syntax: arg(1) is `self`, actual params start at arg(2).
-- `resolveBlockId` auto-prepends `minecraft:` if no namespace present.
-- `ItemStackWrap`: `wrap()` stores the raw `ItemStack` as `__pxrp_object`; property setters (`item.count = 5`) mutate it in
-  place. `ItemStackWrap.unwrap()` (and the `:copy()` method) call `.copy()` — so a Lua-side assignment like
-  `player2.mainhand = player1.mainhand` is safe, but `unwrap()` consumers must not assume the returned stack is
-  the same instance as the source.
-- Per-instance wrapper state (e.g. `WorldWrap`'s `InstanceData` with `playerCache` + `tickProvider`) lives on
-  `__pxrp_data` userdata, not on Kotlin `companion object` fields. The shared `BUILT` metatable template on
-  `companion object` IS the right place for shared/constant data — it must survive reload.
-- EventBus runs `LuaClosure` handlers through a `LuaThread` (`EventBus.kt` `invokeCallback`), so coroutine-yielding
-  async (`mc.sleep`/`mc.fetch`) and suspend functions work inside event handlers — they did not before.
-- `luaSuspendFunction(scope, block)` / `luaSuspendFunctionNil` (`Utils.kt`) return Lua functions that yield and resume
-  the coroutine when the suspend block completes. Requirements: must be called inside a coroutine (not main thread) and
-  the thread must have a `LuaThread.resumeHandler`. The main thread handler is set in `LuaMcApi.init`. `future.handle`
-  must be registered BEFORE `scope.launch` (fast-completion race). Design rationale: `docs/async-suspend-bridge.md`.
-- `EventBus` requires a `stateProvider: () -> LuaState?` for `LuaClosure` handlers; without it they throw. Regions use
-  `RegionManager.sharedStateProvider` (set in `LuaMcApi.init`).
+- `Registry.getId(x)` is the numeric id. The identifier is `getKey(x)`.
+- `BuiltInRegistries.BLOCK`, `ITEM` and `ENTITY_TYPE` are defaulted: `getValue` never returns null, an unknown id
+  yields air or pig. Use `getOptional`.
+- Fabric API differs between targets (mod id `fabric-api` on 26.x, renamed networking and client-command classes).
+  Check the actual jar with `javap` instead of assuming.
+- After `setmetatable()`, `LuaTable.set()` goes through `__newindex`. Use `rawset` for new keys.
+- In `__index` / `__newindex` and `method { }` bodies, `arg(1)` is `self`; real parameters start at `arg(2)`.
+- Wrapper metatables (`BUILT`) are shared and survive script reload. Per-object state lives on the wrapper table,
+  never in a `companion object`.
+- The Lua state is rebuilt on every script reload. Never capture a `LuaState`; take it from the provider at call time.
+- `luaj` numbers: `LuaString.isint()` / `isnumber()` are true for numeric strings, and `LuaNumber.isstring()` is true.
+  Branch on `type()` when the distinction matters.
+- `ItemStackWrap.wrap()` holds the live stack; `ItemStackWrap.unwrap()` returns a copy.
 
-## Lua environment → see `agent_docs/lua.md`
+## Releases
 
-Loaded libs, `package.path`, globals, lambda syntax, scheduler tick, built-in `require` libs (`format`, `simple`,
-`chestgui`).
+Bump `mod_version` in `gradle.properties` and the badge in `README.md`, add the changelog entry, tag `v<version>`.
+**Never commit a version bump or changelog entry without user review.** Stage the files and stop.
+CI (`.github/workflows/build.yml`) builds both targets and publishes to Modrinth on tag push.
 
-## Design docs → see `docs/`
+## More
 
-Changelog (`site/src/content/docs/changelog.md`) says WHAT changed; `docs/` (e.g. `async-suspend-bridge.md`) documents
-WHY — design decisions, tradeoffs, deferred work. Point there before re-deriving rationale.
-
-## API surface → see `agent_docs/api.md`
-
-Topics: all events (`mc.on`), `mc.*` API, `register()` syntax + types. `register("syntax", function(ctx))` does NOT
-have `ctx.args` — it uses positional args.
+- Lua environment, globals, built-in modules: `agent_docs/lua.md`
+- Events, `mc.*`, command syntax: `agent_docs/api.md`
+- Design rationale (why, not what): `docs/`

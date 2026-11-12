@@ -1,20 +1,21 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.world.BossEvent
-import net.minecraft.server.level.ServerBossEvent
-import net.minecraft.server.level.ServerPlayer
+import ru.pyxiion.ignis.wrapObject
 import net.minecraft.network.chat.Component
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.BossEvent
+import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
-import org.luaj.vm2.lib.VarArgFunction
+import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.BossBarManager
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.unwrap
 
 class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String = "progress") {
-    private val bar = ServerBossEvent(
+    private val bar = Compat.createBossEvent(
         Component.literal(title),
         parseColor(colorStr),
         parseStyle(styleStr),
@@ -58,11 +59,7 @@ class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String
     }
 
     fun toLuaValue(): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(MetaTableRegistry.BOSS_BAR)
-        t.rawset("__pxrp_type", LuaValue.valueOf("bossbar"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(this))
-        return t
+        return wrapObject(MetaTableRegistry.BOSS_BAR, "bossbar", this)
     }
 
     companion object {
@@ -119,12 +116,16 @@ class BossBarWrapper(title: String, colorStr: String = "white", styleStr: String
             BUILT.apply(meta)
         }
 
-        private fun parseColor(s: String): BossEvent.BossBarColor {
-            return BossEvent.BossBarColor.valueOf(s.uppercase())
-        }
+        private fun parseColor(s: String): BossEvent.BossBarColor =
+            BossEvent.BossBarColor.entries.firstOrNull { it.name.equals(s, ignoreCase = true) }
+                ?: throw LuaError(
+                    "Неизвестный цвет боссбара '$s' (допустимо: ${BossEvent.BossBarColor.entries.joinToString { it.name.lowercase() }})"
+                )
 
-        private fun parseStyle(s: String): BossEvent.BossBarOverlay {
-            return BossEvent.BossBarOverlay.valueOf(s.uppercase())
-        }
+        private fun parseStyle(s: String): BossEvent.BossBarOverlay =
+            BossEvent.BossBarOverlay.entries.firstOrNull { it.name.equals(s, ignoreCase = true) }
+                ?: throw LuaError(
+                    "Неизвестный стиль боссбара '$s' (допустимо: ${BossEvent.BossBarOverlay.entries.joinToString { it.name.lowercase() }})"
+                )
     }
 }

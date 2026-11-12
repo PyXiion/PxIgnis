@@ -318,7 +318,7 @@ public class DebugLib extends TwoArgFunction {
 				case TNIL:      LuaNil.s_metatable      = mt; break;
 				case TNUMBER:   LuaNumber.s_metatable   = mt; break;
 				case TBOOLEAN:  LuaBoolean.s_metatable  = mt; break;
-				case TSTRING:   LuaString.s_metatable   = mt; break;
+				case TSTRING:   LuaState.current().stringMetatable = mt instanceof LuaTable ? (LuaTable) mt : null; break;
 				case TFUNCTION: LuaFunction.s_metatable = mt; break;
 				case TTHREAD:   LuaThread.s_metatable   = mt; break;
 				default: value.setmetatable( mt );

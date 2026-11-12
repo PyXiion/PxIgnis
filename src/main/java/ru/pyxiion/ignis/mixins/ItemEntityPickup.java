@@ -19,17 +19,19 @@ public abstract class ItemEntityPickup {
     @Shadow
     public abstract ItemStack getItem();
 
-    // player_pickup_item — intercept item pickup
-    @Inject(method = "playerTouch", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/item/ItemEntity;getItem()Lnet/minecraft/world/item/ItemStack;"), cancellable = true)
+    // player_pickup_item. Inventory.add is reached only after the pickup delay and the owner checks of
+    // playerTouch passed, so the event fires once per actual pickup attempt, not on every tick of the delay.
+    @Inject(method = "playerTouch", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Inventory;add(Lnet/minecraft/world/item/ItemStack;)Z"), cancellable = true)
     private void pxrp$onPlayerCollision(Player player, CallbackInfo ci) {
 
-        var results = PxIgnis.instance.runtime.getEventManager()
-            .fireWithResults("player_pickup_item",
-                EntityFactory.INSTANCE.wrap(player),
-                ItemStackWrap.INSTANCE.wrap(this.getItem()),
-                LuaValue.valueOf(this.getItem().getCount()));
+        var rt = PxIgnis.getRuntimeOrNull();
+        if (rt == null) return;
 
-        if (results.stream().anyMatch(r -> r.isboolean() && !r.toboolean())) {
+        if (rt.getEventManager().fireCancellable("player_pickup_item", () -> new LuaValue[]{
+            EntityFactory.INSTANCE.wrap(player),
+            ItemStackWrap.INSTANCE.wrap(this.getItem()),
+            LuaValue.valueOf(this.getItem().getCount())
+        })) {
             ci.cancel();
         }
     }

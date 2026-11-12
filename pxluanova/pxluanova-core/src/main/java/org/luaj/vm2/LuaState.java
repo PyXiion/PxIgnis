@@ -178,6 +178,8 @@ public final class LuaState {
 	private final InterruptHandler interruptHandler;
 
 	int javaCallDepth = 0;
+	/** Depth of {@link LuaClosure#execute} activations; a sync coroutine cannot suspend inside one. */
+	int luaNestDepth = 0;
 
 	private final ThreadLocal<LuaThread> currentThread = new ThreadLocal<>();
 	private final LuaThread mainThread;
@@ -274,20 +276,6 @@ public final class LuaState {
 
 	public void leavingJavaCall() {
 		javaCallDepth--;
-	}
-
-	public void enterSyncCompiled() {
-		LuaThread ct = getCurrentThread();
-		if (ct != null && !ct.isMainThread()) {
-			ct.threadState.syncCompiledDepth++;
-		}
-	}
-
-	public void leaveSyncCompiled() {
-		LuaThread ct = getCurrentThread();
-		if (ct != null && !ct.isMainThread()) {
-			ct.threadState.syncCompiledDepth--;
-		}
 	}
 
 	public boolean isInJavaCall() {

@@ -48,3 +48,8 @@ P.S. `[name:type]` is equal to `[<name:type>]` =D
 ## Configuration
 
 All Lua scripts go in `config/ignis/`. Files are loaded alphabetically.
+
+## Globals
+
+Assigning a global is allowed. Reading a global that was never assigned is an error (`global 'x' is not defined`);
+test for an optional global with `rawget(_G, "x")`.

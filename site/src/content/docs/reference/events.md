@@ -27,21 +27,21 @@ mc.off(id)
 | `player_join`            | `(player)`                                       |      ❌      |
 | `player_respawn`         | `(player, alive)`                                |      ❌      |
 | `player_leave`           | `(player)`                                       |      ❌      |
-| `player_death`           | `(entity, damageType, amount)`                   |      ✅      |
+| `player_death`           | `(player, amount, msgId, attacker?)`             |      ✅      |
 | `player_chat`            | `(player, message)`                              |      ✅      |
 | `player_block_break`     | `(player, pos, blockId)`                         |      ✅      |
 | `player_block_place`     | `(player, pos, blockId)`                         |      ✅      |
 | `player_use_item`        | `(player, hand, item, itemId)`                   |      ✅      |
 | `player_attack_entity`   | `(player, entity)`                               |      ✅      |
 | `player_interact_entity` | `(player, entity, hand)`                         |      ✅      |
-| `player_hurt`            | `(player, damageType, amount)`                   |      ✅      |
-| `entity_hurt`            | `(entity, damageType, amount, source?)`          |      ✅      |
+| `player_hurt`            | `(player, amount, msgId, attacker?)`             |      ✅      |
+| `entity_hurt`            | `(entity, amount, msgId, attacker?)`             |      ✅      |
 | `player_damage`          | `(player, damageType, amount, blocked)`          |      ❌      |
 | `entity_damage`          | `(entity, damageType, amount, source?, blocked)` |      ❌      |
 | `player_kill`            | `(player, target, damageSource)`                 |      ❌      |
 | `entity_spawn`           | `(entity)`                                       |      ❌      |
 | `entity_despawn`         | `(entity)`                                       |      ❌      |
-| `entity_death`           | `(entity, damageType, amount)`                   |      ✅      |
+| `entity_death`           | `(entity, amount, msgId, attacker?)`             |      ✅      |
 | `player_consume_item`    | `(player, item)`                                 |      ✅      |
 | `player_pickup_item`     | `(player, itemStack, count)`                     |      ✅      |
 | `player_drop_item`       | `(player, itemStack, count)`                     |      ✅      |
@@ -95,7 +95,10 @@ end)
 
 ## Notes
 
-- **damageType** is the last segment after `.` in the damage type registry ID (e.g. `"player_attack"`, `"fall"`,
+- **msgId** (hurt/death events) is the full damage type message id (e.g. `"player"`, `"fall"`, `"inFire"`);
+  **attacker** is the entity that caused the damage, or `nil`. `player_hurt`, `entity_hurt`, `player_death` and
+  `entity_death` all take the same four arguments: victim, amount, msgId, attacker.
+- **damageType** (`player_damage`, `entity_damage`) is the last segment after `.` in the damage type registry ID (e.g. `"player_attack"`, `"fall"`,
   `"in_fire"`, `"on_fire"`).
 - **blocked** is a boolean indicating whether the damage was blocked by a shield. Available on `player_damage` and
   `entity_damage` only (not on the cancellable hurt events).
@@ -104,7 +107,10 @@ end)
 
 - **from**/**to** on `player_move` are [vectors](/reference/vector-api).
 - **alive** on `player_respawn` is `true` if the player respawned alive, `false` if they died and respawned.
-- **player_block_place** only fires when the held item is a `BlockItem` - right-clicking with a non-block item (food,
-  tool, etc.) does not trigger it.
+- **player_block_place** fires when a block item is about to place a block, once per placement: `pos` is where the
+  block goes (not the block that was clicked) and `blockId` is the block that is placed. Cancelling prevents the
+  placement; right-clicking with a non-block item does not trigger it.
+- **player_pickup_item** fires once per pickup attempt, after the pickup delay has passed.
+- **player_consume_item** is for players only. Cancelling stops the use and resends the player's inventory.
 - **Async** is **not available** in event handlers. Use `mc.schedule(0, function() ... end)` to defer async work from an
   event.

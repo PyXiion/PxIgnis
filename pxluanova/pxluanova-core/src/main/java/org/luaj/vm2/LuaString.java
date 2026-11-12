@@ -61,14 +61,9 @@ import org.luaj.vm2.lib.MathLib;
  */
 public class LuaString extends LuaValue {
 
-	/** The singleton instance for string metatables that forwards to the string functions.
-	 * Typically, this is set to the string metatable as a side effect of loading the string
-	 * library, and is read-write to provide flexible behavior by default.  When used in a
-	 * server environment where there may be roge scripts, this should be replaced with a
-	 * read-only table since it is shared across all lua code in this Java VM.
-	 */
-	public static LuaValue s_metatable;
-	
+	/** The string metatable lives on {@link LuaState#stringMetatable}; loading the string
+	 * library sets it for the state that loads it. */
+
 	/** The bytes for the string.  These <em><b>must not be mutated directly</b></em> because
 	 * the backing may be shared by multiple LuaStrings, and the hash code is
 	 * computed only at construction time.
@@ -245,7 +240,8 @@ public class LuaString extends LuaValue {
 	}
 		
 	public LuaValue getmetatable() {
-		return s_metatable;
+		LuaState s = LuaState.current();
+		return s == null ? null : s.stringMetatable;
 	}
 	
 	public int type() {

@@ -8,7 +8,7 @@ mc = {}
 -- === Functions =============================================================
 
 ---@param text string
----@param overlay? integer  -- if set, send as overlay (action bar) for N ticks
+---@param overlay? boolean  -- true: send to the action bar instead of chat
 function mc.broadcast(text, overlay) end
 
 ---@return number  -- Unix seconds
@@ -57,8 +57,8 @@ function mc.getHologram(uuid) end
 ---@return Structure
 function mc.loadStructure(id) end
 
----Loads a structure from a file path.
----@param path string
+---Loads a structure from a `.nbt` file inside `config/ignis`. Throws if the path is missing or leaves that directory.
+---@param path string Path relative to `config/ignis`
 ---@return Structure
 function mc.loadStructureFile(path) end
 

@@ -101,22 +101,22 @@ local ring = items.define {
 }
 
 -- Give items to a player
-register("wand") \{ ctx ->
+register("wand", function(ctx)
     ctx.player:give(wand:make(1))
-}
+end)
 
-register("ring") \{ ctx ->
+register("ring", function(ctx)
     ctx.player:give(ring:make(1))
-}
+end)
 
 -- Check if a player has the ring
-register("hasring") \{ ctx ->
+register("hasring", function(ctx)
     if ring:has(ctx.player) then
         ctx.player:sendMessage("&aYou have the ring!")
     else
         ctx.player:sendMessage("&cYou don't have the ring.")
     end
-}
+end)
 ```
 
 ## Notes

@@ -28,6 +28,7 @@ import java.math.BigDecimal;
 import org.luaj.vm2.Buffer;
 import org.luaj.vm2.LuaClosure;
 import org.luaj.vm2.LuaDouble;
+import org.luaj.vm2.LuaState;
 import org.luaj.vm2.LuaString;
 import org.luaj.vm2.LuaTable;
 import org.luaj.vm2.LuaValue;
@@ -74,12 +75,11 @@ public class StringLib extends TwoArgFunction {
 	 * adding the table to package.loaded, and returning table as the return value.
 	 * Creates a metatable that uses __INDEX to fall back on itself to support string
 	 * method operations.
-	 * If the shared strings metatable instance is null, will set the metatable as
-	 * the global shared metatable for strings.
+	 * Sets the string metatable of the current {@link LuaState}.
 	 * <P>
 	 * All tables and metatables are read-write by default so if this will be used in
 	 * a server environment, sandboxing should be used.  In particular, the
-	 * {@link LuaString#s_metatable} table should probably be made read-only.
+	 * {@link LuaState#stringMetatable} table should probably be made read-only.
 	 * @param modname the module name supplied if this is loaded via 'require'.
 	 * @param env the environment to load into, typically a Globals instance.
 	 */
@@ -102,9 +102,7 @@ public class StringLib extends TwoArgFunction {
 		
 		env.set("string", string);
 		if (!env.get("package").isnil()) env.get("package").get("loaded").set("string", string);
-		if (LuaString.s_metatable == null) {
-			LuaString.s_metatable = LuaValue.tableOf(new LuaValue[] { INDEX, string });
-		}
+		LuaState.current().stringMetatable = LuaValue.tableOf(new LuaValue[] { INDEX, string });
 		return string;
 	}
 	

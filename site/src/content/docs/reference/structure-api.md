@@ -25,14 +25,14 @@ local struct = mc.loadStructure("my_house")
 
 ### `mc.loadStructureFile(path)`
 
-Loads a structure from a file path.
+Loads a structure from a `.nbt` file inside `config/ignis`.
 
-- `path` (`string`) — Absolute or server-relative path
+- `path` (`string`) — Path relative to `config/ignis`. Paths that resolve outside it (`..`, symlinks) are rejected.
 
-Returns a structure wrapper, or throws an error if not found.
+Returns a structure wrapper, or throws an error if the file is missing, outside `config/ignis` or too large (32 MiB).
 
 ```lua
-local struct = mc.loadStructureFile("config/ignis/my_build.nbt")
+local struct = mc.loadStructureFile("my_build.nbt")
 ```
 
 ## Properties

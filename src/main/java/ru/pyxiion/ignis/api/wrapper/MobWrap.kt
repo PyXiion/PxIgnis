@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis.api.wrapper
 
+import ru.pyxiion.ignis.wrapObject
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.Mob
@@ -18,15 +19,11 @@ import java.util.UUID
 object MobWrap {
 
     fun wrap(mob: Mob): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(MetaTableRegistry.MOB)
-        t.rawset("__pxrp_type", LuaValue.valueOf("mob"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(mob))
-        return t
+        return wrapObject(MetaTableRegistry.MOB, "mob", mob)
     }
 
     private val BUILT = metaTable<Mob> {
-        inherit { MetaTableRegistry.ENTITY }
+        inherit(EntityWrap.BUILT)
 
         prop("isMob") { LuaValue.TRUE }
         prop("aiActive") { LuaValue.valueOf(MobAIManager.hasAI(this)) }
@@ -39,12 +36,8 @@ object MobWrap {
                 if (v.isnil()) {
                     target = null
                 } else {
-                    val uuidStr = v.checktable().get("uuid")
-                    if (uuidStr.isstring()) {
-                        val uuid = UUID.fromString(uuidStr.tojstring())
-                        val entity = level().getEntity(uuid)
-                        target = entity as? LivingEntity
-                    }
+                    target = v.unwrapOrNull<LivingEntity>()
+                        ?: throw LuaError("mob.target: ожидается живая сущность или nil")
                 }
             }
         )
@@ -82,9 +75,8 @@ object MobWrap {
             val m = self.unwrap<Mob>()
 
             val result: Boolean = if (args.arg(2).istable()) {
-                val entityTable = args.arg(2).checktable()
-                val uuidStr = entityTable.get("uuid").optjstring(null) ?: return@method LuaValue.FALSE
-                val target = m.level().getEntity(UUID.fromString(uuidStr)) ?: return@method LuaValue.FALSE
+                val target = args.arg(2).unwrapOrNull<Entity>()
+                    ?: throw LuaError("mob:navigateTo(): ожидается сущность или координаты x, y, z")
                 val speed = args.arg(3).optdouble(1.0)
                 m.navigation.moveTo(target, speed)
             } else {
@@ -107,9 +99,8 @@ object MobWrap {
             val m = self.unwrap<Mob>()
 
             if (args.arg(3).isnil() && args.arg(2).istable()) {
-                val entityTable = args.arg(2).checktable()
-                val uuidStr = entityTable.get("uuid").optjstring(null) ?: return@method LuaValue.NIL
-                val target = m.level().getEntity(UUID.fromString(uuidStr)) ?: return@method LuaValue.NIL
+                val target = args.arg(2).unwrapOrNull<Entity>()
+                    ?: throw LuaError("mob:lookAt(): ожидается сущность или координаты x, y, z")
                 m.lookControl.setLookAt(target)
             } else {
                 val x = args.arg(2).checkdouble()

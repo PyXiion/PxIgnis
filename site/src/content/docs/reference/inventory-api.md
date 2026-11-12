@@ -82,7 +82,7 @@ and access to the backing inventory and player.
 
 ```lua
 local container = inv:open(player, "&6My Chest")
-container:onClick(function(p, slot, clickType, slotItem, cursorItem)
-  if slot == 1 then return false end
+container:onClick(function(p, slot, clickType, slotItem, cursorItem, inGui)
+  return not inGui   -- GUI slots are locked, the player's own inventory is free
 end)
 ```

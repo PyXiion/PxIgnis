@@ -1,9 +1,8 @@
 package ru.pyxiion.ignis.api.wrapper
 
-import net.minecraft.world.entity.Display
+import ru.pyxiion.ignis.wrapObject
 import net.minecraft.world.entity.Display.BillboardConstraints
 import net.minecraft.world.entity.Display.TextDisplay
-import net.minecraft.server.level.ServerLevel
 import net.minecraft.network.chat.Component
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
@@ -15,17 +14,21 @@ import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.unwrap
 
 
-class HologramWrapper(
-    internal val entity: TextDisplay,
-    @Suppress("unused") private val world: ServerLevel,
-) {
+/**
+ * A script-owned hologram. The Lua table is created once; when the chunk holding the entity is reloaded the
+ * entity object changes, so [rebind] swaps `__pxrp_object` inside the same table and scripts keep their handle.
+ */
+class HologramWrapper(entity: TextDisplay) {
+    internal var entity: TextDisplay = entity
+        private set
 
-    fun toLuaValue(): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(MetaTableRegistry.HOLOGRAM)
-        t.rawset("__pxrp_type", LuaValue.valueOf("hologram"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(entity))
-        return t
+    private val lua: LuaTable = newTable(entity)
+
+    fun toLuaValue(): LuaValue = lua
+
+    internal fun rebind(newEntity: TextDisplay) {
+        entity = newEntity
+        lua.rawset("__pxrp_object", LuaValue.userdataOf(newEntity))
     }
 
     internal fun destroyInternals() {
@@ -38,9 +41,18 @@ class HologramWrapper(
     }
 
     companion object {
+        /** Options of `world:spawnHologram`, applied through the property setters. */
+        val OPTION_KEYS = listOf("alignment", "billboard", "lineWidth", "background", "opacity", "shadow", "seeThrough", "glowing")
+
+        private fun newTable(entity: TextDisplay): LuaTable {
+            return wrapObject(MetaTableRegistry.HOLOGRAM, "hologram", entity)
+        }
+
+        /** A text display this runtime did not create: same properties, no manager entry. */
+        fun untracked(entity: TextDisplay): LuaValue = newTable(entity)
         private val BUILT by lazy {
             metaTable<TextDisplay> {
-                inherit { MetaTableRegistry.ENTITY }
+                inherit(EntityWrap.BUILT)
 
                 prop(
                     "text",
@@ -87,7 +99,7 @@ class HologramWrapper(
                 )
                 prop(
                     "opacity",
-                    get = { LuaValue.valueOf(textOpacity.toInt()) },
+                    get = { LuaValue.valueOf(textOpacity.toInt() and 0xFF) },
                     set = { v -> textOpacity = v.checkint().toByte() }
                 )
                 prop(
@@ -151,13 +163,6 @@ class HologramWrapper(
             "center" -> BillboardConstraints.CENTER
             else -> throw LuaError("Неизвестный billboard '$s' (допустимо: fixed, vertical, horizontal, center)")
         }
-
-        internal fun parseBillboardFromLua(s: String): BillboardConstraints = parseBillboard(s)
-        internal fun applyAlignmentFromLua(e: TextDisplay, s: String) =
-            setAlignment(e, parseAlignment(s))
-
-        internal fun applyFlagFromLua(e: TextDisplay, flag: Byte, value: Boolean) =
-            setFlag(e, flag, value)
 
         private fun setFlag(e: TextDisplay, flag: Byte, value: Boolean) {
             val current = e.flags.toInt()

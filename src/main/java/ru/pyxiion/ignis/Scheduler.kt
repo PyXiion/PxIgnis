@@ -7,39 +7,36 @@ import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaThread
 import org.luaj.vm2.LuaValue
 import java.util.PriorityQueue
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
+/** Server-thread only: Lua runs on one thread, so there is no locking. */
 class Scheduler(private val stateProvider: () -> LuaState) {
     private companion object {
         private const val MAX_TASKS_PER_TICK = 1024
     }
-    private val lock = ReentrantLock()
+
     private var nextId = 0
-    @Volatile
     var currentTick = 0L
+        private set
     private val tasks = PriorityQueue(compareBy<ScheduledTask> { it.fireAtTick })
     private val cancelledIds = HashSet<Int>()
 
     fun tick() {
         val due = ArrayList<ScheduledTask>()
-        lock.withLock {
-            currentTick++
-            var processed = 0
-            while (tasks.isNotEmpty() && tasks.peek().fireAtTick <= currentTick && processed < MAX_TASKS_PER_TICK) {
-                val task = tasks.poll()
-                processed++
+        currentTick++
+        var processed = 0
+        while (tasks.isNotEmpty() && tasks.peek().fireAtTick <= currentTick && processed < MAX_TASKS_PER_TICK) {
+            val task = tasks.poll()
+            processed++
 
-                if (task.id in cancelledIds) {
-                    cancelledIds.remove(task.id)
-                    continue
-                }
-
-                if (task.repeating && task.interval > 0) {
-                    tasks.offer(task.copy(fireAtTick = task.fireAtTick + task.interval))
-                }
-                due.add(task)
+            if (task.id in cancelledIds) {
+                cancelledIds.remove(task.id)
+                continue
             }
+
+            if (task.repeating && task.interval > 0) {
+                tasks.offer(task.copy(fireAtTick = task.fireAtTick + task.interval))
+            }
+            due.add(task)
         }
 
         val state = stateProvider()
@@ -57,34 +54,29 @@ class Scheduler(private val stateProvider: () -> LuaState) {
         }
     }
 
-    fun schedule(delay: Int, callback: LuaFunction): Int = lock.withLock {
+    fun schedule(delay: Int, callback: LuaFunction): Int {
         val id = nextId++
         tasks.offer(ScheduledTask(id, currentTick + delay.coerceAtLeast(0), 0, false, callback))
-        id
+        return id
     }
 
-    fun scheduleRepeating(delay: Int, interval: Int, callback: LuaFunction): Int = lock.withLock {
+    fun scheduleRepeating(delay: Int, interval: Int, callback: LuaFunction): Int {
         val id = nextId++
         val safeInterval = interval.coerceAtLeast(1)
-        tasks.offer(
-            ScheduledTask(id, currentTick + delay.coerceAtLeast(0), safeInterval, true, callback)
-        )
-        id
+        tasks.offer(ScheduledTask(id, currentTick + delay.coerceAtLeast(0), safeInterval, true, callback))
+        return id
     }
 
-    fun cancel(id: Int): Boolean = lock.withLock {
-        if (id >= nextId) return@withLock false
-        if (id in cancelledIds) return@withLock false
-        cancelledIds.add(id)
-        true
+    /** `true` if a pending task was cancelled; `false` for an unknown id, a task that already ran, or a repeat of it. */
+    fun cancel(id: Int): Boolean {
+        if (tasks.none { it.id == id }) return false
+        return cancelledIds.add(id)
     }
 
     fun clear() {
-        lock.withLock {
-            tasks.clear()
-            cancelledIds.clear()
-            nextId = 0
-        }
+        tasks.clear()
+        cancelledIds.clear()
+        nextId = 0
     }
 }
 

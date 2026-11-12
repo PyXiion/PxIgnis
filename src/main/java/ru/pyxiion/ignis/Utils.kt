@@ -4,6 +4,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import me.lucko.fabric.api.permissions.v0.Permissions
 import net.minecraft.commands.SharedSuggestionProvider
+import net.minecraft.core.Registry
+import net.minecraft.resources.Identifier
+import net.minecraft.server.level.ServerPlayer
 import org.luaj.vm2.*
 import org.luaj.vm2.lib.LuaContinuableFunction
 import org.luaj.vm2.lib.OneArgFunction
@@ -18,6 +21,15 @@ import java.util.concurrent.ExecutionException
 
 fun SharedSuggestionProvider.checkPermission(permission: String): Boolean = Permissions.check(this, permission)
 
+/** Operator with the admin command permission level. */
+fun ServerPlayer.isAdmin(): Boolean = permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_ADMIN)
+
+/** Searches the registry. Not found means [LuaError] */
+fun <T : Any> Registry<T>.lookup(what: String, id: String): T {
+    val key = Identifier.tryParse(id) ?: throw LuaError("$what '$id' не найден")
+    return getOptional(key).orElseThrow { LuaError("$what '$id' не найден") }
+}
+
 fun luaTableOf(vararg items: Pair<String, LuaValue>): LuaTable {
     return LuaTable().apply {
         items.forEach { (k, v) ->
@@ -26,24 +38,43 @@ fun luaTableOf(vararg items: Pair<String, LuaValue>): LuaTable {
     }
 }
 
+/**
+ * Everything that leaves Kotlin for Lua is a [LuaError]: `require`/`check`/`error()` failures (IllegalArgument/IllegalState)
+ * become a Lua error with just their message instead of an opaque Java exception with a class name.
+ */
+inline fun <R> luaGuard(f: () -> R): R = try {
+    f()
+} catch (e: LuaError) {
+    throw e
+} catch (e: Exception) {
+    throw LuaError(e.message ?: e.toString())
+}
+
+/** The one way to build a wrapper table: metatable, type name and the wrapped object. */
+fun wrapObject(meta: LuaTable, type: String, obj: Any): LuaTable = LuaTable().also {
+    it.setmetatable(meta)
+    it.rawset("__pxrp_type", LuaValue.valueOf(type))
+    it.rawset("__pxrp_object", LuaValue.userdataOf(obj))
+}
+
 class KotlinZeroArgBridge(private val f: () -> LuaValue) : ZeroArgFunction() {
-    override fun call(): LuaValue = f()
+    override fun call(): LuaValue = luaGuard { f() }
 }
 
 class KotlinOneArgBridge(private val f: (LuaValue) -> LuaValue) : OneArgFunction() {
-    override fun call(arg1: LuaValue): LuaValue = f(arg1)
+    override fun call(arg1: LuaValue): LuaValue = luaGuard { f(arg1) }
 }
 
 class KotlinTwoArgBridge(private val f: (LuaValue, LuaValue) -> LuaValue) : TwoArgFunction() {
-    override fun call(arg1: LuaValue, arg2: LuaValue): LuaValue = f(arg1, arg2)
+    override fun call(arg1: LuaValue, arg2: LuaValue): LuaValue = luaGuard { f(arg1, arg2) }
 }
 
 class KotlinThreeArgBridge(private val f: (LuaValue, LuaValue, LuaValue) -> LuaValue) : ThreeArgFunction() {
-    override fun call(arg1: LuaValue, arg2: LuaValue, arg3: LuaValue): LuaValue = f(arg1, arg2, arg3)
+    override fun call(arg1: LuaValue, arg2: LuaValue, arg3: LuaValue): LuaValue = luaGuard { f(arg1, arg2, arg3) }
 }
 
 class KotlinVarArgBridge(private val f: (args: Varargs) -> Varargs) : VarArgFunction() {
-    override fun invoke(args: Varargs): Varargs = f(args)
+    override fun invoke(args: Varargs): Varargs = luaGuard { f(args) }
 }
 
 fun luaFunction(f: (LuaValue) -> LuaValue): LuaFunction = KotlinOneArgBridge(f)
@@ -136,7 +167,6 @@ inline fun String.toLua(): LuaString = LuaValue.valueOf(this)
 
 fun LuaValue?.takeIfValid(): LuaValue? = this?.takeUnless { it.isnil() }
 
-fun LuaValue?.asLuaString(): LuaString? = this?.takeIf { it.isstring() } as LuaString?
 fun LuaValue?.asJString(): String? = this?.takeIf { it.isstring() }?.checkjstring()
 
 fun LuaValue?.asTable(): LuaTable? = this?.takeIf { it.istable() } as LuaTable?
@@ -180,6 +210,21 @@ fun Iterable<LuaValue>?.toLuaArray(): LuaTable {
     return LuaTable().apply {
         this@toLuaArray?.forEachIndexed { i, value -> set(i + 1, value) }
     }
+}
+
+/** Java value to Lua. Integral Java types stay integers in Lua; a Long outside the int range becomes a double. */
+fun toLuaValue(obj: Any?): LuaValue = when (obj) {
+    null -> LuaValue.NIL
+    is LuaValue -> obj
+    is Boolean -> LuaValue.valueOf(obj)
+    is Byte, is Short, is Int -> LuaValue.valueOf((obj as Number).toInt())
+    is Long -> if (obj in Int.MIN_VALUE..Int.MAX_VALUE) LuaValue.valueOf(obj.toInt()) else LuaValue.valueOf(obj.toDouble())
+    is Float, is Double -> LuaValue.valueOf((obj as Number).toDouble())
+    is String -> LuaValue.valueOf(obj)
+    is Array<*> -> obj.asIterable().map(::toLuaValue).toLuaArray()
+    is List<*> -> obj.map(::toLuaValue).toLuaArray()
+    is Map<*, *> -> LuaTable().apply { obj.forEach { (k, v) -> set(toLuaValue(k), toLuaValue(v)) } }
+    else -> LuaValue.userdataOf(obj)
 }
 
 fun Iterable<Pair<LuaValue, LuaValue>>?.toLuaTable(): LuaTable {

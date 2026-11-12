@@ -2,6 +2,7 @@ package ru.pyxiion.ignis
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import ru.pyxiion.ignis.commands.SyntaxNode
 import ru.pyxiion.ignis.commands.generateCommandPaths
 
@@ -118,6 +119,59 @@ class BuildVariantsTest {
             ),
             variants[1]
         )
+    }
+
+
+    @Test
+    fun `choice becomes one literal variant per option`() {
+        val variants = generateCommandPaths("cmd <mode:choice=да,нет>")
+        assertEquals(
+            listOf(
+                listOf(SyntaxNode.Literal("cmd"), SyntaxNode.Choice("mode", "да")),
+                listOf(SyntaxNode.Literal("cmd"), SyntaxNode.Choice("mode", "нет")),
+            ),
+            variants
+        )
+    }
+
+    @Test
+    fun `choice options are trimmed`() {
+        val variants = generateCommandPaths("cmd <m:choice=a, b>")
+        assertEquals(listOf("a", "b"), variants.map { (it[1] as SyntaxNode.Choice).value })
+    }
+
+    @Test
+    fun `optional choice keeps the variant without it`() {
+        val variants = generateCommandPaths("cmd [m:choice=a,b]")
+        assertEquals(3, variants.size)
+        assertEquals(listOf(SyntaxNode.Literal("cmd")), variants[0])
+    }
+
+    @Test
+    fun `several choices make a cartesian product`() {
+        val variants = generateCommandPaths("cmd <a:choice=x,y> <b:choice=1,2>")
+        assertEquals(4, variants.size)
+        assertEquals(
+            listOf(SyntaxNode.Literal("cmd"), SyntaxNode.Choice("a", "y"), SyntaxNode.Choice("b", "2")),
+            variants.last()
+        )
+    }
+
+    @Test
+    fun `choice option with a space is an error`() {
+        assertFailsWith<IllegalArgumentException> { generateCommandPaths("cmd <m:choice=a b,c>") }
+    }
+
+    @Test
+    fun `empty and duplicate choice options are errors`() {
+        assertFailsWith<IllegalArgumentException> { generateCommandPaths("cmd <m:choice=a,,b>") }
+        assertFailsWith<IllegalArgumentException> { generateCommandPaths("cmd <m:choice=a,a>") }
+    }
+
+    @Test
+    fun `repeated argument name is an error`() {
+        assertFailsWith<IllegalArgumentException> { generateCommandPaths("cmd <x:int> <x:word>") }
+        assertFailsWith<IllegalArgumentException> { generateCommandPaths("cmd <x:int> [x:int]") }
     }
 
 }

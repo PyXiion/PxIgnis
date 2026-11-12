@@ -56,14 +56,14 @@ local entity = mc.getEntity("123e4567-e89b-12d3-a456-426614174000")
 
 ## Chat & Broadcasting
 
-### `mc.broadcast(text, overlayDuration?)`
-Broadcasts a message to all online players. If `overlayDuration` is a number (in ticks),
-sends it as a title overlay (toast-style) instead of chat. The overlay fades in over 20
-ticks (1s), stays for the given duration, then fades out over 20 ticks.
+### `mc.broadcast(text, overlay?)`
+Broadcasts a message to all online players. With `overlay = true` it goes to the action bar instead of chat.
+`overlay` must be a boolean (or omitted); anything else is an error. The action bar keeps whatever title timings
+the client already has.
 
 ```lua
 mc.broadcast("Server is restarting soon!")
-mc.broadcast("Welcome!", 70) -- overlay, stays ~3.5s
+mc.broadcast("Welcome!", true) -- action bar
 ```
 
 ## Utilities

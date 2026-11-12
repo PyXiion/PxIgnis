@@ -8,44 +8,16 @@ import net.minecraft.world.inventory.ChestMenu
 import net.minecraft.world.MenuProvider
 import net.minecraft.world.inventory.AbstractContainerMenu
 import net.minecraft.world.inventory.MenuType
-import net.minecraft.world.inventory.ClickType
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.network.chat.Component
 import org.luaj.vm2.LuaValue
+import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 
-class LockableInventory(size: Int) : SimpleContainer(size) {
-    var locked = false
-
-    inline fun <T> unlocked(block: () -> T): T {
-        val was = locked
-        locked = false
-        try { return block() } finally { locked = was }
-    }
-
-    override fun removeItemNoUpdate(slot: Int): ItemStack {
-        if (locked) return ItemStack.EMPTY
-        return super.removeItemNoUpdate(slot)
-    }
-
-    override fun removeItem(slot: Int, amount: Int): ItemStack {
-        if (locked) return ItemStack.EMPTY
-        return super.removeItem(slot, amount)
-    }
-
-    override fun setItem(slot: Int, stack: ItemStack) {
-        super.setItem(slot, stack)
-    }
-
-    override fun clearContent() {
-        if (locked) return
-        super.clearContent()
-    }
-}
-
-object ContainerManager {
+/** Открытые GUI-меню. Принадлежит [ru.pyxiion.ignis.IgnisRuntime]; обёртки хранят ссылку на своего владельца. */
+class ContainerManager {
     private val containers = mutableMapOf<AbstractContainerMenu, ContainerWrapper>()
 
     fun open(
@@ -78,7 +50,7 @@ object ContainerManager {
 
         player.openMenu(factory)
         val sh = screenHandler!!
-        val wrapper = ContainerWrapper(player, inventory, sh)
+        val wrapper = ContainerWrapper(this, player, inventory, sh)
         containers[sh] = wrapper
         return wrapper
     }
@@ -107,36 +79,48 @@ object ContainerManager {
         containers.clear()
     }
 
+    /**
+     * Every click in a menu that has an `onClick` callback is shown to it: GUI slots, the player's own inventory
+     * slots (menu slot numbers, `inGui = false`) and clicks outside the window (`slot = nil`). The click goes
+     * through only if the callback returns `true`; `nil`, `false` or a Lua error cancel it.
+     * A menu without a callback behaves like a vanilla chest.
+     */
     fun shouldAllowClick(
         sh: AbstractContainerMenu,
         slot: Int,
         button: Int,
-        actionType: ClickType,
+        actionType: Enum<*>,
         player: ServerPlayer
     ): Boolean {
         val wrapper = containers[sh] ?: return true
         val cb = wrapper.onClickCallback ?: return true
 
-        if (slot < 0 || slot >= wrapper.inventory.containerSize) return true
+        val inWindow = slot >= 0 && slot < sh.slots.size
+        val inGui = slot >= 0 && slot < wrapper.inventory.containerSize
 
-        val luaPlayer = PlayerWrap.wrap(player)
-        val slotStack = wrapper.inventory.getItem(slot)
-        val luaItem = if (slotStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(slotStack)
-
-        val cursorStack = player.containerMenu.carried
+        val luaSlot = if (inWindow) LuaValue.valueOf(slot + 1) else LuaValue.NIL
+        val slotStack = if (inWindow) sh.getSlot(slot).item else ItemStack.EMPTY
+        val luaItem = if (slotStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(slotStack.copy())
+        val cursorStack = sh.carried
         val luaCursor = if (cursorStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(cursorStack.copy())
 
-        val result = cb.invoke(LuaValue.varargsOf(arrayOf(
-            luaPlayer,
-            LuaValue.valueOf(slot + 1),
-            LuaValue.valueOf(actionType.name.lowercase()),
-            luaItem,
-            luaCursor
-        )))
+        val allowed = try {
+            val result = cb.invoke(LuaValue.varargsOf(arrayOf(
+                PlayerWrap.wrap(player),
+                luaSlot,
+                LuaValue.valueOf(actionType.name.lowercase()),
+                luaItem,
+                luaCursor,
+                LuaValue.valueOf(inGui),
+            )))
+            result.arg1() == LuaValue.TRUE
+        } catch (e: Throwable) {
+            PxIgnis.logger.error("Ошибка в onClick GUI-контейнера: ${e.message}", e)
+            false
+        }
 
-        val firstResult = result.arg1()
-        if (firstResult.isboolean() && !firstResult.toboolean())
-            return false
-        return true
+        // The client has already predicted the click; put it back in sync with the untouched server state.
+        if (!allowed) sh.sendAllDataToRemote()
+        return allowed
     }
 }

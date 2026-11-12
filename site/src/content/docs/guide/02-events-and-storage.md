@@ -12,12 +12,6 @@ In this guide you will learn how to:
 - Fire your own events with `mc.emit`.
 - Save data globally with `mc.data` and per-player with `player.data`.
 
-All examples use [Nova lambda syntax](/reference/language), so the first line of each file is:
-
-```lua
---# nova syntax
-```
-
 ## 1. Reacting to events with `mc.on`
 
 Minecraft fires events constantly — when a player joins, breaks a block, chats, dies, and so on. `mc.on` lets you run code whenever one of those events happens.
@@ -35,10 +29,9 @@ mc.on(eventName, handler)
 Example:
 
 ```lua
---# nova syntax
-mc.on("player_join") \{ player ->
+mc.on("player_join", function(player)
     mc.broadcast("Welcome, " .. player.name .. "!")
-}
+end)
 ```
 
 The handler receives `player`, the player who joined. Each event sends its own arguments, so check the [Events reference](/reference/events) for details.
@@ -46,10 +39,9 @@ The handler receives `player`, the player who joined. Each event sends its own a
 To unsubscribe later:
 
 ```lua
---# nova syntax
-local joinId = mc.on("player_join") \{ player ->
+local joinId = mc.on("player_join", function(player)
     mc.broadcast("Welcome!")
-}
+end)
 
 -- later...
 mc.off(joinId)
@@ -60,13 +52,12 @@ mc.off(joinId)
 Some events are cancellable. If your handler returns `false`, Minecraft stops the action.
 
 ```lua
---# nova syntax
-mc.on("player_block_break") \{ player, pos, blockId ->
+mc.on("player_block_break", function(player, pos, blockId)
     if not player:hasPermission("build") then
         player:sendMessage("You cannot break blocks here.")
         return false
     end
-}
+end)
 ```
 
 In this example, `player:hasPermission("build")` checks whether the player has the `build` permission. You can use any permission node you have configured on your server.
@@ -80,18 +71,16 @@ If the event is cancelable and you return nothing (or true) the event will proce
 You can fire your own events from Lua. This is useful when you want separate scripts to react to the same thing.
 
 ```lua
---# nova syntax
 -- rewards.lua
-mc.on("my_mod:boss_killed") \{ player, bossName ->
+mc.on("my_mod:boss_killed", function(player, bossName)
     player:sendMessage("You defeated " .. bossName .. "!")
     player.data.bossKills = (player.data.bossKills or 0) + 1
-}
+end)
 ```
 
 Then elsewhere:
 
 ```lua
---# nova syntax
 -- bossfight.lua
 mc.emit("my_mod:boss_killed", somePlayer, "Ender Dragon")
 ```
@@ -101,12 +90,11 @@ mc.emit("my_mod:boss_killed", somePlayer, "Ender Dragon")
 `mc.data` is a special table that is saved to `config/ignis/storage/global.json`. Anything you put in it survives `/ignis reload` and server restarts.
 
 ```lua
---# nova syntax
 mc.data.joins = (mc.data.joins or 0) + 1
 
-mc.on("player_join") \{ player ->
+mc.on("player_join", function(player)
     mc.broadcast("Visitor #" .. mc.data.joins .. "!")
-}
+end)
 ```
 
 **Allowed values:** numbers, strings, booleans, tables, and `nil` (to delete a key).
@@ -118,12 +106,11 @@ mc.on("player_join") \{ player ->
 Every player wrapper has its own persistent table at `player.data`. It works exactly like `mc.data`, but each player gets a separate file on disk.
 
 ```lua
---# nova syntax
-mc.on("player_join") \{ player ->
+mc.on("player_join", function(player)
     local visits = (player.data.visits or 0) + 1
     player.data.visits = visits
     player:sendMessage("This is visit #" .. visits)
-}
+end)
 ```
 
 Per-player data is saved when the player disconnects and when `/ignis reload` runs. It is removed from memory on disconnect, but stays on disk so it is available next time the player joins.
@@ -133,29 +120,28 @@ Per-player data is saved when the player disconnects and when `/ignis reload` ru
 This example combines commands, events, and per-player storage.
 
 ```lua
---# nova syntax
 local function giveCoins(player, amount)
     player.data.coins = (player.data.coins or 0) + amount
     player:sendMessage("You have " .. player.data.coins .. " coins")
 end
 
 -- /coins gives 10 coins
-register("coins") \{ ctx ->
+register("coins", function(ctx)
     giveCoins(ctx.player, 10)
-}
+end)
 
 -- Killing another player gives 50 coins
-mc.on("player_kill") \{ player, target, damageSource ->
+mc.on("player_kill", function(player, target, damageSource)
     giveCoins(player, 50)
-}
+end)
 
 -- Dying makes you lose 10% of your coins
-mc.on("player_death") \{ player, damageType ->
+mc.on("player_death", function(player, damageType)
     local coins = player.data.coins or 0
     local lost = math.floor(coins * 0.1)
     player.data.coins = coins - lost
     player:sendMessage("You lost " .. lost .. " coins")
-}
+end)
 ```
 
 How it works:
@@ -174,14 +160,13 @@ Because `player.data` persists, your coin total survives disconnects and reloads
 - Some APIs, such as `mc.sleep` and `mc.fetch`, are async and cannot be used directly inside event handlers. If you need them, defer the work to the scheduler:
 
 ```lua
---# nova syntax
-mc.on("player_join") \{ player ->
-    mc.schedule(0) \{
+mc.on("player_join", function(player)
+    mc.schedule(0, function()
         -- async work goes here
         mc.sleep(1000)
         player:sendMessage("Delayed hello!")
-    }
-}
+    end)
+end)
 ```
 
 ## Next steps

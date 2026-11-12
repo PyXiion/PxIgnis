@@ -31,10 +31,12 @@
 ## Test Quirks
 
 - **Working directory**: Tests run from `pxluanova-test/src/test/`, not project root. Lua test scripts are at `pxluanova-test/src/test/lua/*.lua`.
-- **40 known test failures** (not regressions):
-  - 13 `CompatibiltyTest` — need native Lua binary for output comparison / timezone differences
-  - 6 `ErrorsTest` — error message format changes from our fixes
+- **49 known test failures** (not regressions; the fork's Gradle 8.10 needs `JAVA_HOME` = JDK 21):
+  - 14 `CompatibiltyTest` — need native Lua binary for output comparison / timezone differences
+  - 7 `ErrorsTest` — error message format changes from our fixes
   - 21 `WeakTableTest` — pre-existing bug in weak table array part handling
+  - 5 `OrphanedThreadTest` — `cannot resume non-LuaClosure coroutine` (sync coroutines only run Lua closures)
+  - 1 `JavaFunctionYieldTest.testJavaFunctionMultipleYieldsViaLuaCalls`
 - **ScriptDrivenTest** compares output against reference Lua scripts. Tests look for files in `lua/` subdir (not `test/lua/`).
 - **Zip fallback**: Tests can load from `luaj3.0-tests.zip` if plain files not found.
 
@@ -55,14 +57,10 @@ globals.coroutineThreadFactory = LuaThread.PLATFORM_THREAD_FACTORY;
 
 The handoff between resumer and coroutine uses `ReentrantLock` + `Condition` (not `synchronized`/`wait()`/`notify()`). The `run()` method holds the lock for the entire Lua execution; `lua_yield()` and `lua_resume()` use `condition.await()`/`condition.signal()` to hand off.
 
-## Lambda literal extension
+## Fork-specific behaviour
 
-PxLuaNova adds a non-standard `\{ ... }` lambda syntax (off by default, opt-in per file via `--# nova syntax` on line 1):
-- `\{ a, b -> return a + b }` — named-arg lambda, desugars to `function(a, b) return a + b end`.
-- `\{ return 42 }` — zero-arg lambda, requires explicit `return`.
-- `register("lambda") \{ ctx -> ... }` — trailing block sugar, desugars to `register("lambda", function(ctx) ... end)`. Trailing bodies are always chunks (no implicit return).
-
-Implemented in `LexState.java` (lexer synth of `TK_LAMBDA`/`TK_DARROW`, `lambdaBody()` helper, `llex()` magic-comment detection on line 1, hooks in `simpleexp`/`funcargs`/`suffixedexp`). Per-file state lives in the `LexState.lambdaSyntax` instance field; the global `LuaC.lambdaSyntax` flag no longer exists.
+- **String metatable is per `LuaState`.** `LuaString.getmetatable()` reads `LuaState.current().stringMetatable`; `StringLib` sets it on the state that loads it (no more static `LuaString.s_metatable`). Code that runs Lua without a current state sees no string metatable.
+- **Frozen tables.** `LuaTable.freeze()` is shallow and permanent; afterwards `presize`, `setmetatable`, `rawset`, `hashset` and `sort` throw `attempt to modify a frozen table` (so `set`, `insert`, `remove`, `OP_SETLIST` too). Reads are unaffected, so a frozen table without a metatable can be read from several threads. Deep rules (what may be reachable from a frozen table) are the embedder's job.
 
 ## Dependencies
 

@@ -4,6 +4,8 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
+import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
@@ -18,7 +20,7 @@ class MetaTableBuilderTest {
             prop("name") { LuaValue.valueOf("parent") }
         }
         val child = metaTable<Any> {
-            inherit { parent.meta }
+            inherit(parent)
         }
 
         val t = LuaTable()
@@ -34,7 +36,7 @@ class MetaTableBuilderTest {
             prop("name") { LuaValue.valueOf("parent") }
         }
         val child = metaTable<Any> {
-            inherit { parent.meta }
+            inherit(parent)
             prop("name") { LuaValue.valueOf("child") }
         }
 
@@ -54,7 +56,7 @@ class MetaTableBuilderTest {
             }
         }
         val child = metaTable<Any> {
-            inherit { parent.meta }
+            inherit(parent)
         }
 
         val t = LuaTable()
@@ -76,7 +78,7 @@ class MetaTableBuilderTest {
             }
         }
         val child = metaTable<Any> {
-            inherit { parent.meta }
+            inherit(parent)
         }
 
         val t = LuaTable()
@@ -97,7 +99,7 @@ class MetaTableBuilderTest {
             }
         }
         val child = metaTable<Any> {
-            inherit { parent.meta }
+            inherit(parent)
         }
 
         val t = LuaTable()
@@ -118,7 +120,7 @@ class MetaTableBuilderTest {
             }
         }
         val child = metaTable<Any> {
-            inherit { parent.meta }
+            inherit(parent)
             method("childOnly") { args ->
                 LuaValue.valueOf("child")
             }
@@ -144,7 +146,7 @@ class MetaTableBuilderTest {
             )
         }
         val child = metaTable<Any> {
-            inherit { parent.meta }
+            inherit(parent)
         }
 
         val t = LuaTable()
@@ -161,7 +163,7 @@ class MetaTableBuilderTest {
             prop("known") { LuaValue.valueOf("known") }
         }
         val child = metaTable<Any> {
-            inherit { parent.meta }
+            inherit(parent)
         }
 
         val t = LuaTable()
@@ -178,7 +180,7 @@ class MetaTableBuilderTest {
             method("parentFn") { args -> LuaValue.valueOf("pf") }
         }
         val child = metaTable<Any> {
-            inherit { parent.meta }
+            inherit(parent)
             prop("childKey") { LuaValue.valueOf("cv") }
         }
 
@@ -212,11 +214,11 @@ class MetaTableBuilderTest {
             prop("baseProp") { LuaValue.valueOf("base") }
         }
         val mid = metaTable<Any> {
-            inherit { base.meta }
+            inherit(base)
             prop("midProp") { LuaValue.valueOf("mid") }
         }
         val top = metaTable<Any> {
-            inherit { mid.meta }
+            inherit(mid)
             prop("topProp") { LuaValue.valueOf("top") }
         }
 
@@ -235,11 +237,11 @@ class MetaTableBuilderTest {
             prop("baseKey") { LuaValue.valueOf("bv") }
         }
         val mid = metaTable<Any> {
-            inherit { base.meta }
+            inherit(base)
             prop("midKey") { LuaValue.valueOf("mv") }
         }
         val top = metaTable<Any> {
-            inherit { mid.meta }
+            inherit(mid)
             prop("topKey") { LuaValue.valueOf("tv") }
         }
 
@@ -266,4 +268,50 @@ class MetaTableBuilderTest {
         assertTrue("baseKey" in keys)
         assertEquals(3, keys.size)
     }
+
+    private fun wrapper(meta: ru.pyxiion.ignis.api.util.BuiltMeta): LuaTable {
+        val t = LuaTable()
+        t.setmetatable(meta.meta)
+        t.rawset("__pxrp_object", LuaValue.userdataOf(Any()))
+        return t
+    }
+
+    @Test
+    fun `assigning a read only prop is an error`() {
+        val t = wrapper(metaTable<Any> { prop("ro") { LuaValue.valueOf(1) } })
+        assertFailsWith<LuaError> { t.set("ro", LuaValue.valueOf(2)) }
+    }
+
+    @Test
+    fun `assigning an unknown field is an error`() {
+        val t = wrapper(metaTable<Any> { prop("known") { LuaValue.valueOf(1) } })
+        assertFailsWith<LuaError> { t.set("typo", LuaValue.valueOf(2)) }
+    }
+
+    @Test
+    fun `assigning over a method is an error and does not call it`() {
+        var called = false
+        val t = wrapper(metaTable<Any> { method("go") { called = true; LuaValue.NIL } })
+        assertFailsWith<LuaError> { t.set("go", LuaValue.valueOf(2)) }
+        assertFalse(called)
+    }
+
+    @Test
+    fun `unknown assignment through a child is an error too`() {
+        val parent = metaTable<Any> { prop("p") { LuaValue.valueOf(1) } }
+        val child = metaTable<Any> { inherit(parent) }
+        assertFailsWith<LuaError> { wrapper(child).set("nope", LuaValue.valueOf(1)) }
+    }
+
+    @Test
+    fun `lazy value is cached per wrapper table`() {
+        var calls = 0
+        val meta = metaTable<Any> { lazy("v") { calls++; LuaValue.valueOf(calls) } }
+        val a = wrapper(meta)
+        val b = wrapper(meta)
+        assertEquals(1, a.get("v").toint())
+        assertEquals(1, a.get("v").toint())
+        assertEquals(2, b.get("v").toint())
+    }
+
 }

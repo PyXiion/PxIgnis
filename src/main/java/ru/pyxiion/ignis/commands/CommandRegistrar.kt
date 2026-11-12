@@ -11,7 +11,7 @@ import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.luaVarFunction
 import ru.pyxiion.ignis.resumeOrThrow
-import ru.pyxiion.ignis.types.toLuaValue
+import ru.pyxiion.ignis.toLuaValue
 
 class CommandRegistrar(
     private val commandManager: LuaCommandManager,
@@ -75,10 +75,13 @@ class CommandRegistrar(
         val result = mutableListOf<LuaValue>()
         result.add(ctxTable)
         for (node in variant) {
-            if (node is SyntaxNode.Argument) {
-                val def = argDefs[node.name]!!
-                val arg = def.luaType.getArg(ctx, node.name)
-                result.add(toLuaValue(arg))
+            when (node) {
+                is SyntaxNode.Argument -> {
+                    val def = argDefs[node.name]!!
+                    result.add(toLuaValue(def.luaType.getArg(ctx, node.name)))
+                }
+                is SyntaxNode.Choice -> result.add(LuaValue.valueOf(node.value))
+                is SyntaxNode.Literal -> {}
             }
         }
         return result.toTypedArray()

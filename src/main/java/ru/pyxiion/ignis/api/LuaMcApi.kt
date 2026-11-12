@@ -2,132 +2,55 @@ package ru.pyxiion.ignis.api
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException
 import kotlinx.coroutines.CoroutineScope
-import net.minecraft.world.entity.Entity
-import net.minecraft.world.SimpleContainer
-import net.minecraft.nbt.NbtIo
+import net.minecraft.commands.CommandSourceStack
+import net.minecraft.core.Registry
+import net.minecraft.core.registries.Registries
 import net.minecraft.nbt.NbtAccounter
+import net.minecraft.nbt.NbtIo
+import net.minecraft.network.chat.Component
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
-import net.minecraft.core.Registry
-import net.minecraft.resources.ResourceKey
-import net.minecraft.core.registries.Registries
-import net.minecraft.server.MinecraftServer
-import net.minecraft.commands.CommandSourceStack
-import net.minecraft.server.level.ServerLevel
-import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
-import net.minecraft.world.phys.Vec3
+import net.minecraft.resources.ResourceKey
+import net.minecraft.server.MinecraftServer
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.world.SimpleContainer
+import net.minecraft.world.entity.Entity
 import net.minecraft.world.level.Level
+import net.minecraft.world.phys.Vec3
 import org.luaj.vm2.*
 import ru.pyxiion.ignis.*
 import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.api.manager.*
 import ru.pyxiion.ignis.api.util.ItemBuilder
 import ru.pyxiion.ignis.api.util.ItemStackCodec
+import ru.pyxiion.ignis.api.util.broadcastTo
+import ru.pyxiion.ignis.api.util.checkOverlay
 import ru.pyxiion.ignis.api.wrapper.*
-import ru.pyxiion.ignis.api.wrappertoLuaValue.PlayerListWrapper
+import ru.pyxiion.ignis.sandbox.Vfs
 import ru.pyxiion.ignis.storage.StorageManager
-import java.nio.file.Path
 import java.util.*
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+
+private const val MAX_STRUCTURE_BYTES = 32L * 1024 * 1024
 
 class LuaMcApi(
     private val server: MinecraftServer,
     private val storage: StorageManager,
+    private val vfs: Vfs,
+    private val containers: ContainerManager,
     private val stateProvider: () -> LuaState,
     private val eventBus: EventBus,
     private val modScope: CoroutineScope,
 ) {
     val scheduler = Scheduler(stateProvider)
 
-    private val asyncExecutors = AsyncExecutorRegistry()
-    private val asyncThreadPool: ExecutorService = Executors.newFixedThreadPool(
-        Runtime.getRuntime().availableProcessors().coerceIn(2, 8),
-        Thread.ofPlatform().name("PxIgnis-async-", 0).factory()
-    )
-
-    init {
-        asyncExecutors.register(
-            AsyncExecutor(
-                name = "main",
-                dispatch = { runnable -> server.execute(runnable) },
-            )
-        )
-        asyncExecutors.register(
-            AsyncExecutor(
-                name = "threadpool",
-                dispatch = { runnable -> asyncThreadPool.execute(runnable) },
-                shutdown = { asyncThreadPool.shutdown() },
-            )
-        )
-    }
-
-    val asyncLib = AsyncLib(asyncExecutors, stateProvider(), scheduler)
-
-    fun shutdownAsync() {
-        asyncExecutors.shutdown()
-    }
-    private val playerCache = mutableMapOf<UUID, LuaValue>()
+    val asyncLib = AsyncLib(stateProvider, scheduler, vfs)
 
     fun suspendFunction(block: suspend (Varargs) -> Varargs): LuaFunction =
         luaSuspendFunction(modScope, block)
 
     init {
-        EntityWrap.sharedPlayerCache = playerCache
-        EntityWrap.sharedTickProvider = { scheduler.currentTick }
         RegionManager.sharedStateProvider = stateProvider
-    }
-
-    fun invalidatePlayer(uuid: UUID) {
-        playerCache.remove(uuid)
-    }
-
-    fun clearPlayerCache() {
-        playerCache.clear()
-    }
-
-    private fun <T : Any> getRegistryKey(registryType: ResourceKey<Registry<T>>, key: String): ResourceKey<T> {
-        return ResourceKey.create(registryType, Identifier.parse(key))
-    }
-
-    private fun requireWorld(arg: LuaValue): ServerLevel {
-        return server.getLevel(requireWorldKey(arg))
-            ?: throw IllegalArgumentException("Level ${arg.tostring()} not found.")
-    }
-
-    private fun requireWorldKey(arg: LuaValue): ResourceKey<Level> {
-        val key = arg.checkjstring()
-        return getRegistryKey(Registries.DIMENSION, key)
-    }
-
-
-    private fun doBroadcast(text: String, pos: Vec3?, world: ResourceKey<Level>?, range: Double?, overlay: Int?) {
-        var players = server.playerList.players
-
-        range?.let { rng ->
-            require(pos != null && world != null)
-            val rangeSquare = rng * rng
-            players = players.filter {
-                it.level().dimension() == world
-                        && it.distanceToSqr(pos) < rangeSquare
-            }
-        }
-
-        if (overlay == null) {
-            players.forEach {
-                it.sendSystemMessage(Component.literal(text))
-            }
-        } else {
-            val timingPacket = ClientboundSetTitlesAnimationPacket(20, overlay, 20)
-            val titlePacket = ClientboundSetActionBarTextPacket(Component.literal(text))
-            players.forEach {
-                with(it.connection) {
-                    send(timingPacket)
-                    send(titlePacket)
-                }
-            }
-        }
     }
 
     private fun luaTime(args: Varargs): Varargs {
@@ -137,9 +60,7 @@ class LuaMcApi(
     private fun broadcast(args: Varargs) {
         require(args.narg() in 1..2) { "broadcast(text, overlay = false) requires 1..2 arguments" }
         val text = args.arg(1).checkjstring()
-        val overlay = if (args.arg(2).isint()) args.arg(2).toint() else null
-
-        doBroadcast(text, null, null, null, overlay)
+        broadcastTo(server.playerList.players, text, checkOverlay(args.arg(2), "mc.broadcast"))
     }
 
     private fun luaSchedule(args: Varargs): Varargs {
@@ -171,12 +92,12 @@ class LuaMcApi(
         val key = ResourceKey.create(Registries.DIMENSION, Identifier.parse(name))
         val world = server.getLevel(key)
             ?: throw IllegalArgumentException("Level '$name' not found")
-        return WorldWrap.wrap(world, playerCache, { scheduler.currentTick })
+        return WorldWrap.wrap(world)
     }
 
     private fun luaLoadStructure(args: Varargs): Varargs {
         val id = args.arg(1).checkjstring()
-        val manager = server.structureManager
+        val manager = Compat.structureTemplateManager(server)
         val template = manager.get(Identifier.parse(id))
             .orElseThrow { LuaError("Структура '$id' не найдена") }
         return StructureWrap.wrap(template)
@@ -184,8 +105,10 @@ class LuaMcApi(
 
     private fun luaLoadStructureFile(args: Varargs): Varargs {
         val path = args.arg(1).checkjstring()
-        val nbt = NbtIo.readCompressed(Path.of(path), NbtAccounter.unlimitedHeap())
-        val template = server.structureManager.readStructure(nbt)
+        val file = vfs.safeFile(path)
+            ?: throw LuaError("Файл структуры '$path' не найден в config/ignis")
+        val nbt = NbtIo.readCompressed(file.toPath(), NbtAccounter.create(MAX_STRUCTURE_BYTES))
+        val template = Compat.readStructure(server, nbt)
         return StructureWrap.wrap(template)
     }
 
@@ -277,6 +200,8 @@ class LuaMcApi(
 
                 sb.append("  ".repeat(depth))
                 sb.append('}')
+                // Only a table that is an ancestor of itself is a cycle; the same table twice is not.
+                seen.remove(hash)
             }
 
             value.isfunction() -> sb.append("function")
@@ -344,10 +269,9 @@ class LuaMcApi(
         MetaTableRegistry.init()
 
         val state = stateProvider()
-        val mainExecutor = asyncExecutors.resolve("main")
-        state.getMainThread().executionContext = mainExecutor
+        // Queued, never inline: resolving a promise must not run its waiters inside `resolve`.
         state.getMainThread().resumeHandler = LuaThread.ResumeHandler { thread: LuaThread, args: Varargs ->
-            mainExecutor.dispatch { thread.resumeOrLog(args, "async callback") }
+            asyncLib.dispatch { thread.resumeOrLog(args, "async callback") }
         }
 
         val mcMeta = LuaTable()
@@ -359,11 +283,7 @@ class LuaMcApi(
                 }
 
                 "players" -> {
-                    PlayerListWrapper(
-                        source = { server.playerList.players },
-                        playerCache = playerCache,
-                        tickProvider = { scheduler.currentTick },
-                    ).toLua()
+                    PlayerWrap.wrapAll(server.playerList.players)
                 }
 
                 else -> {
@@ -433,7 +353,7 @@ class LuaMcApi(
 
                     "inventory" -> {
                         val inv = InvWrap.deserialise(d, server.registryAccess())
-                        InvWrap.wrap(inv)
+                        InvWrap.wrap(inv, containers)
                     }
 
                     else -> throw LuaError("mc.deserialise: неизвестный тип '$t'")
@@ -443,7 +363,7 @@ class LuaMcApi(
                 val s = size.checkint()
                 if (s !in 9..54 || s % 9 != 0)
                     throw LuaError("mc.createInventory: размер должен быть кратен 9 и от 9 до 54")
-                InvWrap.wrap(LockableInventory(s))
+                InvWrap.wrap(SimpleContainer(s), containers)
             },
 
             "registerBehaviour" to luaFunction { id, fn ->

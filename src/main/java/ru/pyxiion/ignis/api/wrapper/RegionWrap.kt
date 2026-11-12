@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis.api.wrapper
 
+import ru.pyxiion.ignis.wrapObject
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -15,17 +16,13 @@ import ru.pyxiion.ignis.unwrap
 object RegionWrap {
 
     fun wrap(region: Region): LuaValue {
-        val t = LuaTable()
-        t.setmetatable(MetaTableRegistry.REGION)
-        t.rawset("__pxrp_type", LuaValue.valueOf("region"))
-        t.rawset("__pxrp_object", LuaValue.userdataOf(region))
-        return t
+        return wrapObject(MetaTableRegistry.REGION, "region", region)
     }
 
     private val BUILT by lazy {
         metaTable<Region> {
             prop("id") { LuaValue.valueOf(id) }
-            prop("world") { WorldWrap.wrap(world, EntityWrap.sharedPlayerCache, EntityWrap.sharedTickProvider) }
+            prop("world") { WorldWrap.wrap(requireAlive().world) }
             prop("players") {
                 livePlayers().map(EntityFactory::wrap).toLuaArray()
             }
@@ -55,20 +52,20 @@ object RegionWrap {
 
             method("destroy") { args ->
                 val self = args.arg(1).checktable()
-                self.unwrap<Region>().destroy()
+                self.unwrap<Region>().requireAlive().destroy()
                 LuaValue.NIL
             }
 
             method("contains") { args ->
                 val self = args.arg(1).checktable()
-                val region = self.unwrap<Region>()
+                val region = self.unwrap<Region>().requireAlive()
                 val pos = args.arg(2).toVec3d()
                 LuaValue.valueOf(region.contains(pos))
             }
 
             method("getBounds") { args ->
                 val self = args.arg(1).checktable()
-                val region = self.unwrap<Region>()
+                val region = self.unwrap<Region>().requireAlive()
                 with(region.bounds) {
                     luaTableOf(
                         "A" to Vector.of(minX, minY, minZ).toLuaValue(),

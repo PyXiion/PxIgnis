@@ -48,18 +48,8 @@ class LuaCommandManager(
 
         for (node in nodes) {
             val next = when (node) {
-                is SyntaxNode.Literal -> {
-                    if (currentNode == null) {
-                        getOrCreateNodeByCmdPath(listOf(node.value))
-                    } else {
-                        var child = currentNode.getChild(node.value)
-                        if (child == null) {
-                            child = Commands.literal(node.value).build()
-                            currentNode.addChild(child)
-                        }
-                        child
-                    }
-                }
+                is SyntaxNode.Literal -> literalChild(currentNode, node.value)
+                is SyntaxNode.Choice -> literalChild(currentNode, node.value)
                 is SyntaxNode.Argument -> {
                     val argDef = argDefs[node.name]
                         ?: throw IllegalArgumentException("Unknown argument '${node.name}' in variant")
@@ -77,6 +67,7 @@ class LuaCommandManager(
             pathBuilder.add(
                 when (node) {
                     is SyntaxNode.Literal -> node.value
+                    is SyntaxNode.Choice -> node.value
                     is SyntaxNode.Argument -> "<${node.name}>"
                 }
             )
@@ -101,6 +92,16 @@ class LuaCommandManager(
             nodes.filterIsInstance<SyntaxNode.Literal>().joinToString(" ") { it.value },
             nodes.filterIsInstance<SyntaxNode.Argument>().map { it.name },
             permission)
+    }
+
+    private fun literalChild(parent: CommandNode<CommandSourceStack>?, value: String): CommandNode<CommandSourceStack> {
+        if (parent == null) return getOrCreateNodeByCmdPath(listOf(value))
+        var child = parent.getChild(value)
+        if (child == null) {
+            child = Commands.literal(value).build()
+            parent.addChild(child)
+        }
+        return child
     }
 
     private fun getOrCreateNodeByCmdPath(path: List<String>): LiteralCommandNode<CommandSourceStack> {

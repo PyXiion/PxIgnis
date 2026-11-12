@@ -208,6 +208,7 @@ public class LuaClosure extends LuaFunction {
 			state.debuglib.onCall( this, varargs, stack );
 
 		// process instructions
+		if (state != null) state.luaNestDepth++;
 		try {
 			for (; true; ++pc) {
 				if (state != null && state.debuglib != null)
@@ -531,6 +532,7 @@ public class LuaClosure extends LuaFunction {
 			processErrorHooks(le, p, pc);
 			throw le;
 		} finally {
+			if (state != null) state.luaNestDepth--;
 			if ( openups != null )
 				for ( int u=openups.length; --u>=0; )
 					if ( openups[u] != null )

@@ -1,205 +1,44 @@
 ---
 title: Language extensions
-description: PxLuaNova extends Lua 5.2 with a non-standard lambda literal syntax and some Lua 5.3+ stdlib additions.
+description: PxLuaNova is a Lua 5.2 fork with a few Lua 5.3+ math functions; numbers keep Lua 5.2 semantics.
 ---
-
-import { Tabs, TabItem } from '@astrojs/starlight/components'
 
 PxIgnis runs on **PxLuaNova**, a Lua 5.2 fork. This page documents
 extensions that aren't part of standard Lua 5.2.
 
-## Lambda literal `\{ ... }`
+## Numbers
 
-PxLuaNova adds a non-standard syntax for inline anonymous functions.
-Opt in per file by placing the magic comment **on line 1**:
+Numbers behave as in Lua 5.2: there is one `number` type, and there are no
+Lua 5.3 integer/float semantics (no `//`, no bitwise operators, `/` and `^`
+are always floating-point operations).
 
-```lua
---# nova syntax
-```
+Internally a number is stored either as a 32-bit integer or as a double.
+This is only a representation detail: a result that is a whole number in the
+32-bit range (`2.0`, `10 / 2`) is stored as an integer, and anything else
+(`0.5`, `2^40`, `2147483648`) as a double. Values never change what they
+compare or print as because of this.
 
-This enables the `\` + `{` two-character sequence to be recognized as a
-lambda literal. Without the pragma, `\` outside a string literal is a
-syntax error.
-
-### Named-arg lambda
-
-`\{ args -> body }` — arguments followed by `->` and the body.
-
-I tried to implement implicit return like `\{ 5 }` that returns 5,
-but in Lua is too buggy. So just use `return`.
-
-<Tabs>
-<TabItem label="Lambda">
+`math.type` exposes the representation:
 
 ```lua
---# nova syntax
-local double = \{ x -> return x * 2 }
-print(double(21))  -- 42
+print(math.type(3))       -- integer
+print(math.type(10 / 2))  -- integer (5 is a whole number)
+print(math.type(0.5))     -- float
+print(math.type(2^40))    -- float (outside the 32-bit range)
+print(math.type("3"))     -- nil (not a number)
 ```
 
-</TabItem>
-<TabItem label="Function">
-
-```lua
-local function double(x)
-  return x * 2
-end
-print(double(21))
-```
-
-</TabItem>
-</Tabs>
-
-Multi-arg:
-
-<Tabs>
-<TabItem label="Lambda">
-
-```lua
---# nova syntax
-local sum = \{ a, b, c -> return a + b + c }
-print(sum(1, 2, 3))  -- 6
-```
-
-</TabItem>
-<TabItem label="Function">
-
-```lua
-local function sum(a, b, c)
-  return a + b + c
-end
-print(sum(1, 2, 3))
-```
-
-</TabItem>
-</Tabs>
-
-### Zero-arg
-
-No parameters. Body is always a chunk; use `return` for values:
-
-<Tabs>
-<TabItem label="Lambda">
-
-```lua
---# nova syntax
-local answer = \{ return 40 + 2 }
-print(answer())  -- 42
-```
-
-</TabItem>
-<TabItem label="Function">
-
-```lua
-local function answer()
-  return 40 + 2
-end
-print(answer())
-```
-
-</TabItem>
-</Tabs>
-
-Body can contain statements:
-
-<Tabs>
-<TabItem label="Lambda">
-
-```lua
---# nova syntax
-local get = \{
-  print("side effects OK")
-  return 42
-}
-print(get())  -- 42
-```
-
-</TabItem>
-<TabItem label="Function">
-
-```lua
-local function get()
-  print("side effects OK")
-  return 42
-end
-print(get())
-```
-
-</TabItem>
-</Tabs>
-
-### Trailing-block sugar
-
-`\{ ... }` after a function call appends the lambda as the last argument.
-The body is always parsed as a chunk (no implicit return). This is
-especially useful with `register()`:
-
-<Tabs>
-<TabItem label="Lambda">
-
-```lua
---# nova syntax
-register("greet") \{ ctx ->
-  ctx.player:send("hello!")
-}
-```
-
-</TabItem>
-<TabItem label="Function">
-
-```lua
-register("greet", function(ctx)
-  ctx.player:send("hello!")
-end)
-```
-
-</TabItem>
-</Tabs>
-
-Works with any function, not just `register()`:
-
-```lua
---# nova syntax
-local results = {}
-local function each(t, fn)
-  for i, v in ipairs(t) do
-    fn(v, i)
-  end
-end
-each({ "a", "b", "c" }) \{ v, i ->
-  results[i] = v .. i
-}
--- results == { "a1", "b2", "c3" }
-```
-
-### Closures
-
-Lambdas capture local variables from the enclosing scope, just like
-`function`:
-
-```lua
---# nova syntax
-function makeCounter()
-  local n = 0
-  return \{
-    n = n + 1
-    return n
-  }
-end
-
-local c = makeCounter()
-print(c())  -- 1
-print(c())  -- 2
-```
+Don't use it to tell `3` from `3.0`; they are the same value. Use it
+only to check that a value is a number whose representation fits in an
+integer.
 
 ## Standard library additions
 
-The Lua standard library in PxLuaNova includes some Lua 5.3+ functions
-not present in standard Lua 5.2:
+These functions come from Lua 5.3+ and are not part of standard Lua 5.2:
 
-| Function                    | Description                          |
-|-----------------------------|--------------------------------------|
-| `math.type(x)`              | Returns `"integer"` or `"float"`     |
-| `math.atan(y, x)`           | Two-argument arctangent (Lua 5.3+)   |
-| `math.min(...)`             | Variadic minimum                     |
-| `math.max(...)`             | Variadic maximum                     |
+| Function                    | Description                                                  |
+|-----------------------------|--------------------------------------------------------------|
+| `math.type(x)`              | `"integer"`, `"float"`, or `nil` if `x` is not a number      |
+| `math.atan(y, x)`           | Two-argument arctangent                                      |
+| `math.min(...)`             | Variadic minimum                                             |
+| `math.max(...)`             | Variadic maximum                                             |

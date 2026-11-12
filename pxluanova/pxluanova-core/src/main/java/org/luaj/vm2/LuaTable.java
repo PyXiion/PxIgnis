@@ -96,6 +96,27 @@ public class LuaTable extends LuaValue implements Metatable {
     protected Metatable m_metatable;
 
     /**
+     * True once {@link #freeze()} was called; all write entry points then throw.
+     */
+    private boolean frozen;
+
+    /**
+     * Make this table permanently read-only (shallow). Reads stay legal, so a frozen table
+     * may be read by several threads at once as long as it has no metatable.
+     */
+    public void freeze() {
+        frozen = true;
+    }
+
+    public boolean isFrozen() {
+        return frozen;
+    }
+
+    private void checkWritable() {
+        if (frozen) throw new LuaError("attempt to modify a frozen table");
+    }
+
+    /**
      * Construct empty table
      */
     public LuaTable() {
@@ -180,11 +201,13 @@ public class LuaTable extends LuaValue implements Metatable {
     }
 
     public void presize(int narray) {
+        checkWritable();
         if (narray > array.length)
             array = resize(array, 1 << log2(narray));
     }
 
     public void presize(int narray, int nhash) {
+        checkWritable();
         if (narray < 0 || narray >= Integer.MAX_VALUE - 1)
             throw new LuaError("table array part too large");
         if (nhash < 0 || nhash >= Integer.MAX_VALUE - 1)
@@ -229,6 +252,7 @@ public class LuaTable extends LuaValue implements Metatable {
     }
 
     public LuaValue setmetatable(LuaValue metatable) {
+        checkWritable();
         boolean hadWeakKeys = m_metatable != null && m_metatable.useWeakKeys();
         boolean hadWeakValues = m_metatable != null && m_metatable.useWeakValues();
         m_metatable = metatableOf(metatable);
@@ -298,6 +322,7 @@ public class LuaTable extends LuaValue implements Metatable {
     }
 
     public void rawset(int key, LuaValue value) {
+        checkWritable();
         if (!arrayset(key, value))
             hashset(LuaInteger.valueOf(key), value);
     }
@@ -306,6 +331,7 @@ public class LuaTable extends LuaValue implements Metatable {
      * caller must ensure key is not nil
      */
     public void rawset(LuaValue key, LuaValue value) {
+        checkWritable();
         if (!key.isinttype() || !arrayset(key.toint(), value))
             hashset(key, value);
     }
@@ -496,6 +522,7 @@ public class LuaTable extends LuaValue implements Metatable {
      * @param value value to set
      */
     public void hashset(LuaValue key, LuaValue value) {
+        checkWritable();
         if (value.isnil())
             hashRemove(key);
         else {
@@ -861,6 +888,7 @@ public class LuaTable extends LuaValue implements Metatable {
      * @param comparator {@link LuaValue} to be called to compare elements.
      */
     public void sort(LuaValue comparator) {
+        checkWritable();
         if (len().tolong() >= (long) Integer.MAX_VALUE) throw new LuaError("array too big: " + len().tolong());
         if (m_metatable != null && m_metatable.useWeakValues()) {
             dropWeakArrayValues();

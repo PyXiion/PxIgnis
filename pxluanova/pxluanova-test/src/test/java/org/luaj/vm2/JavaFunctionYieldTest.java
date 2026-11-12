@@ -198,4 +198,163 @@ public class JavaFunctionYieldTest extends TestCase {
 		assertTrue(caught.get() instanceof LuaError);
 		assertTrue(caught.get().getMessage().contains("dbg-error"));
 	}
+
+	/** A14: CALL at the top of the stack frame must not overflow on resume. */
+	public void testResumeAfterYieldAtStackTop() {
+		LuaValue f = state.load(
+			"local co = coroutine.wrap(function()\n" +
+			"  local a, b = 1, 2\n" +
+			"  local x = coroutine.yield()\n" +
+			"  return a, b, x\n" +
+			"end)\n" +
+			"co()\n" +
+			"return co(7)", "a14");
+		Varargs r = f.invoke(LuaValue.NONE);
+		assertEquals(3, r.narg());
+		assertEquals(1, r.arg(1).toint());
+		assertEquals(2, r.arg(2).toint());
+		assertEquals(7, r.arg(3).toint());
+	}
+
+	/** A14: same shape, yield done by a Java function. */
+	public void testResumeAfterJavaYieldAtStackTop() {
+		state.globals.set("yield_fn", new YieldAndReturnFunction(state));
+		LuaValue f = state.load(
+			"local co = coroutine.wrap(function()\n" +
+			"  local a, b = 1, 2\n" +
+			"  local x = yield_fn('q')\n" +
+			"  return a, b, x\n" +
+			"end)\n" +
+			"co()\n" +
+			"return co(7)", "a14j");
+		Varargs r = f.invoke(LuaValue.NONE);
+		assertEquals(3, r.narg());
+		assertEquals(1, r.arg(1).toint());
+		assertEquals(2, r.arg(2).toint());
+		assertEquals(7, r.arg(3).toint());
+	}
+
+	/**
+	 * Runs {@code body} inside a coroutine and returns what resume() produced: ok, value.
+	 * A yield that would have to unwind through a Java frame must fail loudly instead of
+	 * letting the Java function and the rest of the Lua body continue with a half-yield.
+	 */
+	private Varargs resumeOnce(String body) {
+		LuaValue f = state.load(
+			"local co = coroutine.create(function()\n" + body + "\nend)\n" +
+			"return coroutine.resume(co)", "boundary");
+		return f.invoke(LuaValue.NONE);
+	}
+
+	private void assertBoundaryError(Varargs r) {
+		assertFalse("resume should fail: " + r, r.arg1().toboolean());
+		assertTrue("got: " + r.arg(2), r.arg(2).tojstring().contains("C-call boundary"));
+	}
+
+	public void testYieldInsideTableSortComparatorIsAnError() {
+		assertBoundaryError(resumeOnce(
+			"table.sort({3, 1, 2}, function(a, b) coroutine.yield('y') return a < b end)"));
+	}
+
+	public void testYieldInsideGsubCallbackIsAnError() {
+		assertBoundaryError(resumeOnce(
+			"return string.gsub('abc', '%w', function(c) coroutine.yield(c) return c:upper() end)"));
+	}
+
+	/** The supported shape still works: yielding Lua function called directly from the coroutine. */
+	public void testYieldFromCoroutineBodyStillWorks() {
+		Varargs r = resumeOnce("coroutine.yield('ok')");
+		assertTrue(r.arg1().toboolean());
+		assertEquals("ok", r.arg(2).tojstring());
+	}
+
+	/** Runs {@code body} in a coroutine; returns resume ok, pcall ok, err, status, reached. */
+	private Varargs pcallInCoroutine(String pcallExpr) {
+		state.globals.set("yield_fn", new YieldAndReturnFunction(state));
+		LuaValue f = state.load(
+			"reached = nil\n" +
+			"local co = coroutine.create(function()\n" +
+			"  local ok, err = " + pcallExpr + "\n" +
+			"  reached = true\n" +
+			"  return ok, err\n" +
+			"end)\n" +
+			"local r, ok, err = coroutine.resume(co)\n" +
+			"return r, ok, err, coroutine.status(co), reached", "pcallbarrier");
+		return f.invoke(LuaValue.NONE);
+	}
+
+	private void assertPcallBoundaryError(Varargs r) {
+		assertTrue("resume itself must succeed: " + r, r.arg(1).toboolean());
+		assertFalse("pcall must report failure: " + r, r.arg(2).toboolean());
+		assertTrue("got: " + r.arg(3), r.arg(3).tojstring().contains("C-call boundary"));
+		assertEquals("dead", r.arg(4).tojstring());
+	}
+
+	public void testYieldInsidePcallClosureIsAnError() {
+		state.globals.set("reached_in_pcall", LuaValue.NIL);
+		LuaValue f = state.load(
+			"local co = coroutine.create(function()\n" +
+			"  return pcall(function() coroutine.yield('y'); reached_in_pcall = true end)\n" +
+			"end)\n" +
+			"local r, ok, err = coroutine.resume(co)\n" +
+			"return r, ok, err, coroutine.status(co), reached_in_pcall", "pcallclosure");
+		Varargs r = f.invoke(LuaValue.NONE);
+		assertPcallBoundaryError(r);
+		assertTrue("body must not run past the yield", r.arg(5).isnil());
+	}
+
+	public void testYieldInsideSortComparatorUnderPcallIsAnError() {
+		Varargs r = pcallInCoroutine(
+			"pcall(table.sort, {3, 1, 2}, function(a, b) coroutine.yield('y') return a < b end)");
+		assertPcallBoundaryError(r);
+	}
+
+	public void testYieldInsideLuaMetamethodIsAnError() {
+		Varargs r = pcallInCoroutine(
+			"pcall(function()\n" +
+			"  local t = setmetatable({}, {__index = function(_, k) coroutine.yield(k) return 1 end})\n" +
+			"  return t.x\n" +
+			"end)");
+		assertPcallBoundaryError(r);
+	}
+
+	public void testPcallOfContinuableFunctionStillSuspendsAndResumes() {
+		state.globals.set("yield_fn", new YieldAndReturnFunction(state));
+		LuaValue f = state.load(
+			"local co = coroutine.create(function()\n" +
+			"  return pcall(yield_fn, 'q')\n" +
+			"end)\n" +
+			"local r1, y = coroutine.resume(co)\n" +
+			"local r2, ok, v = coroutine.resume(co, 'back')\n" +
+			"return r1, y, r2, ok, v, coroutine.status(co)", "pcallok");
+		Varargs r = f.invoke(LuaValue.NONE);
+		assertTrue(r.arg(1).toboolean());
+		assertEquals("q", r.arg(2).tojstring());
+		assertTrue(r.arg(3).toboolean());
+		assertTrue(r.arg(4).toboolean());
+		assertEquals("dead", r.arg(6).tojstring());
+	}
+
+	/**
+	 * A tail call out of the pcall'd closure runs after the closure's activation has ended, so the
+	 * yield is at nest depth 0 and suspends exactly like pcall(continuableFn).
+	 */
+	public void testYieldInTailCallInsidePcallClosureSuspendsAndResumes() {
+		state.globals.set("yield_fn", new YieldAndReturnFunction(state));
+		LuaValue f = state.load(
+			"local co = coroutine.create(function()\n" +
+			"  return pcall(function() return yield_fn('q') end)\n" +
+			"end)\n" +
+			"local r1, y = coroutine.resume(co)\n" +
+			"local st = coroutine.status(co)\n" +
+			"local r2, ok = coroutine.resume(co, 'back')\n" +
+			"return r1, y, st, r2, ok, coroutine.status(co)", "pcalltail");
+		Varargs r = f.invoke(LuaValue.NONE);
+		assertTrue(r.arg(1).toboolean());
+		assertEquals("q", r.arg(2).tojstring());
+		assertEquals("suspended", r.arg(3).tojstring());
+		assertTrue(r.arg(4).toboolean());
+		assertTrue(r.arg(5).toboolean());
+		assertEquals("dead", r.arg(6).tojstring());
+	}
 }

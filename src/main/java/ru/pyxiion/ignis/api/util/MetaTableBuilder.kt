@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis.api.util
 
+import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.LuaValue.varargsOf
@@ -14,7 +15,7 @@ inline fun <reified T : Any> metaTable(block: MetaTableBuilder<T>.() -> Unit): B
 
 /**
  * @param meta  finished metatable (__index / __newindex / __pairs / methods)
- * @param keys  key list for __pairs — children merge these via pairsKeys(...)
+ * @param keys  keys `__pairs` iterates: own props and methods plus everything inherited
  */
 class BuiltMeta(val meta: LuaTable, val keys: List<LuaValue>) {
     /** Copies everything from [meta] onto [target] */
@@ -27,19 +28,19 @@ class BuiltMeta(val meta: LuaTable, val keys: List<LuaValue>) {
  * DSL summary:
  *   prop("x", getter)              – read-only
  *   prop("x", get, set)            – read-write (setter is T.(LuaValue))
- *   lazy("x", factory)             – computed once, cached via rawset
- *   lazy("x", factory, set)        – cached + setter
+ *   lazy("x", factory)             – read-only, computed once per wrapper table and cached on it via rawset
  *   map(mapping, get, set?)        – batch from Map<String, K>
  *   method("x") { args -> ... }    – args.arg(1) = self table
- *   toString { "..." }             - tostring
- *   inherit { MetaTableRegistry.X }
- *   inheritIndex / inheritNewIndex – asymmetric fallthrough
+ *   toString { "..." }             – tostring
+ *   inherit(parent)                – fall through to another BuiltMeta (props, methods, setters, __pairs keys)
+ *
+ * Assigning to a read-only field, to a method or to an unknown name raises a [LuaError]; per-object state
+ * therefore does not live in script-assigned fields (wrappers keep their own state with rawset).
  */
 class MetaTableBuilder<T : Any>(val type: Class<T>) {
     private val entries = linkedMapOf<LuaValue, Entry<T>>()
     private val methods = mutableListOf<Pair<LuaValue, (Varargs) -> LuaValue>>()
-    private var parentIndex: (() -> LuaTable)? = null
-    private var parentNewIndex: (() -> LuaTable)? = null
+    private var parent: BuiltMeta? = null
 
     fun prop(name: String, getter: T.() -> LuaValue) {
         entries[LuaValue.valueOf(name)] = SimpleEntry({ t, _ -> getter(t) }, null)
@@ -57,27 +58,10 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
         entries[LuaValue.valueOf(name)] = SimpleEntry({ t, _ -> get(t) }, { t, v, _ -> set(t, v) })
     }
 
-    /** First read creates and caches the value */
+    /** First read creates and caches the value on the wrapper table. */
     fun lazy(name: String, factory: T.() -> LuaValue) {
         val luaName = LuaValue.valueOf(name)
-        entries[luaName] = LazyEntry(luaName, factory, null)
-    }
-
-    /** Same as lazy(), with optional setter. [invalidate] controls whether setting clears the cache. */
-    fun lazy(
-        name: String,
-        factory: T.() -> LuaValue,
-        set: T.(LuaValue) -> Unit,
-        invalidate: Boolean = true,
-    ) {
-        val luaName = LuaValue.valueOf(name)
-        val setter: (T, LuaValue, LuaTable) -> Unit = { t, v, _ -> set(t, v) }
-
-        if (invalidate) {
-            entries[luaName] = LazyEntryWithInvalidate(factory, setter)
-        } else {
-            entries[luaName] = LazyEntry(luaName, factory, setter)
-        }
+        entries[luaName] = LazyEntry(luaName, factory)
     }
 
     /** Each map entry becomes a separate __index key sharing one getter/setter. */
@@ -104,17 +88,10 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
         method(LuaValue.valueOf(name), body)
     }
 
-    /**
-     * Registers a method. Varargs layout:
-     *   arg(1) = self table   arg(2..n) = Lua arguments
-     */
     fun method(name: LuaValue, body: (Varargs) -> LuaValue) {
         methods.add(name to body)
     }
 
-    /**
-     *
-     */
     inline fun toString(crossinline factory: T.() -> String) {
         method(LuaValue.TOSTRING) { args: Varargs ->
             val self = args.arg(1).checktable()
@@ -124,16 +101,18 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
         }
     }
 
-    fun inherit(parent: () -> LuaTable) {
-        parentIndex = parent
-        parentNewIndex = parent
+    fun inherit(parent: BuiltMeta) {
+        this.parent = parent
     }
 
     fun build(): BuiltMeta {
+        val parent = this.parent
         val meta = LuaTable()
+        val methodNames = methods.map { it.first }.toSet()
         val keysList = linkedSetOf<LuaValue>().apply {
+            if (parent != null) addAll(parent.keys)
             addAll(entries.keys)
-            addAll(methods.map { it.first })
+            addAll(methodNames)
             removeIf { !it.isstring() || it.tojstring().startsWith("__") }
         }.toList()
 
@@ -150,89 +129,52 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
                 if (!m.isnil()) return@luaFunction m
             }
 
-            val parent = parentIndex?.invoke()
             if (parent != null) {
-                val direct = parent.get(key)
+                val direct = parent.meta.get(key)
                 if (!direct.isnil()) return@luaFunction direct
 
-                parent.get("__index").asFunction()?.let {
+                parent.meta.get("__index").asFunction()?.let {
                     return@luaFunction it.invoke(varargsOf(s, key)) as LuaValue
                 }
             }
             return@luaFunction LuaValue.NIL
-        }
-        )
+        })
 
-        val hasSetters = entries.values.any { it.hasSetter }
-        if (hasSetters || parentNewIndex != null) {
-            meta.set("__newindex", luaVarFunction { args ->
-                val self = args.arg(1).checktable()
-                val key = args.arg(2)
-                val value = args.arg(3)
-                val obj = self.rawget("__pxrp_object").checkuserdata(type)
+        meta.set("__newindex", luaVarFunction { args ->
+            val self = args.arg(1).checktable()
+            val key = args.arg(2)
+            val value = args.arg(3)
+            val obj = self.rawget("__pxrp_object").checkuserdata(type)
+            val owner = self.rawget("__pxrp_type").optjstring(type.simpleName)
 
-                val entry = entries[key]
-                if (entry != null && entry.hasSetter) {
-                    entry.set(obj as T, value, self)
-                    return@luaVarFunction LuaValue.NIL
-                }
-
-                val mt = self.getmetatable()
-                if (!mt.isnil()) {
-                    val m = mt.get(key)
-                    if (m.isfunction()) {
-                        m.invoke(varargsOf(arrayOf(self, key, value)))
-                        return@luaVarFunction LuaValue.NIL
-                    }
-                }
-
-                val parent = parentNewIndex?.invoke()
-                if (parent != null) {
-                    val pn = parent.get("__newindex")
-                    if (pn.isfunction()) return@luaVarFunction pn.invoke(varargsOf(arrayOf(self, key, value)))
-                }
-
+            val entry = entries[key]
+            if (entry != null) {
+                if (!entry.hasSetter) throw LuaError("$owner.${key.tojstring()}: поле только для чтения")
+                entry.set(obj as T, value, self)
                 return@luaVarFunction LuaValue.NIL
             }
-            )
-        }
+            if (key in methodNames) throw LuaError("$owner.${key.tojstring()} — метод, его нельзя перезаписать")
+
+            val parentNewIndex = parent?.meta?.get("__newindex")
+            if (parentNewIndex != null && parentNewIndex.isfunction()) {
+                parentNewIndex.invoke(varargsOf(arrayOf(self, key, value)))
+                return@luaVarFunction LuaValue.NIL
+            }
+            throw LuaError("$owner: неизвестное поле '${key.tojstring()}'")
+        })
 
         meta.set("__pairs", luaVarFunction { args ->
             val self = args.arg(1)
-            val parentMeta = parentIndex?.invoke()
-
-            val merged = linkedSetOf<LuaValue>().apply {
-                addAll(keysList)
-                if (parentMeta != null) {
-                    val pp = parentMeta.get("__pairs")
-                    if (pp.isfunction()) {
-                        val triple = pp.invoke(self)
-                        val iterFn = triple.arg(1)
-                        val state = triple.arg(2)
-                        var prevKey = triple.arg(3)
-                        while (true) {
-                            val nxt = iterFn.invoke(varargsOf(state, prevKey))
-                            val k = nxt.arg(1)
-                            if (k.isnil()) break
-                            if (k.isstring() && !k.tojstring().startsWith("__")) {
-                                add(k)
-                            }
-                            prevKey = k
-                        }
-                    }
-                }
-            }.toList()
-
             val iterator = object : VarArgFunction() {
                 private var index = 0
                 override fun invoke(args: Varargs): Varargs {
-                    if (index >= merged.size) return NIL
-                    val key = merged[index]
+                    if (index >= keysList.size) return NIL
+                    val key = keysList[index]
                     index++
                     return varargsOf(key, self.get(key))
                 }
             }
-            return@luaVarFunction varargsOf(iterator, self, LuaValue.NIL)
+            varargsOf(iterator, self, LuaValue.NIL)
         })
 
         for ((name, body) in methods) {
@@ -265,9 +207,8 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
     private class LazyEntry<T>(
         private val name: LuaValue,
         private val factory: (T) -> LuaValue,
-        private val setter: ((T, LuaValue, LuaTable) -> Unit)?,
     ) : Entry<T> {
-        override val hasSetter get() = setter != null
+        override val hasSetter get() = false
         override fun get(obj: T, self: LuaTable): LuaValue {
             val cached = self.rawget(name)
             if (!cached.isnil()) return cached
@@ -276,27 +217,7 @@ class MetaTableBuilder<T : Any>(val type: Class<T>) {
             return v
         }
 
-        override fun set(obj: T, value: LuaValue, self: LuaTable) {
-            setter?.invoke(obj, value, self)
-        }
-    }
-
-    private class LazyEntryWithInvalidate<T>(
-        private val factory: (T) -> LuaValue,
-        private val setter: ((T, LuaValue, LuaTable) -> Unit)?,
-    ) : Entry<T> {
-        private var cached: LuaValue = LuaValue.NIL
-
-        override val hasSetter get() = setter != null
-        override fun get(obj: T, self: LuaTable): LuaValue {
-            if (cached.isnil()) cached = factory(obj)
-            return cached
-        }
-
-        override fun set(obj: T, value: LuaValue, self: LuaTable) {
-            cached = LuaValue.NIL
-            setter?.invoke(obj, value, self)
-        }
+        override fun set(obj: T, value: LuaValue, self: LuaTable) = Unit
     }
 
     /** Uses a shared getter/setter pair with a typed discriminator K (attribute, slot…). */
