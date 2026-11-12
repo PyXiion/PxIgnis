@@ -147,10 +147,62 @@ local function eventPhase(w)
     mc.schedule(2, function() step("watchdog: runaway task was stopped", function() end) end)
 end
 
+-- Диалоги: библиотека грузится, сырой API на месте (показ требует игрока, поэтому только наличие и ошибки).
+local function dialogPhase()
+    step("dialog: library loads", function()
+        local dialog = require "core:dialog"
+        assert(type(dialog.show) == "function" and type(dialog.button) == "function")
+        assert(fails(dialog.show, nil, { title = "x" }), "show without a player")
+    end)
+    step("dialog: warn", function() mc.warn("smoke", "expected warning") end)
+
+    -- Every shape the library can emit must decode through the vanilla codec (no player needed).
+    local n = 0
+    local fake = { uuid = "smoke-dialog", name = "smoke" }
+    function fake:showDialog(spec) mc.decodeDialog(spec); n = n + 1 end
+    function fake:closeDialog() end
+    function fake:runCommand() return true, 1 end
+    local dialog = require "core:dialog"
+    local function ok(name, spec)
+        step("dialog shape: " .. name, function() dialog.show(fake, spec) end)
+    end
+    local noop = function() end
+    local item = mc.createItem("minecraft:diamond_sword", { name = "S" })
+    local inputs = {
+        dialog.text("t", "T", { max = 10, initial = "x", width = 200 }),
+        dialog.text("ml", "ML", { max = 100, lines = 3, height = 60 }),
+        dialog.text("hl", "HL", { hideLabel = true }),
+        dialog.number("n", "N", 0, 10, { step = 2, initial = 4, format = "options.generic_value", width = 150 }),
+        dialog.number("n2", "N2", 0, 1),
+        dialog.option("o", "O", { { "a", "A" }, { "b", "B" } }, { initial = "b", width = 100, hideLabel = true }),
+        dialog.bool("b", "B", { initial = true }),
+        dialog.bool("b2", "B2"),
+    }
+    local body = { "text", dialog.item(item, "desc", { tooltip = false, decorations = false, width = 32, height = 32 }),
+        dialog.item("minecraft:apple"), dialog.item(item) }
+    ok("notice, no buttons", { title = "t" })
+    ok("notice, no buttons + inputs/body", { title = "t", externalTitle = "e", body = body, inputs = inputs })
+    ok("notice, one button, no escape", { title = "t", canEscape = false, buttons = { dialog.button("b", noop) } })
+    ok("one button + escape", { title = "t", buttons = { dialog.button("b", noop, { tooltip = "tip", width = 120 }) } })
+    ok("one button + inputs", { title = "t", inputs = inputs, body = body, buttons = { dialog.button("b", noop) } })
+    ok("many buttons, columns", { title = "t", columns = 2, buttons = {
+        dialog.button("a", noop, { after = "keep" }), dialog.button("b", noop, { after = "close" }),
+        dialog.command("c", "say hi"), dialog.link("l", "https://example.com"), dialog.copy("y", "text") } })
+    ok("all wait", { title = "t", buttons = { dialog.button("a", noop), dialog.command("b", "say hi") } })
+    ok("all keep", { title = "t", buttons = { dialog.button("a", noop, { after = "keep" }) , dialog.button("b", noop, { after = "keep" }) } })
+    ok("all close", { title = "t", buttons = { dialog.button("a", noop, { after = "close" }), dialog.button("b", noop, { after = "close" }) } })
+    ok("no escape, many buttons + inputs", { title = "t", canEscape = false, inputs = inputs, buttons = {
+        dialog.button("a", noop), dialog.link("l", "https://example.com") } })
+    ok("link only", { title = "t", canEscape = false, buttons = { dialog.link("l", "https://example.com") } })
+    step("dialog: raw rejects bad type", function() assert(fails(mc.decodeDialog, { type = "minecraft:nonsense", title = "x" })) end)
+    step("dialog: shapes shown", function() assert(n == 11, n) end)
+end
+
 -- Сущности: чанк удерживается forceload, а проверки идут через 10 секунд, когда чанк точно принимает сущности.
 local function entityPhase(w)
     particlePhase(w)
     eventPhase(w)
+    dialogPhase()
     local mob
     w:setBlock(vec(0, 79, 0), "minecraft:stone")
     step("spawn", function() mob = w:spawn("minecraft:zombie", vec(0, 80, 0), {}); assert(mob) end)

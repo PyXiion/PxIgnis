@@ -11,6 +11,8 @@
 #
 # Needs the Minecraft EULA accepted: eula=true in run/eula.txt, or MINECRAFT_EULA=true in the environment.
 # PXIGNIS_SMOKE_EXTRA="a.lua b.lua" copies extra scripts next to the smoke script (for one-off checks).
+# PXIGNIS_SMOKE_MENU=true|false|flip (default true; flip starts with the menu off, turns it on and runs /reload: nothing may change) sets menu.enabled in config/pxignis.json; the run then checks that the
+# generated pxignis:menu data pack is enabled (true) or absent (false).
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -65,7 +67,7 @@ build_jar() { # build_jar <target> -> prints jar path
 }
 
 run_target() { # run_target <target>: 0 = all green
-    local t=$1 props="$root/gradle/versions/$1.properties"
+    local t=$1 props="$root/gradle/versions/$1.properties" menu=${PXIGNIS_SMOKE_MENU:-true}
     [[ -f $props ]] || { echo "smoke: unknown target '$t'" >&2; return 1; }
     local mc loader fabric flk java jar
     mc=$(prop "$props" minecraft_version); loader=$(prop "$props" loader_version)
@@ -93,6 +95,7 @@ run_target() { # run_target <target>: 0 = all green
     cp "$root/smoke/ignis-smoke.lua" "$run/config/ignis/"
     for extra in ${PXIGNIS_SMOKE_EXTRA:-}; do cp "$extra" "$run/config/ignis/"; done # extra scripts to run alongside
     echo "eula=true" > "$run/eula.txt"
+    echo "{\"menu\": {\"enabled\": $([[ $menu == flip ]] && echo false || echo "$menu"), \"title\": \"Smoke menu\", \"button\": \"Open\"}}" > "$run/config/pxignis.json"
     cat > "$run/server.properties" <<EOF
 online-mode=false
 generate-structures=false
@@ -116,6 +119,16 @@ EOF
         sleep 0.5
     done
     sleep 4 # async checks (parallel workers) report after "all done"
+    echo "datapack list enabled" >&3
+    sleep 1
+    if [[ $menu == flip ]]; then # started with the menu off: turn it on and vanilla /reload
+        echo "{\"menu\": {\"enabled\": true, \"title\": \"Smoke menu\", \"button\": \"Open\"}}" > "$run/config/pxignis.json"
+        echo "[SMOKE-FLIP] reload" >> "$run/server.log"
+        echo "reload" >&3
+        sleep 6
+        echo "datapack list enabled" >&3
+        sleep 1
+    fi
     echo stop >&3
     for _ in $(seq 60); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
     kill "$pid" 2>/dev/null || true
@@ -130,6 +143,11 @@ EOF
     done_=$(grep -c '^\[SMOKE\] all done' "$log" || true)
 
     local status=0
+    if [[ $menu == true ]]; then
+        grep -q 'file/pxignis_menu' "$log" || { echo "smoke[$t]: pxignis:menu data pack is not enabled" >&2; status=1; }
+    else
+        ! grep -q 'file/pxignis_menu' "$log" || { echo "smoke[$t]: pxignis:menu data pack present although menu.enabled=false" >&2; status=1; }
+    fi
     [[ $done_ -ge 1 ]] || { echo "smoke[$t]: never reached 'all done'" >&2; status=1; }
     [[ -z $fail ]] || { echo "$fail" >&2; status=1; }
     [[ -z $errors ]] || { echo "smoke[$t]: server errors:" >&2; echo "$errors" >&2; status=1; }
