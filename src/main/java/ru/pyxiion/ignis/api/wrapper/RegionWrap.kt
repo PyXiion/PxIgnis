@@ -44,6 +44,20 @@ object RegionWrap {
                 LuaValue.valueOf(region.on(event, callback, throttle))
             }
 
+            method("emit") { args ->
+                val self = args.arg(1).checktable();
+                val region = self.unwrap<Region>();
+                val event = args.arg(2).checkjstring();
+                val eventArgs = {
+                    if (args.narg() >= 2) {
+                        (2..args.narg()).map { args.arg(it) }.toTypedArray()
+                    } else emptyArray<LuaValue>()
+                }
+
+                region.emit(event, eventArgs)
+                LuaValue.NIL
+            }
+
             method("off") { args ->
                 val self = args.arg(1).checktable()
                 val region = self.unwrap<Region>()

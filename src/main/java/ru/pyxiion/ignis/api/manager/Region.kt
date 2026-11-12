@@ -63,6 +63,11 @@ class Region internal constructor(
 
     internal fun tick() = bus.tick()
 
+    fun emit(event: String, args: () -> Array<LuaValue>) {
+        requireAlive()
+        bus.fire(event, args);
+    }
+
     fun contains(uuid: UUID): Boolean = uuid in contained
 
     fun destroy() {
