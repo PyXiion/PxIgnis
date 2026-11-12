@@ -56,9 +56,9 @@ config and internals are allowed and expected whenever they make the design simp
 - `ItemStackWrap.wrap()` holds the live stack; `ItemStackWrap.unwrap()` returns a copy.
 - Events: built-in names live in `events/EventCatalog.kt` (`GlobalEvents`, `RegionEvents`); Minecraft callbacks
   post them through `events/GameEvents.kt` (mixins call its `@JvmStatic` functions). Handlers get one event table
-  `e` (fields set with `rawset`, `e:cancel()` from a shared metatable). Pre-0.18 names are `LegacyEvent` views that
-  rebuild positional args from `e`. Adding an event = `EventDef` + a `GameEvents` function + `lua-types/19-events.lua`
-  + `site/.../reference/events.md`. Design: `docs/events.md`.
+  `e` (fields set with `rawset`, `e:cancel()` from a shared metatable). `EventBus.on`/`emit` accept a built-in name of
+  the bus's catalog or a namespaced custom name `ns:name` and throw on anything else. Adding an event = `EventDef` +
+  a `GameEvents` function + `lua-types/19-events.lua` + `site/.../reference/events.md`. Design: `docs/events.md`.
 - Script errors/warnings go through `runtime/ScriptErrors` (log + chat to `px.ignis.prompt_errors`, rate-limited),
   not `logger` directly.
 

@@ -78,7 +78,7 @@ All `/ignis` commands need operator level 4 or the `px.ignis` permission.
 
 ## Script errors in chat
 
-Errors in event handlers, commands and scheduled tasks, and warnings such as an unknown event name, are written to
+Errors in event handlers, commands, scheduled tasks, mob AI behaviours and async callbacks are written to
 the server log and also sent to online players with the `px.ignis.prompt_errors` permission (operators level 4 by
 default), in the form `event 'block.break': shop.lua:12: attempt to index a nil value`. The same error is repeated in
 chat at most once every 10 seconds, so a handler failing every tick does not flood it.

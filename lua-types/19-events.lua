@@ -94,7 +94,8 @@ function Event:cancel(reason) end
 ---@field amount number
 
 ---Subscribes a handler to an event. Returns a handler id (pass to `mc.off`).
----Names with a `:` are custom events (`mc.emit`); their handlers get the emitted arguments.
+---Custom events (`mc.emit`) are named `prefix:name`; their handlers get the emitted arguments.
+---A name that is neither a built-in event nor `prefix:name` is an error.
 ---@param event PxIgnisEventName|string
 ---@param handler fun(...)
 ---@param opts? EventOptions
@@ -131,8 +132,8 @@ function mc.on(event, handler, opts) end
 ---@return boolean  -- true if the handler was found and removed
 function mc.off(id) end
 
----Fires a custom event (its name must not be a built-in one). Handlers run before this returns.
----@param event string  -- e.g. "mymod:boss_killed"
+---Fires a custom event. Handlers run before this returns.
+---@param event string  -- namespaced, e.g. "mymod:boss_killed"; a built-in or bare name is an error
 ---@param ... any       -- passed to the handlers as they are
 ---@return boolean      -- false if a handler returned false (cancelled)
 function mc.emit(event, ...) end

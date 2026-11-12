@@ -39,6 +39,12 @@ object RegionWrap {
                 LuaValue.valueOf(region.on(event, callback, options))
             }
 
+            method("emit") { args ->
+                val self = args.arg(1).checktable()
+                val region = self.unwrap<Region>()
+                LuaValue.valueOf(region.emit(args.arg(2).checkjstring(), args.subargs(3)))
+            }
+
             method("off") { args ->
                 val self = args.arg(1).checktable()
                 val region = self.unwrap<Region>()

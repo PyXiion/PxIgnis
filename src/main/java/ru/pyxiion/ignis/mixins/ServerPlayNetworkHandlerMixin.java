@@ -22,7 +22,7 @@ public abstract class ServerPlayNetworkHandlerMixin {
     @Shadow
     public ServerPlayer player;
 
-    // player_drop_item — intercept DROP_ITEM / DROP_ALL_ITEMS (hotbar Q)
+    // player.drop — intercept DROP_ITEM / DROP_ALL_ITEMS (hotbar Q)
     @Inject(method = "handlePlayerAction", at = @At("HEAD"), cancellable = true)
     private void pxrp$onDropItem(ServerboundPlayerActionPacket packet, CallbackInfo ci) {
         var action = packet.getAction();
@@ -49,7 +49,7 @@ public abstract class ServerPlayNetworkHandlerMixin {
         }
     }
 
-    // player_drop_item — intercept THROW + PICKUP(outside) from inventory (inventory Q)
+    // player.drop — intercept THROW + PICKUP(outside) from inventory (inventory Q)
     @Inject(method = "handleContainerClick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/inventory/AbstractContainerMenu;getStateId()I"), cancellable = true)
     private void pxrp$onClickSlotDrop(ServerboundContainerClickPacket packet, CallbackInfo ci) {
         var handler = player.containerMenu;

@@ -51,13 +51,13 @@ local function particlePhase(w)
     end)
 end
 
--- Модель событий: таблица события, приоритеты, старые имена, отмена (в том числе падением обработчика), watchdog.
+-- Модель событий: таблица события, приоритеты, проверка имён, свои события, отмена (в том числе падением
+-- обработчика), watchdog.
 local function eventPhase(w)
-    local order, got, legacy = {}, nil, nil
+    local order, got = {}, nil
     local ids = {
         mc.on("entity.spawn", function(e) order[#order + 1] = "low"; got = e end, { priority = "low" }),
         mc.on("entity.spawn", function(e) order[#order + 1] = "high" end, { priority = "high" }),
-        mc.on("entity_spawn", function(entity) legacy = entity end),
     }
     local pig
     step("events: spawn passes an event table", function()
@@ -65,7 +65,6 @@ local function eventPhase(w)
         assert(got and got.name == "entity.spawn" and got.entity, "no event table")
     end)
     step("events: priority order", function() assert(order[1] == "high" and order[2] == "low", table.concat(order, ",")) end)
-    step("events: old name gets positional args", function() assert(legacy and legacy.type == "minecraft:pig", tostring(legacy)) end)
     for _, id in ipairs(ids) do mc.off(id) end
 
     local function hurtWith(handler)
@@ -89,6 +88,56 @@ local function eventPhase(w)
         assert(pig.health < before, "damage not applied")
     end)
     step("events: builtin names cannot be emitted", function() assert(fails(mc.emit, "entity.spawn")) end)
+    step("events: a pre-1.0 name is an error", function()
+        local ok, err = pcall(mc.on, "entity_spawn", function() end)
+        assert(not ok and tostring(err):find("Did you mean 'entity.spawn'", 1, true), tostring(err))
+    end)
+    step("events: a custom name without a namespace is an error", function()
+        local ok, err = pcall(mc.on, "smoke_custom", function() end)
+        assert(not ok and tostring(err):find("must be namespaced", 1, true), tostring(err))
+        assert(fails(mc.emit, "smoke_custom"), "emit accepted it")
+    end)
+    step("events: a namespaced custom event round-trips", function()
+        local seen
+        local id = mc.on("smoke:custom", function(a, b) seen = a .. b end)
+        assert(mc.emit("smoke:custom", "x", 1) == true, "emit reported a cancel")
+        mc.off(id)
+        assert(seen == "x1", tostring(seen))
+    end)
+    step("events: region:on follows the same name rule", function()
+        local r = w:createRegion(vec(20, 70, 20), vec(24, 74, 24))
+        r:off(r:on("enter", function() end))
+        r:off(r:on("smoke:custom", function() end))
+        local ok, err = pcall(r.on, r, "entity_enter", function() end)
+        assert(not ok and tostring(err):find("unknown event 'entity_enter'", 1, true), tostring(err))
+        assert(fails(r.on, r, "smoke_custom", function() end), "bare custom name accepted")
+        r:destroy()
+    end)
+    step("events: region:emit is local, positional and cancellable", function()
+        local r = w:createRegion(vec(20, 70, 20), vec(24, 74, 24))
+        local other = w:createRegion(vec(30, 70, 30), vec(34, 74, 34))
+        local calls, otherCalls, globalCalls = {}, 0, 0
+        local gid = mc.on("smoke:ping", function() globalCalls = globalCalls + 1 end)
+        other:on("smoke:ping", function() otherCalls = otherCalls + 1 end)
+        r:on("smoke:ping", function(a, b) calls[#calls + 1] = "low" end)
+        r:on("smoke:ping", function(a, b)
+            calls[#calls + 1] = "high:" .. tostring(a) .. "," .. tostring(b)
+            return false
+        end, { priority = "high" })
+        r:on("smoke:ping", function() calls[#calls + 1] = "audit" end, { priority = "lowest", receiveCancelled = true })
+        local ok, err = pcall(function() return r:emit("smoke:ping", "x", 2) end)
+        mc.off(gid)
+        assert(ok, tostring(err))
+        assert(err == false, "emit returned " .. tostring(err))
+        assert(table.concat(calls, "|") == "high:x,2|audit", table.concat(calls, "|"))
+        assert(otherCalls == 0 and globalCalls == 0, "leaked to " .. otherCalls .. "/" .. globalCalls)
+        assert(other:emit("smoke:quiet") == true, "no handlers must return true")
+        assert(fails(r.emit, r, "enter"), "built-in name accepted")
+        assert(fails(r.emit, r, "smoke_ping"), "bare name accepted")
+        other:destroy()
+        r:destroy()
+        assert(fails(r.emit, r, "smoke:ping"), "emit after destroy accepted")
+    end)
     pig:remove()
 
     step("ignis: /ignis status", function() assert(mc.execute("ignis status"), "command failed") end)

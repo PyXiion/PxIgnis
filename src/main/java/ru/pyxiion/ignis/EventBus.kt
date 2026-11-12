@@ -8,10 +8,8 @@ import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaThread
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
-import org.slf4j.Logger
 import ru.pyxiion.ignis.events.EventCatalog
 import ru.pyxiion.ignis.events.EventDef
-import ru.pyxiion.ignis.events.LegacyEvent
 import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 
@@ -69,11 +67,9 @@ data class HandlerOptions(val priority: Int = 0, val receiveCancelled: Boolean =
 
 class EventHandler internal constructor(
     val id: Int,
-    /** The name the script passed to `on`. */
-    val registeredAs: String,
+    val event: String,
     val callback: LuaFunction,
     val options: HandlerOptions,
-    internal val legacy: LegacyEvent?,
 ) {
     internal var nextAllowedTick = Long.MIN_VALUE
     internal var removed = false
@@ -94,8 +90,8 @@ class EventResult(val cancelled: Boolean, val event: LuaTable?) {
  * Handlers for one scope (the global `mc.on`, or one region).
  *
  * Built-in events ([catalog]) pass handlers a single event table `e`; handlers cancel with `e:cancel()`.
- * Handlers registered under a pre-1.0 name ([LegacyEvent]) still get positional arguments and cancel by
- * returning false. Custom events (`mc.emit`) pass their arguments through as they are.
+ * Custom events are named `ns:name` and pass their arguments through as they are (`mc.emit`); a handler cancels
+ * by returning false. Any other name is an error in [on] and [emit].
  *
  * For every event, handlers run by priority and a cancelled event skips handlers without `receiveCancelled`.
  * A handler that throws cancels a built-in cancellable event (fail closed), so a broken permission check does
@@ -106,66 +102,50 @@ class EventResult(val cancelled: Boolean, val event: LuaTable?) {
  */
 class EventBus(
     private val context: String,
-    private val logger: Logger,
+    private val catalog: EventCatalog,
     private val stateProvider: () -> LuaState? = { null },
-    private val catalog: EventCatalog = EventCatalog.EMPTY,
     private val clock: (() -> Long)? = null,
 ) {
     private val handlers = mutableMapOf<String, MutableList<EventHandler>>()
-    private val byId = mutableMapOf<Int, Pair<String, EventHandler>>()
+    private val byId = mutableMapOf<Int, EventHandler>()
     private var nextId = 0
     private var ticks = 0L
-    private val warnedLegacy = HashSet<String>()
 
     fun on(event: String, callback: LuaFunction, options: HandlerOptions = HandlerOptions.DEFAULT): Int {
-        val legacy = catalog.legacy(event)
-        val key = when {
-            legacy != null -> {
-                if (warnedLegacy.add(event)) {
-                    logger.warn(
-                        "{}: event '{}' is deprecated, use '{}' (its handler gets an event table)",
-                        scope(), event, legacy.target,
-                    )
-                }
-                legacy.target
-            }
-            catalog.def(event) != null -> event
-            else -> {
-                if (!catalog.isEmpty && ':' !in event) warnUnknown(event)
-                event
-            }
-        }
+        if (catalog.def(event) == null) requireCustom(event)
         val id = ++nextId
-        val entry = EventHandler(id, event, callback, options, legacy)
-        val list = handlers.getOrPut(key) { mutableListOf() }
+        val entry = EventHandler(id, event, callback, options)
+        val list = handlers.getOrPut(event) { mutableListOf() }
         // Stable: after every handler of the same or higher priority.
         val at = list.indexOfFirst { it.options.priority < options.priority }
         if (at < 0) list.add(entry) else list.add(at, entry)
-        byId[id] = key to entry
+        byId[id] = entry
         return id
     }
 
-    private fun warnUnknown(event: String) {
-        val hint = catalog.suggest(event)?.let { " Did you mean '$it'?" }
-            ?: " Custom events should be namespaced, e.g. 'mymod:$event'."
-        ScriptErrors.warn(scope(), "unknown event '$event', the handler will never be called.$hint")
+    /** Throws unless [event] is a custom event name: `ns:name` with both parts non-empty. */
+    private fun requireCustom(event: String) {
+        val colon = event.indexOf(':')
+        if (colon > 0 && colon < event.length - 1) return
+        val hint = catalog.suggest(event)?.let { "Did you mean '$it'?" }
+            ?: "Custom events must be namespaced, e.g. 'mymod:$event'"
+        throw LuaError("unknown event '$event'. $hint")
     }
 
     fun off(id: Int): Boolean {
-        val (key, entry) = byId.remove(id) ?: return false
+        val entry = byId.remove(id) ?: return false
         entry.removed = true
-        handlers[key]?.remove(entry)
-        if (handlers[key]?.isEmpty() == true) handlers.remove(key)
+        val list = handlers[entry.event] ?: return true
+        list.remove(entry)
+        if (list.isEmpty()) handlers.remove(entry.event)
         return true
     }
 
-    /** True when some handler listens to [event] (a built-in, legacy or custom name). */
-    fun hasHandlers(event: String): Boolean =
-        handlers[catalog.legacy(event)?.target ?: event]?.isNotEmpty() == true
+    /** True when some handler listens to [event] (a built-in or custom name). */
+    fun hasHandlers(event: String): Boolean = handlers[event]?.isNotEmpty() == true
 
-    /** Handler count per name the scripts registered, for `/ignis status`. */
-    fun stats(): Map<String, Int> =
-        byId.values.groupingBy { it.second.registeredAs }.eachCount().toSortedMap()
+    /** Handler count per event, for `/ignis status`. */
+    fun stats(): Map<String, Int> = handlers.mapValues { it.value.size }.toSortedMap()
 
     /** Fires a built-in event without fields. */
     fun fire(event: String) {
@@ -190,7 +170,8 @@ class EventBus(
      * false. Returns false when the event was cancelled.
      */
     fun emit(event: String, args: Varargs): Boolean {
-        if (catalog.isBuiltIn(event)) throw LuaError("'$event' is a built-in event and cannot be emitted from Lua")
+        if (catalog.def(event) != null) throw LuaError("'$event' is a built-in event and cannot be emitted from Lua")
+        requireCustom(event)
         val list = handlers[event]
         if (list.isNullOrEmpty()) return true
         return !dispatch(event, list, true, null, args)
@@ -204,25 +185,15 @@ class EventBus(
             if (h.removed) continue
             if (e != null && cancellable) cancelled = e.rawget("cancelled").toboolean()
             if (cancelled && !h.options.receiveCancelled) continue
-            val legacy = h.legacy
-            if (legacy != null && !legacy.accepts(e!!)) continue
             if (h.options.throttle > 0) {
                 if (now < h.nextAllowedTick) continue
                 h.nextAllowedTick = now + h.options.throttle
             }
-            val callArgs: Varargs = when {
-                legacy != null -> LuaValue.varargsOf(legacy.args(e!!))
-                e != null -> e
-                else -> args
-            }
             try {
-                val r = invoke(h.callback, callArgs).arg1()
-                if (cancellable && (legacy != null || e == null) && r.isboolean() && !r.toboolean()) {
-                    cancelled = true
-                    e?.rawset("cancelled", LuaValue.TRUE)
-                }
+                val r = invoke(h.callback, e ?: args).arg1()
+                if (e == null && r.isboolean() && !r.toboolean()) cancelled = true
             } catch (t: Throwable) {
-                val where = scope(h.registeredAs)
+                val where = scope(h.event)
                 // Built-in cancellable events fail closed; a custom event is only cancelled by `return false`.
                 if (cancellable && e != null) {
                     e.rawset("cancelled", LuaValue.TRUE)
@@ -254,10 +225,8 @@ class EventBus(
         else -> ScriptWatchdog.guard { cb.invoke(args) }
     }
 
-    private fun scope(event: String? = null): String {
-        val name = if (event == null) "events" else "event '$event'"
-        return if (context.isEmpty()) name else "$name ($context)"
-    }
+    private fun scope(event: String): String =
+        if (context.isEmpty()) "event '$event'" else "event '$event' ($context)"
 
     /** Advances the default throttle clock by one tick. */
     fun tick() {
@@ -265,10 +234,9 @@ class EventBus(
     }
 
     fun clear() {
-        byId.values.forEach { it.second.removed = true }
+        byId.values.forEach { it.removed = true }
         handlers.clear()
         byId.clear()
-        warnedLegacy.clear()
         nextId = 0
     }
 

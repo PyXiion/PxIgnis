@@ -23,7 +23,8 @@ Region.entities = nil
 
 ---Subscribes a callback to a region event. Returns a handler id (pass to
 ---`region:off` to unsubscribe). Event tables are described in 19-events.lua.
----@param event RegionEventName
+---Names with a `:` are custom events fired by `Region:emit`; their callbacks get the emitted arguments.
+---@param event RegionEventName|string
 ---@param callback fun(e: RegionEvent)
 ---@param opts? EventOptions
 ---@return integer
@@ -32,6 +33,14 @@ Region.entities = nil
 ---@overload fun(self: Region, event: '"move"', callback: fun(e: RegionMoveEvent), opts?: EventOptions): integer
 ---@overload fun(self: Region, event: '"death"', callback: fun(e: RegionDeathEvent), opts?: EventOptions): integer
 function Region:on(event, callback, opts) end
+
+---Fires a custom event on this region only (`mc.on` handlers and other regions do not see it). The name must be
+---namespaced, e.g. "arena:round_start"; a built-in region event name or a bare name is an error. Handlers run
+---before this returns and get the arguments as they are (the region is not added).
+---@param event string
+---@param ... any
+---@return boolean  -- false if a handler returned false (cancelled)
+function Region:emit(event, ...) end
 
 ---@param id integer
 ---@return boolean

@@ -40,7 +40,7 @@ class IgnisRuntime(private val server: MinecraftServer) {
     private val vfs = Vfs(FabricLoader.getInstance().configDir.resolve("ignis").toAbsolutePath())
     private val environment = ScriptEnvironment(vfs)
     val modScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    val eventManager = EventBus("", PxIgnis.logger, { environment.luaStateOrNull }, GlobalEvents.CATALOG)
+    val eventManager = EventBus("", GlobalEvents.CATALOG, { environment.luaStateOrNull })
     val containers = ContainerManager()
     val api: LuaMcApi = LuaMcApi(server, storage, vfs, containers, { environment.luaState }, eventManager, modScope)
     val scheduler: Scheduler get() = api.scheduler

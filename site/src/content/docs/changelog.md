@@ -50,10 +50,10 @@ description: Release history for PxIgnis.
   integer within range for numbers).
 - **Regions:** a region covers at most 1024 chunks (`world:createRegion`/`region:setBounds` raise an error beyond
   that); a destroyed region's methods raise errors. The client wireframe debugging (`/ignis debug regions`, the five
-  `Region*Payload` packets, the client entrypoint) is removed until real rendering exists. `entity_enter` /
-  `entity_leave` follow region membership, so a teleport across dimensions produces one of each; chunks are computed
-  with `floor`, so negative coordinates land in the right chunk; region `entity_death` / `player_death` now actually
-  fire (they were never called).
+  `Region*Payload` packets, the client entrypoint) is removed until real rendering exists. `enter` / `leave`
+  (`entity_enter` / `entity_leave`) follow region membership, so a teleport across dimensions produces one of each;
+  chunks are computed with `floor`, so negative coordinates land in the right chunk; the region `death` event
+  (`entity_death` / `player_death`) now actually fires (it was never called).
 - **Commands:** `choice=a,b` registers one Brigadier literal per option (vanilla parsing, errors and completion;
   non-ASCII options work); an option with a space, an empty or a duplicate option is an error at `register`.
   The `target` argument type is removed (use `player`). `int` arguments arrive as integers, `block_pos` as a `Vector`.
@@ -77,19 +77,72 @@ description: Release history for PxIgnis.
   behaviour, so vanilla behaviour keeps running while the goal runs. A goal pausing (`Goal.stop()`) no longer ends
   the Lua AI; a Lua AI error is logged with the behaviour id.
 - **New event model.** Built-in events have new names (`player.join`, `block.break`, `entity.hurt`, ...) and pass
-  one event table `e` instead of positional arguments; cancel with `e:cancel(reason?)`. The old names still work
-  with positional arguments and `return false`, and log a deprecation warning. See
-  [Events](/reference/events#old-event-names) for the mapping.
-- **Cancelled events skip later handlers** unless they are registered with `{ receiveCancelled = true }`. This also
-  applies to handlers under the old names.
+  one event table `e` instead of positional arguments; cancel with `e:cancel(reason?)` instead of `return false`.
+  **The old names are removed**, with no compatibility layer: rename every handler using the table under
+  [Event names before 0.18](#event-names-before-018) and read its arguments from `e`.
+- **Unknown event names are errors.** `mc.on`, `region:on` and `mc.emit` raise an error for a name that is neither
+  a built-in event nor a namespaced custom event `prefix:name` (both parts non-empty), e.g.
+  `unknown event 'player.jion'. Did you mean 'player.join'?` or
+  `unknown event 'boss_killed'. Custom events must be namespaced, e.g. 'mymod:boss_killed'`. Such a handler used to
+  be registered and never called. Rename custom events without a prefix (`boss_killed` → `mymod:boss_killed`).
+- **Cancelled events skip later handlers** unless they are registered with `{ receiveCancelled = true }`.
 - **Errors cancel.** A handler of a cancellable event that throws now cancels the event (a crashing whitelist used to
   let everyone in).
 - **`mc.emit` refuses built-in event names.** It returns `false` when a handler of the custom event returned `false`.
-- Region events: `enter`, `leave`, `move`, `death` with `e.entity` / `e.player` / `e.region`; the old `entity_*` /
-  `player_*` names still work.
+- **Region events** are `enter`, `leave`, `move`, `death`, `tick` and `destroy`, with `e.entity` / `e.player` /
+  `e.region`. The old `entity_*` / `player_*` names are removed; a player-only handler checks `e.player`.
+
+#### Event names before 0.18
+
+`mc.on`:
+
+| Removed (positional arguments)                          | Use                 |
+|---------------------------------------------------------|---------------------|
+| `player_join_init(player)`                              | `player.login`      |
+| `player_join(player)`                                   | `player.join`       |
+| `player_leave(player)`                                  | `player.leave`      |
+| `player_respawn(player, alive)`                         | `player.respawn`    |
+| `player_chat(player, message)`                          | `player.chat`       |
+| `player_move(player, from, to)`                         | `player.move`       |
+| `player_use_item(player, hand, item, itemId)`           | `player.use_item`   |
+| `player_attack_entity(player, entity)`                  | `player.attack`     |
+| `player_interact_entity(player, entity, hand)`          | `player.interact`   |
+| `player_kill(player, target, damageSource)`             | `player.kill`       |
+| `player_consume_item(player, item)`                     | `player.consume`    |
+| `player_pickup_item(player, item, count)`               | `player.pickup`     |
+| `player_drop_item(player, item, count)`                 | `player.drop`       |
+| `player_block_break(player, pos, blockId)`              | `block.break`       |
+| `player_block_place(player, pos, blockId)`              | `block.place`       |
+| `entity_spawn(entity)`                                  | `entity.spawn`      |
+| `entity_despawn(entity)`                                | `entity.despawn`    |
+| `player_hurt(player, damageType, amount)`               | `entity.hurt` with `e.player` |
+| `entity_hurt(entity, damageType, amount, source)`       | `entity.hurt`       |
+| `player_damage(player, damageType, amount, blocked)`    | `entity.damaged` with `e.player` |
+| `entity_damage(entity, damageType, amount, source, blocked)` | `entity.damaged` |
+| `player_death(entity, damageType, amount)`              | `entity.death` with `e.player` |
+| `entity_death(entity, damageType, amount)`              | `entity.death`      |
+
+`region:on`:
+
+| Removed (positional arguments)                          | Use                     |
+|---------------------------------------------------------|-------------------------|
+| `entity_enter(entity)`                                  | `enter`                 |
+| `player_enter(entity)`                                  | `enter` with `e.player` |
+| `entity_leave(entity)`                                  | `leave`                 |
+| `player_leave(entity)`                                  | `leave` with `e.player` |
+| `entity_move(entity, from, to)`                         | `move`                  |
+| `player_move(entity, from, to)`                         | `move` with `e.player`  |
+| `entity_death(entity, damageType, amount)`              | `death`                 |
+| `player_death(entity, damageType)`                      | `death` with `e.player` |
+
+The fields of each event are listed in [Events](/reference/events#event-reference) and
+[Region API](/reference/region-api#events).
 
 ### New
 
+- **`region:emit(name, ...)`** fires a custom event on one region and returns `false` if a handler cancelled it by
+  returning `false`. The name is namespaced (`prefix:name`); only that region's `region:on` handlers run, with the
+  arguments as passed. See [Region API](/reference/region-api#regionemitevent-).
 - **`entity.yaw`, `entity.pitch`, `entity.noGravity`, `entity.velocity`, `mob.noAi` and `entity:remove()`** (`remove`
   was documented in the type stubs but did not exist). `remove()` discards the entity without death or loot and
   refuses players.
@@ -100,9 +153,8 @@ description: Release history for PxIgnis.
 - **`table.freeze(t)` / `table.isfrozen(t)`**: deep, permanent read-only tables.
 - **Handler options** for `mc.on` and `region:on`: `priority` (a number, higher runs first; aliases `lowest` ...
   `highest`), `receiveCancelled`, `throttle`.
-- **Unknown event names** produce a warning with the closest name ("did you mean 'player.join'?").
-- **Script errors in chat**: errors in handlers, commands and scheduled tasks are sent to players with
-  `px.ignis.prompt_errors` (operators by default), at most once per 10 seconds per error.
+- **Script errors in chat**: errors in handlers, commands, scheduled tasks, mob AI behaviours and async callbacks are
+  sent to players with `px.ignis.prompt_errors` (operators by default), at most once per 10 seconds per error.
 - **Editor support**: `config/ignis/.types/` (LuaLS type definitions, refreshed on start) and `.luarc.json` (created
   once). Event handlers are typed per event.
 - **`/ignis watch on|off`**: reload automatically when a `.lua` file is saved (`-Dpxignis.watch=true` to start on).
@@ -130,7 +182,7 @@ description: Release history for PxIgnis.
 - Persistent data: a numeric-looking string no longer turns into a number, `2^40` and `{[1001] = 1}` survive a
   reload, and a corrupt data file is renamed instead of silently emptied and overwritten.
 - `init` fired twice at server start (once from the script load, once more after `server_start`).
-- `player_block_place` fires, and can be cancelled, for every block item. It was hooked inside
+- `block.place` (`player_block_place`) fires, and can be cancelled, for every block item. It was hooked inside
   `BlockItem.placeBlock`: beds override that method without calling `super` (no event at all), and doors and other
   tall blocks set their upper half first, so a cancel left it standing.
 - `world:spawnHologram` with an invalid option (`{ billboard = "typo" }`) raised the error but left a registered

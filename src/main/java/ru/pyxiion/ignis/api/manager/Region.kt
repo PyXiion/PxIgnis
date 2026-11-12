@@ -11,6 +11,7 @@ import org.luaj.vm2.LuaFunction
 import org.luaj.vm2.LuaState
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
+import org.luaj.vm2.Varargs
 import ru.pyxiion.ignis.EventBus
 import ru.pyxiion.ignis.HandlerOptions
 import ru.pyxiion.ignis.PxIgnis
@@ -29,7 +30,7 @@ class Region internal constructor(
     bounds: AABB,
 ) {
     internal val bus = EventBus(
-        "region #$id", PxIgnis.logger, { RegionManager.sharedStateProvider() }, RegionEvents.CATALOG, RegionManager::ticks,
+        "region #$id", RegionEvents.CATALOG, { RegionManager.sharedStateProvider() }, RegionManager::ticks,
     )
     private val contained = mutableSetOf<UUID>()
 
@@ -53,6 +54,9 @@ class Region internal constructor(
         if (bus.hasHandlers("tick")) RegionManager.registerTickSubscriber(this)
         return handlerId
     }
+
+    /** Fires a custom event on this region only; see [EventBus.emit]. */
+    fun emit(event: String, args: Varargs): Boolean = requireAlive().bus.emit(event, args)
 
     fun off(handlerId: Int): Boolean {
         requireAlive()

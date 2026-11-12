@@ -17,6 +17,7 @@ import ru.pyxiion.ignis.parallel.SharedLib
 import ru.pyxiion.ignis.parallel.Snapshotter
 import ru.pyxiion.ignis.parallel.StdlibRegistry
 import ru.pyxiion.ignis.parallel.checkGlobals
+import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import ru.pyxiion.ignis.sandbox.Vfs
 import java.time.Duration
@@ -58,7 +59,7 @@ class AsyncLib(
                 try {
                     work.run()
                 } catch (e: Throwable) {
-                    PxIgnis.logger.error("async: ошибка в отложенной задаче: ${e.message}", e)
+                    ScriptErrors.error("async deferred task", e)
                 }
             }
         }
@@ -384,7 +385,7 @@ class AsyncLib(
                             val result = if (error != null) LuaHttp.buildError(error) else LuaHttp.buildResponse(response)
                             resumeThread(co, result, "async.fetch callback", gen)
                         } catch (e: Throwable) {
-                            PxIgnis.logger.error("async.fetch: не удалось возобновить корутину: ${e.message}", e)
+                            ScriptErrors.error("async.fetch resume", e)
                         }
                     }
                 }

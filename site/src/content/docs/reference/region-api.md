@@ -101,6 +101,10 @@ Subscribe with `region:on(event, handler, opts?)`. Handlers get an event table `
 below. Region events are not cancellable. Options (`priority`, `receiveCancelled`, `throttle`) work as for
 [`mc.on`](/reference/events#options).
 
+The name is checked like in `mc.on`: one of the events below or a namespaced name (`prefix:name`); anything else
+raises an error (see [Unknown names](/reference/events#unknown-names)). The engine fires only the events below; a
+namespaced name is a custom event that scripts fire themselves with [`region:emit`](#regionemitevent-).
+
 | Event     | Fields                                  | When                                                        |
 |-----------|-----------------------------------------|-------------------------------------------------------------|
 | `enter`   | `entity`, `player?`                     | An entity moves into the region (or is loaded inside it)    |
@@ -131,15 +135,36 @@ r:on("tick", function()
 end)
 ```
 
-The old names (`entity_enter`, `player_enter`, `entity_leave`, `player_leave`, `entity_move`, `player_move`,
-`entity_death`, `player_death`) still work with positional arguments and log a deprecation warning.
-
 ## Methods
 
 ### `region:on(event, callback, opts?)`
 
 See the [Events](#events) section above for details. Returns a handler ID (integer) that can be passed to
 `region:off(id)` to unsubscribe.
+
+### `region:emit(event, ...)`
+
+Fires a custom event on this region and returns `false` if a handler cancelled it by returning `false`, `true`
+otherwise (also when nobody listens). The name must be namespaced (`prefix:name`); a built-in region event name or a
+name without a prefix is an error, and so is calling it on a destroyed region.
+
+Only handlers registered with `region:on` on **this** region run: not `mc.on` handlers, not other regions. They run
+before `emit` returns and get the arguments exactly as passed (no event table, and the region is not added).
+A handler cancels by returning `false`; later handlers are then skipped unless they were registered with
+`receiveCancelled = true`. An error in a handler is reported and does not cancel. Options (`priority`,
+`receiveCancelled`, `throttle`) work as usual; `throttle` counts server ticks.
+
+```lua
+local arena = world:createRegion({ x = 0, y = 0, z = 0 }, { x = 50, y = 32, z = 50 })
+
+arena:on("arena:round_start", function(round, name)
+  mc.broadcast("Round " .. round .. ": " .. name)
+end)
+
+if arena:emit("arena:round_start", 1, "Warm-up") then
+  startTimer()
+end
+```
 
 ### `region:off(id)`
 

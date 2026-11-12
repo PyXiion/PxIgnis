@@ -14,6 +14,7 @@ import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.util.LuaGoal
 import ru.pyxiion.ignis.api.wrapper.MobWrap
 import ru.pyxiion.ignis.mixins.MobEntityMixin
+import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import java.util.UUID
 
@@ -143,7 +144,8 @@ object MobAIManager {
         try {
             ScriptWatchdog.guard { entry.fn.call(wrapper, entry.state) }
         } catch (e: Throwable) {
-            PxIgnis.logger.warn("Ошибка в AI-поведении ${entry.behaviourId ?: "<функция>"} моба ${mob.type}: ${e.message}", e)
+            val behaviour = entry.behaviourId?.let { "'$it'" } ?: "<function>"
+            ScriptErrors.error("AI behaviour $behaviour of ${mob.type}", e)
         }
     }
 

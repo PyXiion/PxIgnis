@@ -39,20 +39,15 @@ What `mc.on` / `region:on` do and why. The user-facing reference is `site/src/co
   Region events drop the prefix (`enter`, `leave`, `move`, `death`). Damage is two events: `entity.hurt` (before,
   cancellable) and `entity.damaged` (after); `e.player` is set when the entity is a player instead of separate
   `player_*` variants.
-- **Unknown names** warn with the closest known name (Levenshtein, `_` = `.`). Names containing `:` are custom and
-  never warned about.
+- **Unknown names are errors.** `on` accepts a built-in name of its bus (global or region) or a custom name
+  `ns:name`; anything else throws, with the closest built-in name as a hint (Levenshtein, `_` = `.`). A warning was
+  tried first and was easy to miss: the handler was registered and never ran. Requiring a namespace for custom events
+  is what makes the check possible, since a bare unknown name is then always a mistake. `mc.emit` applies the same
+  rule and also refuses built-in names (it would deliver positional args to handlers expecting `e`).
+- **No compatibility layer.** The 0.17 names are removed, not mapped onto the new events: the project is pre-1.0,
+  and views that rebuilt positional arguments doubled the dispatch paths. The changelog has the mapping table.
 - **Throttle** uses a clock (the bus's own tick counter, or `RegionManager.ticks` for regions) instead of
   per-handler countdowns, so it works whatever else is registered.
-
-## Compatibility
-
-Old names are `LegacyEvent` views over the new events: a filter (e.g. `player_hurt` = `entity.hurt` where
-`e.player ~= nil`) and a function that rebuilds the old positional arguments from `e`. Their handlers sit in the
-same priority-ordered list as new ones and `return false` still cancels. They log a deprecation warning once per
-name per reload.
-
-Deliberate breaks, all towards the safer behaviour: old handlers are also skipped after a cancel and also fail
-closed; `mc.emit` refuses built-in names (it would have delivered positional args to handlers expecting `e`).
 
 ## Not done
 

@@ -15,7 +15,7 @@ import ru.pyxiion.ignis.events.GameEvents;
 @Mixin(BlockItem.class)
 public abstract class BlockItemMixin {
 
-    // player_block_place. Wraps the placeBlock call inside BlockItem.place, not placeBlock itself: BedItem overrides
+    // block.place. Wraps the placeBlock call inside BlockItem.place, not placeBlock itself: BedItem overrides
     // placeBlock without calling super, and DoubleHighBlockItem sets the upper half before calling it, so a hook
     // inside placeBlock is skipped or fires too late. Here the context and the state are the ones about to be placed
     // (the position is the placement position, not the clicked block). Returning false makes place() answer

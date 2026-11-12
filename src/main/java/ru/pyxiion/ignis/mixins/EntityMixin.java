@@ -20,7 +20,7 @@ public class EntityMixin {
     private void pxrp$capturePos(CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
         if (self.level().isClientSide()) return;
-        // Entities are only watched while someone can see the movement: players (player_move) or any region.
+        // Entities are only watched while someone can see the movement: players (player.move) or any region.
         if (!(self instanceof ServerPlayer) && !RegionManager.INSTANCE.getHasRegions()) {
             pxrp$lastPos = null;
             return;

@@ -14,4 +14,4 @@ When updating the API, always ask user if he wants to update the documentation (
 For `register("cmd <arg1:word> <arg2:player>", handler)` handler is `(ctx, arg1, arg2)`.
 
 Event handlers get one table `e` (`mc.on("block.break", function(e) ... e:cancel() end, { priority = "high" })`).
-Old underscore names (`player_join`, ...) still work with positional args but are deprecated.
+Event names are checked: a built-in name or a namespaced custom name (`mymod:boss_killed`); anything else is an error.

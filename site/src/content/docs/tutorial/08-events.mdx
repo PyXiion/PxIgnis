@@ -14,7 +14,7 @@ script that rewards the winner.
 ## Firing a custom event
 
 `mc.emit(name, ...)` calls every handler of the event with the arguments you pass. Custom event names
-contain a `:`; a prefix like `arena:` keeps them apart from other scripts' events.
+have the form `prefix:name`; a prefix like `arena:` keeps them apart from other scripts' events.
 
 The event fires at the end of the celebration, when the winner is back in the lobby:
 

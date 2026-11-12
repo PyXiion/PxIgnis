@@ -232,8 +232,9 @@ end, { priority = "high" })
 Removes a handler registered with `mc.on`. Returns `true` if it was found.
 
 ### `mc.emit(event, ...)`
-Fires a custom event (not a built-in name) and returns `false` if a handler cancelled it by returning `false`.
-Handlers get the arguments as they are.
+Fires a custom event and returns `false` if a handler cancelled it by returning `false`. The name must be
+namespaced (`prefix:name`); a built-in name or a name without a prefix is an error. Handlers get the arguments as
+they are.
 
 ```lua
 mc.on("script:custom_event", function(p, msg)

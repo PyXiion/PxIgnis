@@ -139,7 +139,9 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
 
 ## Custom events: `mc.emit(event, ...)`
 
-Scripts can fire their own events. The name must not be a built-in one; use a prefix such as `mymod:`.
+Scripts can fire their own events. A custom event name is namespaced, `prefix:name` (for example
+`arena:boss_killed`), with at least one character on each side of the first `:`. `mc.emit` raises an error for any
+other name, built-in names included.
 Handlers of custom events get the emitted arguments as they are and cancel by returning `false`; `mc.emit` returns
 `false` if a handler did.
 
@@ -156,55 +158,29 @@ end
 ```
 
 All handlers run before `emit` returns. Priorities, `receiveCancelled` and `throttle` work as for built-in events.
+`mc.emit` reaches `mc.on` handlers only. To scope a custom event to one region, use
+[`region:emit`](/reference/region-api#regionemitevent-) and `region:on` on that region.
 
 ## Async handlers
 
 Handlers run as coroutines, so `async.sleep` / `async.fetch` (`require "async"`) work directly. The event does not
 wait for them: decide whether to cancel **before the first async call**. Calling `e:cancel()` after it is an error.
 
-## Typos
+## Unknown names
 
-`mc.on` with an unknown event name logs a warning (also sent to operators in chat, see
-[Getting Started](/guide/getting-started#script-errors-in-chat)) with the closest name:
-`unknown event 'player.jion', the handler will never be called. Did you mean 'player.join'?`
+`mc.on` and `region:on` accept the built-in events of their table and namespaced custom names. Any other name
+raises an error at the call, so the script stops there instead of registering a handler that never runs. A name
+close to a built-in one gets a hint:
+`unknown event 'player.jion'. Did you mean 'player.join'?`
+
+Otherwise the error reads
+`unknown event 'boss_killed'. Custom events must be namespaced, e.g. 'mymod:boss_killed'`.
+
+The names used up to 0.17 (`player_join`, `player_block_break`, ...) are unknown names too; the
+[changelog](/changelog#event-names-before-018) maps each one to its replacement.
 
 ## Time limit
 
 A handler (or any other Lua call on the server thread) that runs longer than 5 seconds is stopped with the error
 `script exceeded the 5000ms time limit`. `pcall` cannot catch and continue past it. Server owners can change the
 limit with the JVM flag `-Dpxignis.scriptTimeoutMs=<ms>` (`0` disables it).
-
-## Old event names
-
-Up to 0.17 the events had other names and passed positional arguments; handlers cancelled by returning `false`.
-Those names still work, so old scripts keep running, but each one logs a deprecation warning once per reload.
-Switch to the new names when convenient:
-
-| Old (positional arguments)                              | New                 |
-|---------------------------------------------------------|---------------------|
-| `player_join_init(player)`                              | `player.login`      |
-| `player_join(player)`                                   | `player.join`       |
-| `player_leave(player)`                                  | `player.leave`      |
-| `player_respawn(player, alive)`                         | `player.respawn`    |
-| `player_chat(player, message)`                          | `player.chat`       |
-| `player_move(player, from, to)`                         | `player.move`       |
-| `player_use_item(player, hand, item, itemId)`           | `player.use_item`   |
-| `player_attack_entity(player, entity)`                  | `player.attack`     |
-| `player_interact_entity(player, entity, hand)`          | `player.interact`   |
-| `player_kill(player, target, damageSource)`             | `player.kill`       |
-| `player_consume_item(player, item)`                     | `player.consume`    |
-| `player_pickup_item(player, item, count)`               | `player.pickup`     |
-| `player_drop_item(player, item, count)`                 | `player.drop`       |
-| `player_block_break(player, pos, blockId)`              | `block.break`       |
-| `player_block_place(player, pos, blockId)`              | `block.place`       |
-| `entity_spawn(entity)` / `entity_despawn(entity)`       | `entity.spawn` / `entity.despawn` |
-| `player_hurt(player, damageType, amount)`               | `entity.hurt` with `e.player` |
-| `entity_hurt(entity, damageType, amount, source)`       | `entity.hurt`       |
-| `player_damage(player, damageType, amount, blocked)`    | `entity.damaged` with `e.player` |
-| `entity_damage(entity, damageType, amount, source, blocked)` | `entity.damaged` |
-| `player_death(entity, damageType, amount)`              | `entity.death` with `e.player` |
-| `entity_death(entity, damageType, amount)`              | `entity.death`      |
-
-Handlers under old names follow the new rules too: they are skipped once the event is cancelled (unless
-`receiveCancelled`), and an error in a cancellable event cancels it. Built-in events can no longer be fired with
-`mc.emit`.
