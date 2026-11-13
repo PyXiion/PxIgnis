@@ -123,13 +123,26 @@ jobs:
           pattern: jar-*
           merge-multiple: true
 
+      - name: Extract this version's changelog section
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            index($0, "## " v " ") == 1 || $0 == "## " v { on = 1; next }
+            /^## / { on = 0 }
+            on
+          ' site/src/content/docs/changelog.md | sed '/./,$!d' > "$RUNNER_TEMP/release-notes.md"
+          if [ ! -s "$RUNNER_TEMP/release-notes.md" ]; then
+            echo "::error::no '## $version' section in site/src/content/docs/changelog.md" >&2
+            exit 1
+          fi
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/PxIgnis-*.jar
             dist/ignis-voice-*.jar
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/release-notes.md
 
       - name: Publish 1.21.11 to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3.1
