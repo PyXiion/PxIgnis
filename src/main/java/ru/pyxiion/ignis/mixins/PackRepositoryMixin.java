@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import ru.pyxiion.ignis.MenuPack;
+import ru.pyxiion.ignis.preload.PreloadPack;
 
 import java.util.Arrays;
 import java.util.Set;
@@ -24,10 +25,10 @@ public abstract class PackRepositoryMixin {
     @Mutable
     private Set<RepositorySource> sources;
 
-    // The data pack repository of a server (the one with ServerPacksSource) also offers the pxignis:menu pack.
+    // The data pack repository of a server (the one with ServerPacksSource) also offers the pxignis:menu pack and the packs generated from preload scripts.
     @Inject(method = "<init>", at = @At("TAIL"))
     private void pxrp$addMenuPack(RepositorySource[] sources, CallbackInfo ci) {
         if (Arrays.stream(sources).noneMatch(s -> s instanceof ServerPacksSource)) return;
-        this.sources = ImmutableSet.<RepositorySource>builder().addAll(this.sources).add(MenuPack.INSTANCE.newSource()).build();
+        this.sources = ImmutableSet.<RepositorySource>builder().addAll(this.sources).add(MenuPack.INSTANCE.newSource()).add(PreloadPack.INSTANCE.newSource()).build();
     }
 }

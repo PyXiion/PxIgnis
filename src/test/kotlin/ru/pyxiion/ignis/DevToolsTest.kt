@@ -67,7 +67,7 @@ class DevToolsTest {
         val first = CountDownLatch(1)
         Files.createDirectories(tmp.resolve("lib"))
         Files.createDirectories(tmp.resolve("storage"))
-        val watcher = ScriptWatcher(tmp, debounceMillis = 200) {
+        val watcher = ScriptWatcher(listOf(tmp), debounceMillis = 200) {
             calls.incrementAndGet()
             first.countDown()
         }

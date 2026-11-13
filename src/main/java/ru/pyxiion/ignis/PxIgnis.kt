@@ -158,6 +158,10 @@ class PxIgnis : ModInitializer {
 
         UseItemCallback.EVENT.register { player, world, hand ->
             if (player is ServerPlayer && !world.isClientSide && !GameEvents.useItem(player, hand)) {
+                // The client has already predicted the use (a thrown potion or snowball shrinks its stack), and the
+                // server stack never changed, so no slot update would follow: resend the inventory.
+                player.inventoryMenu.sendAllDataToRemote()
+                player.containerMenu.sendAllDataToRemote()
                 return@register InteractionResult.FAIL
             }
             InteractionResult.PASS
@@ -175,10 +179,6 @@ class PxIgnis : ModInitializer {
                 return@register InteractionResult.FAIL
             }
             InteractionResult.PASS
-        }
-
-        ServerLivingEntityEvents.ALLOW_DAMAGE.register { entity, source, amount ->
-            GameEvents.hurt(entity, source, amount)
         }
 
         ServerLivingEntityEvents.AFTER_DAMAGE.register { entity, source, _, damageTaken, blocked ->

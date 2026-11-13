@@ -44,6 +44,40 @@ function World:spawnHologram(pos, text, opts) end
 ---@param blockId string
 function World:setBlock(pos, blockId) end
 
+---True when the block's collision shape at `pos` is not empty (the block stops a generic entity).
+---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}
+---@return boolean
+function World:isSolid(pos) end
+
+---True when the block's collision shape at `pos` is empty (an entity can occupy it).
+---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}
+---@return boolean
+function World:isPassable(pos) end
+
+---Whether the block at `pos` is in a block tag, e.g. "minecraft:climbable" (a leading `#` is optional).
+---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}
+---@param tag string
+---@return boolean
+function World:hasBlockTag(pos, tag) end
+
+---@class BreakBlockOptions
+---@field drops? boolean   -- drop the block's items; default false
+---@field effects? boolean -- break sound and particles; default true
+
+---Destroys the block like a break (sound and particles, optional drops). Does not fire `block.break`.
+---Returns false for air.
+---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}
+---@param opts? BreakBlockOptions
+---@return boolean
+function World:breakBlock(pos, opts) end
+
+---Shows the crack overlay on a block, `stage` 0..9; nil or -1 clears it. Clearing needs the same `sourceId`
+---(a string or number; default: one per position) that set it.
+---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}
+---@param stage integer|nil
+---@param sourceId? string|integer
+function World:setBreakProgress(pos, stage, sourceId) end
+
 ---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}
 ---@return string  -- block id
 function World:getBlock(pos) end
@@ -55,6 +89,19 @@ function World:getBlockState(pos) end
 ---@param pos Vec|Vec3Like|{x:integer,y:integer,z:integer}
 ---@param state BlockStateTable
 function World:setBlockState(pos, state) end
+
+---@class CaptureStructureOptions
+---@field entities? boolean  -- also capture entities in the area; default false
+---@field ignore? string     -- block id that is not saved (e.g. "minecraft:structure_void"); default none
+
+---Captures the area between two inclusive corners (any order) as a Structure, block entities included (chests,
+---structure blocks in DATA mode...). Not limited to 48 blocks, but to 500000 blocks of volume; chunks in the area
+---are loaded. See `Structure:save`.
+---@param posA Vec|Vec3Like|{x:integer,y:integer,z:integer}
+---@param posB Vec|Vec3Like|{x:integer,y:integer,z:integer}
+---@param opts? CaptureStructureOptions
+---@return Structure
+function World:captureStructure(posA, posB, opts) end
 
 ---Fills a box with the given block. Volume capped at 32768.
 ---@param posA Vec|Vec3Like|{x:integer,y:integer,z:integer}

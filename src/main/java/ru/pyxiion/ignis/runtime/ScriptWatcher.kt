@@ -16,14 +16,15 @@ import kotlin.io.path.isDirectory
 import kotlin.io.path.name
 
 /**
- * Watches the scripts folder and calls [onChange] once edits to `.lua` files settle for [debounceMillis]
+ * Watches the script roots in [roots] and calls [onChange] once edits to `.lua` files settle for [debounceMillis]
  * (editors often write a file in several steps). Runs on its own daemon thread; [onChange] is called there,
  * so it must hop to the server thread itself.
  *
- * Folders skipped: hidden ones (`.types` with the editor stubs) and [ignored] (`storage`, written by scripts).
+ * Folders skipped below a root: hidden ones (`.types` with the editor stubs) and [ignored] (`storage`, written by
+ * scripts). A root that does not exist is not watched.
  */
 class ScriptWatcher(
-    private val root: Path,
+    private val roots: List<Path>,
     private val debounceMillis: Long = 500,
     private val ignored: Set<String> = setOf("storage"),
     private val onChange: () -> Unit,
@@ -40,7 +41,7 @@ class ScriptWatcher(
         if (running) return
         val ws = FileSystems.getDefault().newWatchService()
         service = ws
-        registerTree(ws, root)
+        roots.forEach { registerTree(ws, it) }
         thread = Thread({ loop(ws) }, "PxIgnis-script-watcher").apply {
             isDaemon = true
             start()
@@ -56,7 +57,7 @@ class ScriptWatcher(
         dirs.clear()
     }
 
-    private fun skip(dir: Path): Boolean = dir != root && (dir.name.startsWith(".") || dir.name in ignored)
+    private fun skip(dir: Path): Boolean = roots.none { dir == it } && (dir.name.startsWith(".") || dir.name in ignored)
 
     private fun registerTree(ws: WatchService, dir: Path) {
         if (!dir.isDirectory() || skip(dir)) return
@@ -74,7 +75,7 @@ class ScriptWatcher(
                     for (event in key.pollEvents()) {
                         val path = dir?.resolve(event.context() as? Path ?: continue) ?: continue
                         if (event.kind() == ENTRY_CREATE && path.isDirectory()) registerTree(ws, path)
-                        if (path.name.endsWith(".lua")) pendingSince = System.currentTimeMillis()
+                        if (path.name.endsWith(".lua") && !ScriptRoots.isPreload(path.name)) pendingSince = System.currentTimeMillis()
                     }
                     if (!key.reset()) dirs.remove(key)
                 }

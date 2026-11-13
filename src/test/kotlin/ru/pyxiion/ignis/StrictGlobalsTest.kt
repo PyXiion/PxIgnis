@@ -15,7 +15,7 @@ class StrictGlobalsTest {
 
     private fun run(script: String): Varargs {
         val state = LuaState()
-        installStdlib(state, Vfs(Files.createTempDirectory("ignis")))
+        installStdlib(state, Vfs(listOf(Files.createTempDirectory("ignis"))))
         installStrictGlobals(state.globals)
         LuaState.setCurrent(state)
         return state.load(script, "test").checkfunction().invoke()

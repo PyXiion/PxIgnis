@@ -24,6 +24,9 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  * versions. `src/version-26.3` declares the same members; shared code only calls these.
  */
 object Compat {
+    /** Whether dimension types name a world clock (Minecraft 26.1+). */
+    const val HAS_WORLD_CLOCKS = false
+
     /** `ServerboundContainerClickPacket` calls its click type `clickType()` here and `containerInput()` on 26.x. */
     fun isThrowClick(packet: ServerboundContainerClickPacket): Boolean = packet.clickType() == ClickType.THROW
 

@@ -138,7 +138,9 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
 - `player.pickup` fires once per pickup attempt, after the pickup delay has passed.
 - `player.consume` is for players only. Cancelling stops the use and resends the player's inventory.
 - `block.break`, `block.place` and `player.use_item` report namespaced ids (`minecraft:stone`).
-- `entity.hurt` runs before the damage is applied (cancel to prevent it); `entity.damaged` after.
+- `entity.hurt` runs before the damage is applied (cancel to prevent it); `entity.damaged` after. `e.amount` of
+  `entity.hurt` is writable: the value after all handlers have run is the damage that is applied, and an amount of 0
+  or less behaves as a cancel.
 - `entity.death` fires on fatal damage, before a totem of undying gets a chance to save the entity. Cancelling it
   keeps the entity alive.
 

@@ -105,6 +105,7 @@ object EntityWrap {
             get = { if (isCurrentlyGlowing) LuaValue.TRUE else LuaValue.FALSE },
             set = { v -> setGlowingTag(v.toboolean()) }
         )
+        prop("onGround") { LuaValue.valueOf(onGround()) }
         prop(
             "invulnerable",
             get = { if (isInvulnerable) LuaValue.TRUE else LuaValue.FALSE },

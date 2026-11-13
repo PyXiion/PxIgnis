@@ -26,7 +26,7 @@ import kotlin.test.assertTrue
 class ParallelTest {
 
     private class Env {
-        val vfs = Vfs(Files.createTempDirectory("ignis"))
+        val vfs = Vfs(listOf(Files.createTempDirectory("ignis")))
         val state = LuaState()
         val stdlib = installStdlib(state, vfs)
         val queue = ConcurrentLinkedQueue<Runnable>()

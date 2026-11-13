@@ -37,7 +37,7 @@ private const val MAX_STRUCTURE_BYTES = 32L * 1024 * 1024
 class LuaMcApi(
     private val server: MinecraftServer,
     private val storage: StorageManager,
-    private val vfs: Vfs,
+    val vfs: Vfs,
     private val containers: ContainerManager,
     private val stateProvider: () -> LuaState,
     private val eventBus: EventBus,
@@ -109,7 +109,7 @@ class LuaMcApi(
     private fun luaLoadStructureFile(args: Varargs): Varargs {
         val path = args.arg(1).checkjstring()
         val file = vfs.safeFile(path)
-            ?: throw LuaError("Файл структуры '$path' не найден в config/ignis")
+            ?: throw LuaError("Файл структуры '$path' не найден в папках скриптов")
         val nbt = NbtIo.readCompressed(file.toPath(), NbtAccounter.create(MAX_STRUCTURE_BYTES))
         val template = Compat.readStructure(server, nbt)
         return StructureWrap.wrap(template)
@@ -385,6 +385,9 @@ class LuaMcApi(
             "decodeDialog" to luaFunction { spec ->
                 DialogApi.check(server.registryAccess(), spec.checktable())
                 LuaValue.NIL
+            },
+            "decodeText" to luaFunction { spec ->
+                LuaValue.valueOf(ru.pyxiion.ignis.api.util.Text.fromLua(spec, "decodeText").string)
             },
             "warn" to luaFunction { context, text ->
                 ScriptErrors.warn(context.checkjstring(), text.checkjstring())

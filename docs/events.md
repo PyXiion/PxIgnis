@@ -51,7 +51,7 @@ What `mc.on` / `region:on` do and why. The user-facing reference is `site/src/co
 
 ## Not done
 
-- Mutable fields (e.g. changing `e.amount` in `entity.hurt`, `e.message` in `player.chat`) would be the next step:
-  read the field back after dispatch.
+- Mutable fields other than `e.amount` in `entity.hurt` (done: read back after dispatch; `<= 0` cancels) such as
+  `e.message` in `player.chat` would be the next step: read the field back after dispatch.
 - Each handler call still creates a `LuaThread`. Reusing threads for handlers that finish without yielding would cut
   allocation on hot events.

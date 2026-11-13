@@ -5,7 +5,34 @@ description: Release history for PxIgnis.
 
 ## Unreleased
 
+### Fixed
+
+- Cancelling `player.use_item` resends the player's inventory, so an item the client predicted to use up (splash
+  potion, snowball, egg, ender pearl) no longer looks gone until the next resync.
+
 ### Added
+
+- **Mob AI helpers.** `entity.onGround`; `world:isSolid(pos)`, `world:isPassable(pos)` (collision shape),
+  `world:hasBlockTag(pos, tag)`; `world:breakBlock(pos, { drops, effects })` (break sound and particles, no
+  `block.break` event); `world:setBreakProgress(pos, stage, sourceId?)` (crack overlay 0..9, `nil` clears).
+- **Rich text in the action bar.** `player:sendActionBar` also takes a text component table (`text`, `color`, `font`,
+  `shadow_color`, `bold`/`italic`/..., `extra`, and any other vanilla field), parsed by the game's component codec.
+  See [player API](/reference/player-api#playersendactionbartext).
+- **Data components on items.** `item:getComponent(id)`, `item:setComponent(id, value)`, `item:removeComponent(id)`
+  (explicit removal) and `item:resetComponent(id)` (back to the item type's default) work for any component through its
+  codec; `mc.createItem` takes `components = { ["minecraft:x"] = v }`. Shortcut properties `item_model`,
+  `tooltip_style`, `rarity`, `item_name`, `glint`, `max_stack_size`, `use_cooldown` (`{seconds, group}`) and
+  `custom_model` (`{floats, flags, strings, colors}`, `custom_model_data` stays the first float) are accepted by
+  `mc.createItem` and `items.define` as well. See [ItemStack](/reference/itemstack-api#data-components).
+- **Cooldowns.** `player:setCooldown(group, ticks)`, `player:getCooldown(group)` (remaining ticks) and
+  `player:clearCooldown(group)`, where `group` is an item id or a `use_cooldown` group.
+- **Custom data on items.** `item:getData(key)` and `item:setData(key, value)` (`nil` removes) read and write the
+  stack's vanilla `custom_data` component; `mc.createItem` takes `data = { ... }`. Values are booleans, strings,
+  numbers (integral numbers are stored as int/long, others as double), and nested tables (a sequence is a list, any
+  other table a compound with string keys). They come back as equal Lua values. See [ItemStack](/reference/itemstack-api#custom-data).
+- **`e.amount` is writable in `entity.hurt`.** The value is read back after dispatch and used as the damage, later
+  handlers see it, and an amount of 0 or less drops the hit like a cancel. The event is now dispatched from a mixin on
+  `LivingEntity.hurtServer` instead of Fabric's `ALLOW_DAMAGE`.
 
 - **Dialogs (Minecraft 1.21.6+).** Raw API: `player:showDialog(spec)` (a registry dialog id, or a table in the vanilla
   dialog JSON shape; an `Item` is accepted where an item stack is expected), `player:closeDialog()` and
@@ -13,6 +40,20 @@ description: Release history for PxIgnis.
   `player.custom_click` (`player`, `id`, `payload`) for `custom` dialog actions. New library `core:dialog`
   (`dialog.show` with text/number/option/bool inputs, button, command, link and copy buttons, checked input values,
   `onClose`); see [dialog](/libraries/dialog).
+- **Capturing and saving structures.** `world:captureStructure(pos1, pos2, { entities, ignore })` captures an area
+  (up to 500 000 blocks, block entities kept, structure blocks in DATA mode included) as a structure, and
+  `structure:save(path, { root })` writes it as a vanilla `.nbt` file into a script root (the first by default), readable by
+  `mc.loadStructureFile`. See [structure API](/reference/structure-api).
+- **Preload scripts and custom dimensions.** Files `*.preload.lua` at any depth of a script root run once at server
+  start, before worlds exist, with only `preload`, `print`, the Lua standard library and `require`. `preload.dimension(id,
+  options)` declares a dimension (void or flat generator, biome, `min_y`/`height`, sky: `time = "day"|"night"`, ambient light,
+  skylight, ceiling); it is then available as `mc.world(id)` and a `teleport` target. `/ignis reload` does not re-run
+  preload scripts, it warns that a restart is required. See [preload scripts](/reference/preload).
+- **Multiple script roots.** `script_roots` in `config/pxignis.json` (default `["config/ignis"]`) lists the
+  folders scripts load from: roots in the listed order, `.lua` files sorted by name inside a root, and `require` searches
+  the same roots, so the first root wins for a duplicate module. Relative paths resolve against the server run dir,
+  absolute ones are allowed, a missing root is skipped with a warning. `package.path` lists every root; the symlink
+  check stays per root. See [configuration](/reference/configuration#script-roots).
 - **Pause-menu button.** `config/pxignis.json` (`menu.enabled`, `menu.title`, `menu.button`; off by default) adds the
   dialog `pxignis:menu` to the pause screen and quick actions menu; a click is the `player.custom_click` event with id
   `pxignis:menu`.

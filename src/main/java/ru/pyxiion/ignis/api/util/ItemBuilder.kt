@@ -1,6 +1,8 @@
 package ru.pyxiion.ignis.api.util
 
 import net.minecraft.core.component.DataComponents
+import net.minecraft.nbt.CompoundTag
+import net.minecraft.world.item.component.CustomData
 import net.minecraft.world.item.component.CustomModelData
 import net.minecraft.world.item.component.ItemLore
 import net.minecraft.world.item.ItemStack
@@ -8,6 +10,7 @@ import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
 import ru.pyxiion.ignis.lookup
 import net.minecraft.util.Unit
+import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import org.luaj.vm2.Varargs
 
@@ -19,6 +22,7 @@ object ItemBuilder {
         unbreakable: Boolean = false,
         customModelData: Int? = null,
         lore: List<String>? = null,
+        data: CompoundTag? = null,
     ): ItemStack {
         val item = BuiltInRegistries.ITEM.lookup("Item", id)
         val stack = ItemStack(item, count)
@@ -33,6 +37,8 @@ object ItemBuilder {
         }
         if (lore != null) stack.set(DataComponents.LORE, ItemLore(lore.map { Component.literal(it) }))
 
+        if (data != null && !data.isEmpty) stack.set(DataComponents.CUSTOM_DATA, CustomData.of(data))
+
         return stack
     }
 
@@ -42,7 +48,7 @@ object ItemBuilder {
      * Supported call patterns:
      *   mc.createItem("id")
      *   mc.createItem("id", count)
-     *   mc.createItem("id", { name=..., lore=..., unbreakable=..., custom_model_data=..., count=... })
+     *   mc.createItem("id", { name=..., lore=..., unbreakable=..., custom_model_data=..., count=..., data={...}, components={...}, item_model=..., ... })
      *   mc.createItem { id="...", ... }
      */
     fun fromLua(args: Varargs): ItemStack {
@@ -71,7 +77,8 @@ object ItemBuilder {
             unbreakable = t.get("unbreakable").toboolean(),
             customModelData = t.get("custom_model_data").let { if (it.isint()) it.toint() else null },
             lore = parseLore(t.get("lore")),
-        )
+            data = t.get("data").let { if (it.isnil()) null else LuaNbt.toCompound(it, "createItem data") },
+        ).also { applyExtras(it, t) }
     }
 
     private fun fromTable(table: LuaValue): ItemStack {
@@ -83,7 +90,25 @@ object ItemBuilder {
             unbreakable = t.get("unbreakable").toboolean(),
             customModelData = t.get("custom_model_data").let { if (it.isint()) it.toint() else null },
             lore = parseLore(t.get("lore")),
-        )
+            data = t.get("data").let { if (it.isnil()) null else LuaNbt.toCompound(it, "createItem data") },
+        ).also { applyExtras(it, t) }
+    }
+
+    /** `item_model`, `glint`, ... and `components = { ["minecraft:x"] = v }`; the latter win on a clash. */
+    private fun applyExtras(stack: ItemStack, t: LuaTable) {
+        for (name in ItemComponents.SHORTCUTS) {
+            val v = t.get(name)
+            if (!v.isnil()) ItemComponents.setShortcut(stack, name, v)
+        }
+        val components = t.get("components")
+        if (!components.isnil()) {
+            val ct = components.checktable()
+            var k: Varargs = ct.next(LuaValue.NIL)
+            while (!k.arg1().isnil()) {
+                ItemComponents.set(stack, k.arg1().checkjstring(), k.arg(2))
+                k = ct.next(k.arg1())
+            }
+        }
     }
 
     private fun parseLore(v: LuaValue): List<String>? {

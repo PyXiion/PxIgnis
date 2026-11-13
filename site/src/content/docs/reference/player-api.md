@@ -58,10 +58,19 @@ player:sendMessage("Hello!")
 
 Sends an action bar message.
 
-- `text` (`string`) — Message text
+- `text` (`string` or `table`) — Message text, or a text component
+
+A table is a vanilla text component, parsed by the game's own codec, so every vanilla field works. Common ones:
+`text`, `color` (`"#RRGGBB"`, a colour name, or a number), `font` (`"namespace:id"`), `shadow_color` (ARGB number or
+`"#AARRGGBB"`; `0` removes the shadow), `bold`, `italic`, `underlined`, `strikethrough`, `obfuscated`, and `extra`
+(a list of components or strings appended after `text`). An invalid table raises an error with the game's message.
 
 ```lua
 player:sendActionBar("&eHotbar message")
+player:sendActionBar({
+  text = "\u{E000}", font = "pxrp:hud", color = "#FFFFFF", shadow_color = 0,
+  extra = { { text = " 50%", color = "gold", bold = true }, " left" },
+})
 ```
 
 ### `player:sendTitle(title, subtitle?)`
@@ -172,6 +181,19 @@ Sets an item in a slot.
 Gets the item in a slot.
 
 - `slot` (`number`) — Slot index
+
+### `player:setCooldown(group, ticks)`
+### `player:getCooldown(group)`
+### `player:clearCooldown(group)`
+
+Item use cooldowns (the grey overlay in the hotbar). `group` is an item id (`"minecraft:snowball"`) or the `group` of an
+item's `use_cooldown`; every item that shares it is on cooldown. `getCooldown` returns the remaining **ticks** (0 when
+not cooling down), `setCooldown(group, 0)` ends it like `clearCooldown`.
+
+```lua
+player:setCooldown("pxrp:flask", 60)
+if player:getCooldown("pxrp:flask") > 0 then ... end
+```
 
 ### `player:clear()`
 

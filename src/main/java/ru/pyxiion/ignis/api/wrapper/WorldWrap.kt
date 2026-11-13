@@ -148,6 +148,42 @@ object WorldWrap {
             lua
         }
 
+        // world:captureStructure(pos1, pos2, { entities = false, ignore = blockId }) -> structure
+        method("captureStructure") { args ->
+            val w = args.arg(1).checktable().unwrap<ServerLevel>()
+            val a = args.arg(2).toBlockPos()
+            val b = args.arg(3).toBlockPos()
+            val opts = args.arg(4)
+            if (!opts.isnil() && !opts.istable()) throw LuaError("captureStructure: options must be a table")
+            var entities = false
+            var ignore = emptyList<net.minecraft.world.level.block.Block>()
+            if (opts.istable()) {
+                for (key in opts.checktable().keys()) {
+                    if (key.tojstring() !in setOf("entities", "ignore")) {
+                        throw LuaError("captureStructure: unknown option '${key.tojstring()}' (known: entities, ignore)")
+                    }
+                }
+                val e = opts.get("entities")
+                if (!e.isnil()) {
+                    if (!e.isboolean()) throw LuaError("captureStructure: entities must be a boolean")
+                    entities = e.toboolean()
+                }
+                val i = opts.get("ignore")
+                if (!i.isnil()) ignore = listOf(BuiltInRegistries.BLOCK.lookup("Блок", i.checkjstring()))
+            }
+            val box = try {
+                ru.pyxiion.ignis.api.util.StructureCapture.box(a.x, a.y, a.z, b.x, b.y, b.z)
+            } catch (e: IllegalArgumentException) {
+                throw LuaError(e.message)
+            }
+            val template = net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate()
+            template.fillFromWorld(
+                w, BlockPos(box.minX, box.minY, box.minZ),
+                net.minecraft.core.Vec3i(box.sizeX, box.sizeY, box.sizeZ), entities, ignore,
+            )
+            StructureWrap.wrap(template)
+        }
+
         // world:setBlock(pos, blockId)
         method("setBlock") { args ->
             val self = args.arg(1).checktable()
@@ -156,6 +192,60 @@ object WorldWrap {
             val block = BuiltInRegistries.BLOCK.lookup("Блок", args.arg(3).checkjstring())
 
             w.setBlock(pos, block.defaultBlockState(), 0x03)
+            LuaValue.NIL
+        }
+
+        // world:isSolid(pos) / isPassable(pos): the collision shape of the block state
+        method("isSolid") { args ->
+            val w = args.arg(1).checktable().unwrap<ServerLevel>()
+            val pos = args.arg(2).toBlockPos()
+            LuaValue.valueOf(!w.getBlockState(pos).getCollisionShape(w, pos).isEmpty)
+        }
+
+        method("isPassable") { args ->
+            val w = args.arg(1).checktable().unwrap<ServerLevel>()
+            val pos = args.arg(2).toBlockPos()
+            LuaValue.valueOf(w.getBlockState(pos).getCollisionShape(w, pos).isEmpty)
+        }
+
+        // world:hasBlockTag(pos, "minecraft:climbable")
+        method("hasBlockTag") { args ->
+            val w = args.arg(1).checktable().unwrap<ServerLevel>()
+            val pos = args.arg(2).toBlockPos()
+            val name = args.arg(3).checkjstring().removePrefix("#")
+            val id = Identifier.tryParse(if (':' in name) name else "minecraft:$name")
+                ?: throw LuaError("hasBlockTag: bad tag id '$name'")
+            LuaValue.valueOf(w.getBlockState(pos).`is`(net.minecraft.tags.TagKey.create(Registries.BLOCK, id)))
+        }
+
+        // world:breakBlock(pos, { drops = false, effects = true }) -> broke
+        method("breakBlock") { args ->
+            val w = args.arg(1).checktable().unwrap<ServerLevel>()
+            val pos = args.arg(2).toBlockPos()
+            val opts = args.arg(3)
+            val drops = opts.istable() && opts.get("drops").toboolean()
+            val effects = !opts.istable() || opts.get("effects").let { it.isnil() || it.toboolean() }
+            val state = w.getBlockState(pos)
+            when {
+                state.isAir -> LuaValue.FALSE
+                effects -> LuaValue.valueOf(w.destroyBlock(pos, drops))
+                else -> {
+                    if (drops) net.minecraft.world.level.block.Block.dropResources(state, w, pos, w.getBlockEntity(pos))
+                    LuaValue.valueOf(w.setBlock(pos, state.fluidState.createLegacyBlock(), 3))
+                }
+            }
+        }
+
+        // world:setBreakProgress(pos, stage, sourceId?): crack overlay 0..9, nil/-1 clears
+        method("setBreakProgress") { args ->
+            val w = args.arg(1).checktable().unwrap<ServerLevel>()
+            val pos = args.arg(2).toBlockPos()
+            val stage = if (args.arg(3).isnil()) -1 else args.arg(3).checkint()
+            if (stage !in -1..9) throw LuaError("setBreakProgress: stage must be 0..9, or -1/nil to clear, got $stage")
+            val source = args.arg(4)
+            val key = if (source.isnil()) "pos:${pos.asLong()}" else "src:${source.tojstring()}"
+            // a stable id per source (or per position) in a range real entities do not reach
+            w.destroyBlockProgress((key.hashCode() and 0x3FFFFFFF) or 0x40000000, pos, stage)
             LuaValue.NIL
         }
 

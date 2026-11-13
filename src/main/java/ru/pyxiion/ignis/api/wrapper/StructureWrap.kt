@@ -11,6 +11,15 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import net.minecraft.world.level.block.Mirror
 import net.minecraft.world.level.block.Rotation
 import net.minecraft.core.BlockPos
+import net.minecraft.nbt.CompoundTag
+import net.minecraft.nbt.NbtIo
+import net.minecraft.nbt.NbtUtils
+import net.fabricmc.loader.api.FabricLoader
+import ru.pyxiion.ignis.PxIgnis
+import ru.pyxiion.ignis.api.util.StructureCapture
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
@@ -32,6 +41,51 @@ object StructureWrap {
         prop("size") {
             val s = size
             Vector.of(s.x.toDouble(), s.y.toDouble(), s.z.toDouble()).toLuaValue()
+        }
+
+        // structure:save(path[, { root = index | path }]): gzipped vanilla .nbt in a script root
+        method("save") { args ->
+            val template = args.arg(1).checktable().unwrap<StructureTemplate>()
+            val rel = try {
+                StructureCapture.savePath(args.arg(2).checkjstring())
+            } catch (e: IllegalArgumentException) {
+                throw LuaError(e.message)
+            }
+            val opts = args.arg(3)
+            if (!opts.isnil() && !opts.istable()) throw LuaError("structure:save: options must be a table")
+            var index: Int? = null
+            var rootPath: String? = null
+            if (opts.istable()) {
+                for (key in opts.checktable().keys()) {
+                    if (key.tojstring() != "root") throw LuaError("structure:save: unknown option '${key.tojstring()}' (known: root)")
+                }
+                val root = opts.get("root")
+                when {
+                    root.isnil() -> {}
+                    root.type() == LuaValue.TNUMBER && root.todouble() == Math.floor(root.todouble()) -> index = root.toint()
+                    root.type() == LuaValue.TSTRING -> rootPath = root.tojstring()
+                    else -> throw LuaError("structure:save: root must be a root index or a root path")
+                }
+            }
+            val rt = PxIgnis.runtimeOrNull ?: throw LuaError("structure:save: scripts are not running")
+            val vfs = rt.api.vfs
+            try {
+                val root = StructureCapture.selectRoot(vfs.roots, index, rootPath, FabricLoader.getInstance().gameDir)
+                val target = vfs.writeTarget(root, rel)
+                val nbt = NbtUtils.addCurrentDataVersion(template.save(CompoundTag()))
+                val tmp = Files.createTempFile(target.parent, ".structure", ".tmp")
+                try {
+                    NbtIo.writeCompressed(nbt, tmp)
+                    Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING)
+                } finally {
+                    Files.deleteIfExists(tmp)
+                }
+            } catch (e: IllegalArgumentException) {
+                throw LuaError(e.message)
+            } catch (e: IOException) {
+                throw LuaError("structure:save: ${e.message}")
+            }
+            LuaValue.NIL
         }
 
         method("place") { args ->

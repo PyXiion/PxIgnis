@@ -52,6 +52,10 @@ The direction of the head.
 
 **type:** [Vector](/reference/vector-api)
 
+### `entity.onGround`
+
+**type:** `boolean` (read-only) — whether the entity stands on the ground.
+
 ### `entity.isSneaking`
 
 **type:** `boolean`

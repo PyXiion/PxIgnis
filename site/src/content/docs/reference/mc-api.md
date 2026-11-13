@@ -159,6 +159,11 @@ local sword = mc.createItem("diamond_sword", {
 })
 ```
 
+`data` takes a table that is stored as the item's custom data (see [custom data](/reference/itemstack-api#custom-data)):
+```lua
+local key = mc.createItem("stick", { data = { owner = "alex", level = 3, tags = { "a", "b" } } })
+```
+
 You can also pass a single table with an `id` field:
 ```lua
 local sword = mc.createItem({ id = "diamond_sword", count = 1, name = "&cEpic Sword" })

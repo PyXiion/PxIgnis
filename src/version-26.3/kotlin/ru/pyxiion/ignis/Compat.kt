@@ -31,6 +31,9 @@ import java.util.UUID
  * versions. `src/version-1.21.11` declares the same members; shared code only calls these.
  */
 object Compat {
+    /** Whether dimension types name a world clock (Minecraft 26.1+). */
+    const val HAS_WORLD_CLOCKS = true
+
     /** `ServerboundContainerClickPacket` calls its click type `clickType()` on 1.21.x and `containerInput()` here. */
     fun isThrowClick(packet: ServerboundContainerClickPacket): Boolean =
         packet.containerInput() == ContainerInput.THROW

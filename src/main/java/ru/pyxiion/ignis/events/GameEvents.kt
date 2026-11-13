@@ -154,11 +154,23 @@ object GameEvents {
 
     fun despawn(entity: Entity) = post("entity.despawn") { it["entity"] = EntityFactory.wrap(entity) }
 
-    fun hurt(entity: LivingEntity, source: DamageSource, amount: Float) = allowed("entity.hurt") {
-        it.entity(entity)
-        it["source"] = damageType(source)
-        it["amount"] = LuaValue.valueOf(amount.toDouble())
-        it["attacker"] = source.entity?.let(EntityFactory::wrap) ?: LuaValue.NIL
+    /**
+     * `entity.hurt`: returns the damage to apply. Handlers may write `e.amount`; the value is read back after
+     * dispatch. A cancelled event, or an amount of 0 or less (or NaN), returns 0 and the caller drops the hit.
+     */
+    @JvmStatic
+    fun hurt(entity: LivingEntity, source: DamageSource, amount: Float): Float {
+        val r = post("entity.hurt") {
+            it.entity(entity)
+            it["source"] = damageType(source)
+            it["amount"] = LuaValue.valueOf(amount.toDouble())
+            it["attacker"] = source.entity?.let(EntityFactory::wrap) ?: LuaValue.NIL
+        }
+        if (r.cancelled) return 0f
+        val v = r.event?.rawget("amount") ?: return amount
+        if (!v.isnumber()) return amount
+        val a = v.todouble().toFloat()
+        return if (a > 0f) a else 0f
     }
 
     fun damaged(entity: LivingEntity, source: DamageSource, amount: Float, blocked: Boolean) = post("entity.damaged") {

@@ -30,6 +30,9 @@ import ru.pyxiion.ignis.api.DialogApi
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.SidebarManager
 import ru.pyxiion.ignis.lookup
+import ru.pyxiion.ignis.api.util.Cooldowns
+import ru.pyxiion.ignis.api.util.Text
+import ru.pyxiion.ignis.api.util.ItemComponents
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.isAdmin
@@ -121,7 +124,7 @@ object PlayerWrap {
         method("sendActionBar") { args ->
             val self = args.arg(1).checktable()
             self.unwrap<ServerPlayer>().connection.send(
-                ClientboundSetActionBarTextPacket(Component.literal(args.arg(2).checkjstring()))
+                ClientboundSetActionBarTextPacket(Text.fromLua(args.arg(2), "sendActionBar"))
             )
             LuaValue.NIL
         }
@@ -263,6 +266,26 @@ object PlayerWrap {
             if (slot < 0 || slot >= inv.containerSize) return@method LuaValue.NIL
             val stack = inv.getItem(slot)
             if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
+        }
+
+        method("setCooldown") { args ->
+            val e = args.arg(1).checktable().unwrap<ServerPlayer>()
+            val id = ItemComponents.normalizeId(args.arg(2).checkjstring())
+            val ticks = args.arg(3).checkint()
+            if (ticks < 0) throw LuaError("setCooldown: ticks must not be negative")
+            if (ticks == 0) e.cooldowns.removeCooldown(id) else e.cooldowns.addCooldown(id, ticks)
+            LuaValue.NIL
+        }
+
+        method("getCooldown") { args ->
+            val e = args.arg(1).checktable().unwrap<ServerPlayer>()
+            LuaValue.valueOf(Cooldowns.remaining(e.cooldowns, ItemComponents.normalizeId(args.arg(2).checkjstring())))
+        }
+
+        method("clearCooldown") { args ->
+            val e = args.arg(1).checktable().unwrap<ServerPlayer>()
+            e.cooldowns.removeCooldown(ItemComponents.normalizeId(args.arg(2).checkjstring()))
+            LuaValue.NIL
         }
 
         method("clear") { args ->

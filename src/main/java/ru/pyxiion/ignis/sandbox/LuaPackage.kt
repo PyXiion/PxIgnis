@@ -14,7 +14,11 @@ class LuaPackage(
     private val vfs: Vfs
 ) : TwoArgFunction() {
     private val loadedTable = tableOf()
-    private val packageTable = tableOf().apply { set("loaded", loadedTable) }
+    private val packageTable = tableOf().apply {
+        set("loaded", loadedTable)
+        // Informational: require() resolves through the Vfs, which searches the same roots in the same order.
+        set("path", vfs.searchPath)
+    }
     private val loading = mutableSetOf<LuaString>()
 
 

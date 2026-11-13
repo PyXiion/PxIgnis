@@ -15,6 +15,12 @@ local function modelKey(id, modelData)
     return id .. "#" .. (modelData and tostring(modelData) or "_")
 end
 
+-- Template fields handed to mc.createItem as they are (see the ItemStack docs).
+local PASSTHROUGH = {
+    "item_model", "tooltip_style", "rarity", "item_name", "glint", "max_stack_size", "use_cooldown",
+    "custom_model", "data", "components",
+}
+
 local TemplateMethods = {}
 
 function TemplateMethods:make(count)
@@ -23,6 +29,9 @@ function TemplateMethods:make(count)
     if self.lore then opts.lore = self.lore end
     if self.modelData ~= nil then opts.custom_model_data = self.modelData end
     if self.unbreakable then opts.unbreakable = true end
+    for _, k in ipairs(PASSTHROUGH) do
+        if self[k] ~= nil then opts[k] = self[k] end
+    end
     return mc.createItem(self.id, opts)
 end
 

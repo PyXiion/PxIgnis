@@ -27,17 +27,29 @@ import ru.pyxiion.ignis.runtime.ReloadResult
 import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptEnvironment
 import ru.pyxiion.ignis.runtime.ScriptLoader
+import ru.pyxiion.ignis.runtime.ScriptRoots
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import ru.pyxiion.ignis.runtime.ScriptWatcher
+import ru.pyxiion.ignis.preload.Preload
 import ru.pyxiion.ignis.sandbox.Vfs
 import ru.pyxiion.ignis.storage.JsonBackend
 import ru.pyxiion.ignis.storage.StorageManager
 import java.io.ByteArrayInputStream
+import java.nio.file.Path
 
 class IgnisRuntime(private val server: MinecraftServer) {
-    val storage = StorageManager(JsonBackend(FabricLoader.getInstance().configDir.resolve("ignis/storage")))
+    /** Registries of the running server (data component codecs need them). */
+    val registries: net.minecraft.core.HolderLookup.Provider get() = server.registryAccess()
+
+    private val configDir = FabricLoader.getInstance().configDir
+    private val gameDir = FabricLoader.getInstance().gameDir
+
+    /** Folders scripts load from, in order; `script_roots` in `config/pxignis.json`, read once per server start. */
+    private val scriptRoots: List<Path> = ScriptRoots.configured(gameDir, configDir)
+
+    val storage = StorageManager(JsonBackend(configDir.resolve("ignis/storage")))
     private val commandManager = LuaCommandManager(server)
-    private val vfs = Vfs(FabricLoader.getInstance().configDir.resolve("ignis").toAbsolutePath())
+    private val vfs = Vfs(scriptRoots)
     private val environment = ScriptEnvironment(vfs)
     val modScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val eventManager = EventBus("", GlobalEvents.CATALOG, { environment.luaStateOrNull })
@@ -45,8 +57,8 @@ class IgnisRuntime(private val server: MinecraftServer) {
     val api: LuaMcApi = LuaMcApi(server, storage, vfs, containers, { environment.luaState }, eventManager, modScope)
     val scheduler: Scheduler get() = api.scheduler
     private val commandRegistrar: CommandRegistrar = CommandRegistrar(commandManager, { environment.luaState })
-    private val scriptLoader = ScriptLoader()
-    private val watcher = ScriptWatcher(scriptLoader.dir) { server.execute(::reloadFromWatcher) }
+    private val scriptLoader = ScriptLoader(scriptRoots)
+    private val watcher = ScriptWatcher(scriptRoots) { server.execute(::reloadFromWatcher) }
 
     /** Outcome of the last reload, for `/ignis status`. */
     var lastReload: ReloadResult? = null
@@ -96,6 +108,7 @@ class IgnisRuntime(private val server: MinecraftServer) {
      * is reported and the remaining ones still load.
      */
     fun reload(): ReloadResult {
+        Preload.warnIfChanged()
         val compiled = mutableListOf<Pair<String, Prototype>>()
         val compileErrors = mutableListOf<String>()
         for ((name, source) in scriptLoader.loadAll()) {

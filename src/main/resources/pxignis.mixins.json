@@ -14,6 +14,7 @@
     "ServerCommonPacketListenerMixin",
     "PackRepositoryMixin",
     "LivingEntityConsumeMixin",
+    "LivingEntityHurtMixin",
     "ItemEntityPickup",
     "BlockItemMixin"
   ],

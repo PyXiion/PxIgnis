@@ -2,6 +2,8 @@ package ru.pyxiion.ignis.api.wrapper
 
 import ru.pyxiion.ignis.wrapObject
 import net.minecraft.core.component.DataComponents
+import net.minecraft.nbt.CompoundTag
+import net.minecraft.world.item.component.CustomData
 import net.minecraft.world.item.component.CustomModelData
 import net.minecraft.world.item.component.ItemLore
 import net.minecraft.world.item.ItemStack
@@ -12,6 +14,8 @@ import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaTable
 import org.luaj.vm2.LuaValue
 import ru.pyxiion.ignis.api.MetaTableRegistry
+import ru.pyxiion.ignis.api.util.ItemComponents
+import ru.pyxiion.ignis.api.util.LuaNbt
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.unwrap
@@ -81,6 +85,45 @@ object ItemStackWrap {
             val self = args.arg(1).checktable()
             val stack = self.unwrap<ItemStack>().copy()
             wrap(stack)
+        }
+
+        method("getComponent") { args ->
+            ItemComponents.get(args.arg(1).checktable().unwrap<ItemStack>(), args.arg(2).checkjstring())
+        }
+
+        method("setComponent") { args ->
+            ItemComponents.set(args.arg(1).checktable().unwrap<ItemStack>(), args.arg(2).checkjstring(), args.arg(3))
+            LuaValue.NIL
+        }
+
+        method("removeComponent") { args ->
+            ItemComponents.remove(args.arg(1).checktable().unwrap<ItemStack>(), args.arg(2).checkjstring())
+            LuaValue.NIL
+        }
+
+        method("resetComponent") { args ->
+            ItemComponents.reset(args.arg(1).checktable().unwrap<ItemStack>(), args.arg(2).checkjstring())
+            LuaValue.NIL
+        }
+
+        for (name in ItemComponents.SHORTCUTS) {
+            prop(name, get = { ItemComponents.getShortcut(this, name) }, set = { v -> ItemComponents.setShortcut(this, name, v) })
+        }
+
+        method("getData") { args ->
+            val stack = args.arg(1).checktable().unwrap<ItemStack>()
+            val tag = stack.get(DataComponents.CUSTOM_DATA)?.copyTag()?.get(args.arg(2).checkjstring())
+            if (tag == null) LuaValue.NIL else LuaNbt.fromTag(tag)
+        }
+
+        method("setData") { args ->
+            val stack = args.arg(1).checktable().unwrap<ItemStack>()
+            val key = args.arg(2).checkjstring()
+            val tag = LuaNbt.toTag(args.arg(3))
+            val data = stack.get(DataComponents.CUSTOM_DATA)?.copyTag() ?: CompoundTag()
+            if (tag == null) data.remove(key) else data.put(key, tag)
+            if (data.isEmpty) stack.remove(DataComponents.CUSTOM_DATA) else stack.set(DataComponents.CUSTOM_DATA, CustomData.of(data))
+            LuaValue.NIL
         }
 
         prop(

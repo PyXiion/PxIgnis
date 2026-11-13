@@ -76,7 +76,7 @@ function Event:cancel(reason) end
 
 ---@class EntityDamageEvent : EntityEvent
 ---@field source string        -- damage type, e.g. "fall", "player_attack"
----@field amount number
+---@field amount number        -- writable in `entity.hurt` (<= 0 cancels); read-only elsewhere
 ---@field attacker Entity|nil
 
 ---@class EntityDamagedEvent : EntityDamageEvent

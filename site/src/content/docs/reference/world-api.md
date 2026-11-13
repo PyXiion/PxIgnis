@@ -76,6 +76,31 @@ Returns the block ID at the given position.
 local block = world:getBlock({ x = 0, y = 64, z = 0 })
 ```
 
+### `world:isSolid(pos)`
+### `world:isPassable(pos)`
+
+`isSolid` is true when the block's collision shape at `pos` is not empty, so it stops a generic entity; `isPassable` is
+the opposite. (Vanilla has no "solid" tag; the collision shape is the right source.)
+
+### `world:hasBlockTag(pos, tag)`
+
+Whether the block at `pos` is in a block tag, e.g. `"minecraft:climbable"` (a leading `#` is optional).
+
+### `world:breakBlock(pos, [opts])`
+
+Destroys the block with the vanilla break sound and particles. `opts.drops` (default `false`) drops its items,
+`opts.effects` (default `true`) turns the sound and particles off. Returns `false` for air. It does **not** fire
+`block.break`.
+
+```lua
+world:breakBlock({ x = 0, y = 64, z = 0 }, { drops = true })
+```
+
+### `world:setBreakProgress(pos, stage, [sourceId])`
+
+Shows the crack overlay on a block: `stage` 0..9; `nil` or `-1` clears it. The overlay belongs to `sourceId` (a string or
+number; by default one per position), and clearing must use the same one.
+
 ### `world:fill(pos1, pos2, blockId)`
 
 Fills a cuboid between two positions with a block (max 32,768 blocks).

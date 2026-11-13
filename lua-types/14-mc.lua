@@ -11,6 +11,16 @@ mc = {}
 ---@field lore? string[]
 ---@field unbreakable? boolean
 ---@field custom_model_data? integer
+---@field data? table  -- custom data, see Item:setData
+---@field components? table<string, any>  -- data components by id, see Item:setComponent
+---@field item_model? string
+---@field tooltip_style? string
+---@field rarity? string
+---@field item_name? string
+---@field glint? boolean
+---@field max_stack_size? integer
+---@field use_cooldown? {seconds: number, group?: string}
+---@field custom_model? {floats?: number[], flags?: boolean[], strings?: string[], colors?: integer[]}
 
 ---@class ItemSpec : ItemOpts
 ---@field id string
@@ -133,6 +143,12 @@ function mc.execute(command, opts) end
 ---Checks a dialog spec (as for `player:showDialog`) without showing it; raises the game's error if it is rejected.
 ---@param spec table
 function mc.decodeDialog(spec) end
+
+---Checks a text component table (as for `player:sendActionBar`) and returns its plain text; raises the game's error
+---if it is rejected.
+---@param spec string|TextComponent
+---@return string
+function mc.decodeText(spec) end
 
 ---Reports a warning like the engine does: to the server log and, rate-limited, to operators who have
 ---`px.ignis.prompt_errors`.

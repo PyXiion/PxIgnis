@@ -62,6 +62,10 @@ Entity.invulnerable = nil
 ---@type boolean
 Entity.isSneaking = nil
 
+---True when the entity stands on the ground. Read-only.
+---@type boolean
+Entity.onGround = nil
+
 ---Whether the entity is sprinting. Read/write.
 ---@type boolean
 Entity.isSprinting = nil
