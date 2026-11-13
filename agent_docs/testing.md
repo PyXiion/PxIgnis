@@ -26,6 +26,16 @@ reached with no FAIL line and no `ERROR`/`FATAL` log line. Exit status is non-ze
   redownloaded on later runs.
 - Needs the EULA accepted: `eula=true` in `run/eula.txt` or `MINECRAFT_EULA=true`.
 - `PXIGNIS_SMOKE_EXTRA="a.lua b.lua"` drops extra scripts next to the smoke script for one-off checks.
+- `PXIGNIS_SMOKE_MODS="a.jar b.jar"` copies extra mod jars into `mods/`, e.g. a plugin under test. `smoke/packages/` is
+  copied to `config/ignis/packages/` on every run (two packages with a dependency, a `pkg:` require and a bare
+  `require` inside a package; checked at the top of `ignis-smoke.lua`). `smoke_beta` calls `ext:smoketest`'s
+  `file()` when such a plugin is installed. The plugin API was verified with a throwaway Gradle subproject (a Kotlin
+  `IgnisPlugin` registering a module, `onClose` counters, `extend`, `emit`, `file`) built per target and passed via
+  `PXIGNIS_SMOKE_MODS` with a script that asserts `closes == envs - 1` after the smoke run's `/reload`.
+- Pure plugin/package logic is covered by `ModuleNamesTest` (names, path sandbox), `PackagePlanTest` (manifest, order,
+  cycles, cascade), `LuaRequireTest` (namespaces, package envs) and `PluginTypesTest`.
+- `plugins/voice/smoke/run.sh [target]` wraps `smoke/run.sh` (via `PXIGNIS_SMOKE_MODS` / `PXIGNIS_SMOKE_EXTRA`) and
+  boots with and without Simple Voice Chat.
 
 Anything touching Minecraft classes is verified this way on both targets; extend `smoke/ignis-smoke.lua` when you fix
 something that unit tests cannot reach. Do not use `./gradlew runServer` for this: it shares `run/` and its world

@@ -43,6 +43,30 @@ object EditorSupport {
         }
     }
 
+    const val PLUGIN_TYPES_DIR = "plugins"
+
+    /**
+     * Copies the `.lua` stubs from each plugin's `lua-types` folder ([pluginTypes]: plugin id to that folder) to
+     * `.types/plugins/<id>/`. Kept apart from the core stubs because [copyTypes] wipes the top level of `.types`; folders of
+     * plugins that are no longer installed are removed.
+     */
+    fun installPluginTypes(ignisDir: Path, pluginTypes: Map<String, Path>) {
+        try {
+            val base = ignisDir.resolve(TYPES_DIR).resolve(PLUGIN_TYPES_DIR)
+            if (Files.isDirectory(base)) {
+                Files.list(base).use { dirs ->
+                    dirs.filter { Files.isDirectory(it) && it.name !in pluginTypes }.forEach { stale ->
+                        Files.list(stale).use { f -> f.filter { it.extension == "lua" }.forEach(Files::delete) }
+                        Files.deleteIfExists(stale)
+                    }
+                }
+            }
+            for ((id, from) in pluginTypes) copyTypes(from, base.resolve(id))
+        } catch (e: Exception) {
+            logger.warn("Could not copy plugin type stubs to {}: {}", ignisDir, e.toString())
+        }
+    }
+
     private fun copyTypes(from: Path, to: Path) {
         Files.createDirectories(to)
         Files.list(to).use { old -> old.filter { it.extension == "lua" }.forEach(Files::delete) }

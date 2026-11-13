@@ -30,23 +30,30 @@ class Vfs(val roots: List<Path>) {
         "dialog" to Module(loadResource("/dialog.lua"), "@dialog.lua"),
     )
 
-    fun resolve(name: String): Module? {
-        val parts = name.split(":", limit = 2)
-        if (parts.size == 2) {
-            val (ns, rest) = parts
-            if (ns == "core") {
-                return builtins[rest]
-                    ?: error("Built-in module 'core:$rest' not found. Available: ${builtins.keys.sorted().joinToString(", ")}")
-            }
-            val relPath = "$ns/${rest.replace('.', '/')}"
-            return resolveUserFile(relPath)
+    /** A built-in module, or null for an unknown name (the caller lists [builtinNames]). */
+    fun resolveCore(name: String): Module? = builtins[name]
+
+    val builtinNames: List<String> get() = builtins.keys.sorted()
+
+    /** A plain module `a/b` of the script roots (`a/b.lua`, then `a/b/init.lua`), earlier root first. */
+    fun resolvePlain(relPath: String): Module? = lookup(roots, relPath) { real, file -> "@${real.relativize(file)}" }
+
+    /** A module `a/b` inside the package folder [dir]; the chunk name is `@pkg:<id>/a/b.lua`. */
+    fun resolveInPackage(id: String, dir: Path, relPath: String): Module? =
+        lookup(listOf(dir), relPath) { real, file -> "@pkg:$id/${real.relativize(file).joinToString("/")}" }
+
+    /** The entry file of a package, confined to [dir]. Null when it does not exist. */
+    fun resolveEntry(id: String, dir: Path, entry: String): Module? {
+        val file = try {
+            PathSandbox.resolveFile(dir, entry)
+        } catch (e: IOException) {
+            return null
         }
-        val relPath = name.replace('.', '/')
-        return resolveUserFile(relPath)
+        return Module(java.nio.file.Files.readAllBytes(file), "@pkg:$id/$entry")
     }
 
-    private fun resolveUserFile(relPath: String): Module? {
-        for (root in roots) {
+    private fun lookup(searchRoots: List<Path>, relPath: String, chunkName: (Path, Path) -> String): Module? {
+        for (root in searchRoots) {
             val real = realPath(root) ?: continue
             val file1 = safeFile(root, real, "$relPath.lua")
             val file2 = safeFile(root, real, "$relPath/init.lua")
@@ -54,11 +61,11 @@ class Vfs(val roots: List<Path>) {
             when {
                 file1 != null && file2 != null -> {
                     logger.warn("Ambiguous module '$relPath': both $relPath.lua and $relPath/init.lua exist; preferring init.lua")
-                    return Module(file2.readBytes(), "@${real.relativize(file2.toPath())}")
+                    return Module(file2.readBytes(), chunkName(real, file2.toPath()))
                 }
 
-                file1 != null -> return Module(file1.readBytes(), "@${real.relativize(file1.toPath())}")
-                file2 != null -> return Module(file2.readBytes(), "@${real.relativize(file2.toPath())}")
+                file1 != null -> return Module(file1.readBytes(), chunkName(real, file1.toPath()))
+                file2 != null -> return Module(file2.readBytes(), chunkName(real, file2.toPath()))
             }
         }
         return null

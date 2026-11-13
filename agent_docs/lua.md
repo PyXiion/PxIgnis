@@ -19,7 +19,31 @@
 - **Loaded libs**: `math`, `string`, `table`, `bit32`, `package` (custom), `coroutine`. **Not loaded**: `io`,
   `os`, `debug`.
 - **Globals injected**: `mc` (table), `vec(x,y,z)`, `register(syntax, handler, permission?)`.
-- **Built-in Lua libs** (via `require`): `format`, `simple`, `chestgui`.
+- **Built-in Lua libs** (via `require`): `format`, `simple`, `chestgui`, `items`, `particles`, `dialog`, always as
+  `core:<name>`.
+- **`require` names** (`sandbox/ModuleNames.kt` parses, `sandbox/LuaPackage.kt` loads): a closed namespace set
+  `core:`, `pkg:`, `ext:`; any other `x:` is an error (no `ns:a.b` folder fallback). `pkg:id` is a package's entry,
+  `pkg:id.a.b` a file inside it, `ext:id[.sub]` a plugin module, a plain `a.b` is `<root>/a/b.lua` (or
+  `a/b/init.lua`). Cache keys in `package.loaded` are canonical names. A require cycle fails with the chain.
+- **Script packages** (`packages/`): `config/ignis/packages/<folder>/ignis.json` (`id`, `version`, `entry`,
+  `depends`, `optional`; ranges are Fabric `VersionPredicate`s, `ext:` ranges are checked against the plugin mod's
+  version). `PackageManifest` parses, `PackagePlan` (pure) decides order (Kahn, id tiebreak over `depends` +
+  `optional`), failures, cascade (`depends` dependents) and cycles; `PackageDiscovery` scans every script root's
+  `packages/`; `PackageLoader` runs them eagerly in `IgnisRuntime.reload` after `ScriptEnvironment.rebuild` and
+  before the loose scripts. Package code runs in its own environment table (`__index`/`__newindex` = `_G`) whose
+  `require` resolves plain names inside the package folder only (the env is a `PackageEnv`, which
+  `async.parallel`'s `Snapshotter`/`ProtoScan` treat as the globals). A failing entry is reported by `LuaPackage` through `ScriptErrors` and skips
+  its dependents. A manifest edit is picked up by `ScriptWatcher`.
+- **Plugins** (`plugin/IgnisPlugin.kt`, design `docs/plugins.md`): Fabric entrypoint key `pxignis`. `PluginManager`
+  discovers them at server start (`IgnisRuntime.plugins`), calls `onEnvironment` from `ScriptEnvironment.rebuild`
+  right after `mc` is set (the metatables from `MetaTableRegistry.init()` are fresh at that point, so `extend` is
+  per environment), and runs `onClose` blocks in `IgnisRuntime.reload` right after the `uninit` event and before the
+  new state is built, and again at shutdown. A plugin's module tables are copied per calling package with plain
+  functions wrapped so `PluginEnv.file(path)` knows the caller; `LuaContinuableFunction`s and objects with a
+  metatable are passed through. Plugin `lua-types/` are copied to `.types/plugins/<id>/` (`EditorSupport`).
+  Authoring a plugin: implement `IgnisPlugin`, register `"pxignis": [{"adapter": "kotlin", "value": "..."}]`, depend on
+  `pxignis`, keep no Lua values across `onEnvironment` calls, put every release in `env.onClose`, ship Lua stubs in
+  `lua-types/*.lua`.
 - **Scheduler**: ticked via `ServerTickEvents.END_SERVER_TICK`. Tasks cleared on reload and server stop.
 - **Parallel workers** (`async.parallel`, package `ru.pyxiion.ignis.parallel`): one `LuaState` per pool thread, built on
   that thread by `installStdlib` (the same function builds the main state, so both have identical stdlib globals;

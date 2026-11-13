@@ -23,6 +23,7 @@ import ru.pyxiion.ignis.commands.CommandRegistrar
 import ru.pyxiion.ignis.commands.LuaCommandManager
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import ru.pyxiion.ignis.events.GlobalEvents
+import ru.pyxiion.ignis.runtime.EditorSupport
 import ru.pyxiion.ignis.runtime.ReloadResult
 import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptEnvironment
@@ -30,6 +31,9 @@ import ru.pyxiion.ignis.runtime.ScriptLoader
 import ru.pyxiion.ignis.runtime.ScriptRoots
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import ru.pyxiion.ignis.runtime.ScriptWatcher
+import ru.pyxiion.ignis.packages.PackageDiscovery
+import ru.pyxiion.ignis.packages.PackageLoader
+import ru.pyxiion.ignis.plugin.PluginManager
 import ru.pyxiion.ignis.preload.Preload
 import ru.pyxiion.ignis.sandbox.Vfs
 import ru.pyxiion.ignis.storage.JsonBackend
@@ -57,6 +61,7 @@ class IgnisRuntime(private val server: MinecraftServer) {
     val api: LuaMcApi = LuaMcApi(server, storage, vfs, containers, { environment.luaState }, eventManager, modScope)
     val scheduler: Scheduler get() = api.scheduler
     private val commandRegistrar: CommandRegistrar = CommandRegistrar(commandManager, { environment.luaState })
+    val plugins = PluginManager(server, modScope, scriptRoots, eventManager, api.asyncLib.dispatch, PluginManager.discover())
     private val scriptLoader = ScriptLoader(scriptRoots)
     private val watcher = ScriptWatcher(scriptRoots) { server.execute(::reloadFromWatcher) }
 
@@ -73,6 +78,8 @@ class IgnisRuntime(private val server: MinecraftServer) {
         if (System.getProperty("pxignis.watch").toBoolean()) {
             runCatching { setWatching(true) }.onFailure { PxIgnis.logger.warn("Could not watch the scripts folder", it) }
         }
+        EditorSupport.installPluginTypes(configDir.resolve("ignis"), plugins.typeStubs)
+        plugins.onServerStart()
     }
 
     /**
@@ -109,6 +116,7 @@ class IgnisRuntime(private val server: MinecraftServer) {
      */
     fun reload(): ReloadResult {
         Preload.warnIfChanged()
+        val discovered = PackageDiscovery.scan(scriptRoots, plugins.versions)
         val compiled = mutableListOf<Pair<String, Prototype>>()
         val compileErrors = mutableListOf<String>()
         for ((name, source) in scriptLoader.loadAll()) {
@@ -127,6 +135,8 @@ class IgnisRuntime(private val server: MinecraftServer) {
         ScriptErrors.resetRateLimit()
 
         eventManager.fire("uninit")
+        plugins.closeEnvironment()
+        discovered.problems.forEach { ScriptErrors.warn("packages", it) }
         commandManager.clear()
         eventManager.clear()
         scheduler.clear()
@@ -138,9 +148,11 @@ class IgnisRuntime(private val server: MinecraftServer) {
         RegionManager.closeAll()
         BossBarManager.closeAll()
 
-        val state = environment.rebuild(api, commandRegistrar)
+        val state = environment.rebuild(api, commandRegistrar, plugins, discovered.plan)
 
         val errors = compileErrors.toMutableList()
+        val packagesRun = PackageLoader.runAll(state, discovered.plan)
+        errors += packagesRun.errors
         for ((name, prototype) in compiled) {
             try {
                 ScriptWatchdog.guard { state.loader.load(prototype, name, state.globals).call() }
@@ -156,7 +168,10 @@ class IgnisRuntime(private val server: MinecraftServer) {
 
         commandManager.registerAll()
         PxIgnis.logger.info("PxIgnis зарегистрировал свои команды")
-        val result = ReloadResult(compiled.size + compileErrors.size, errors, applied = true, files = compiled.map { it.first })
+        val result = ReloadResult(
+            compiled.size + compileErrors.size + packagesRun.total, errors, applied = true,
+            files = packagesRun.loaded.map { "pkg:$it" } + compiled.map { it.first },
+        )
         lastReload = result
         return result
     }
@@ -229,6 +244,8 @@ class IgnisRuntime(private val server: MinecraftServer) {
         step("scheduler.clear") { scheduler.clear() }
         step("uninit") { eventManager.fire("uninit") }
         step("server_stop") { eventManager.fire("server_stop") }
+        step("plugins.close") { plugins.closeEnvironment() }
+        step("plugins.stop") { plugins.onServerStop() }
         step("async.invalidate") { api.asyncLib.invalidate() }
         step("holograms.closeAll") { HologramManager.closeAll() }
         step("storage.close") { storage.close() }

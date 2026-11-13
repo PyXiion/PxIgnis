@@ -5,12 +5,31 @@ description: Release history for PxIgnis.
 
 ## Unreleased
 
+### Breaking
+
+- **`require` namespaces are a closed set: `core:`, `pkg:`, `ext:`.** `require("ns:a.b")` used to fall back to the
+  folder `<root>/ns/a/b.lua` for any other `ns`; it is now an error (`unknown namespace 'ns:'`). Use
+  `require("ns.a.b")`. Module names also reject empty segments and `/`.
+
 ### Fixed
 
 - Cancelling `player.use_item` resends the player's inventory, so an item the client predicted to use up (splash
   potion, snowball, egg, ender pearl) no longer looks gone until the next resync.
 
 ### Added
+
+- **Script packages.** `config/ignis/packages/<folder>/ignis.json` (`id`, `version`, `entry`, `depends`, `optional`)
+  turns a folder into a package: it loads before the loose scripts, dependencies first, and is reached with
+  `require("pkg:id")` or `require("pkg:id.sub.module")`. Version ranges are semver predicates; a package that fails
+  (missing dependency, version mismatch, cycle, error in its entry) is skipped together with everything that
+  `depends` on it. Inside a package a plain `require("util")` resolves in the package folder only. See
+  [Packages and plugins](/reference/packages).
+- **Plugins.** Separate Fabric mods can add Lua modules backed by Kotlin: `require("ext:<id>")`. Without the plugin
+  `require` fails with `plugin '<id>' is not installed`; packages declare `"ext:<id>": "<range>"` in `depends`. Plugin
+  Lua stubs are copied to `config/ignis/.types/plugins/<id>/`. The Kotlin API (`IgnisPlugin`, `PluginEnv`,
+  `LuaConvert`) is described in [Packages and plugins](/reference/packages#writing-a-plugin).
+- **ignis-voice** plugin (`require("ext:voice")`): play `.ogg`/`.wav` files to players through Simple Voice Chat —
+  emitters on entities, positions or player lists, volume categories, no resource pack.
 
 - **Mob AI helpers.** `entity.onGround`; `world:isSolid(pos)`, `world:isPassable(pos)` (collision shape),
   `world:hasBlockTag(pos, tag)`; `world:breakBlock(pos, { drops, effects })` (break sound and particles, no

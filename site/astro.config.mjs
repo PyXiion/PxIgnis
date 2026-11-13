@@ -49,6 +49,8 @@ export default defineConfig({
             { label: "Events", slug: "reference/events" },
             { label: "Storage", slug: "reference/storage" },
             { label: "Preload scripts", slug: "reference/preload" },
+            { label: "Packages and plugins", slug: "reference/packages" },
+            { label: "Voice plugin", slug: "reference/voice" },
             { label: "Configuration", slug: "reference/configuration" },
             { label: "Language", slug: "reference/language" },
           ],

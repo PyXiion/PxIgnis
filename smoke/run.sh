@@ -11,6 +11,7 @@
 #
 # Needs the Minecraft EULA accepted: eula=true in run/eula.txt, or MINECRAFT_EULA=true in the environment.
 # PXIGNIS_SMOKE_EXTRA="a.lua b.lua" copies extra scripts next to the smoke script (for one-off checks).
+# PXIGNIS_SMOKE_MODS="a.jar b.jar" copies extra mod jars into mods/ (a plugin under test).
 # PXIGNIS_SMOKE_MENU=true|false|flip (default true; flip starts with the menu off, turns it on and runs /reload: nothing may change) sets menu.enabled in config/pxignis.json; the run then checks that the
 # generated pxignis:menu data pack is enabled (true) or absent (false).
 set -euo pipefail
@@ -93,6 +94,8 @@ run_target() { # run_target <target>: 0 = all green
     ln -s "$c"/mods/*.jar "$run/mods/"
     cp "$jar" "$run/mods/"
     cp "$root/smoke/ignis-smoke.lua" "$run/config/ignis/"
+    cp -r "$root/smoke/packages" "$run/config/ignis/packages" # script package fixtures, checked by ignis-smoke.lua
+    for mod in ${PXIGNIS_SMOKE_MODS:-}; do cp "$mod" "$run/mods/"; done # extra mod jars (plugins under test)
     for extra in ${PXIGNIS_SMOKE_EXTRA:-}; do cp "$extra" "$run/config/ignis/"; done # extra scripts to run alongside
     echo "eula=true" > "$run/eula.txt"
     echo "{\"menu\": {\"enabled\": $([[ $menu == flip ]] && echo false || echo "$menu"), \"title\": \"Smoke menu\", \"button\": \"Open\"}}" > "$run/config/pxignis.json"

@@ -7,6 +7,7 @@ import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.asObject
 import ru.pyxiion.ignis.forEach
+import ru.pyxiion.ignis.sandbox.PackageEnv
 import java.util.IdentityHashMap
 
 internal fun childPath(parent: String, key: LuaValue): String =
@@ -48,7 +49,7 @@ internal class Snapshotter(
     }
 
     private fun table(t: LuaTable, path: String): Snap {
-        if (t === globals) return GlobalsRef
+        if (t === globals || t is PackageEnv) return GlobalsRef
         stdlib.pathOf(t)?.let { return StdPath(it) }
         if (t.isFrozen()) return Ref(t)
         if (t.javaClass != LuaTable::class.java || t.getmetatable() != null) {

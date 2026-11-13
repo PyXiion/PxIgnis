@@ -81,7 +81,7 @@ commands.
 
 ## Key files
 
-- `pxluanova/pxluanova-core/src/main/java/org/luaj/vm2/LuaThread.java` — `ResumeHandler`, `lua_resume_sync`
+- `pxluanova/pxluanova-core/src/main/java/ru/pyxiion/luanova/vm2/LuaThread.java` — `ResumeHandler`, `lua_resume_sync`
   `LuaState.current()` fix.
 - `src/main/java/ru/pyxiion/ignis/Utils.kt` — `luaSuspendFunction` / `luaSuspendFunctionNil`.
 - `src/main/java/ru/pyxiion/ignis/api/LuaMcApi.kt` — main-thread resume handler, `suspendFunction` helper.

@@ -7,6 +7,22 @@ local function step(name, fn)
 end
 local function fails(fn, ...) return not pcall(fn, ...) end
 
+-- Пакеты (smoke/packages): грузятся до обычных скриптов, зависимости первыми, на каждой перезагрузке заново.
+step("packages: order and pkg: require", function()
+    assert(rawget(_G, "SMOKE_PKG_ORDER") == "alpha,beta,", tostring(rawget(_G, "SMOKE_PKG_ORDER")))
+    local beta = require("pkg:smoke_beta")
+    assert(beta.alpha == "alpha" and beta.helper == "helper-of-beta" and beta.same)
+    assert(require("pkg:smoke_alpha") == require("pkg:smoke_alpha"))
+end)
+step("packages: namespaces are closed", function()
+    local ok, err = pcall(require, "smoke:thing")
+    assert(not ok and tostring(err):find("unknown namespace", 1, true), tostring(err))
+    local ok2, err2 = pcall(require, "pkg:smoke_missing")
+    assert(not ok2 and tostring(err2):find("not installed", 1, true), tostring(err2))
+    local ok3, err3 = pcall(require, "ext:smoke_missing")
+    assert(not ok3 and tostring(err3):find("plugin 'smoke_missing' is not installed", 1, true), tostring(err3))
+end)
+
 -- команды и поведения регистрируются только при загрузке скрипта
 register("smokecmd", function(ctx) mc.data.smoke_cmd_ran = true end)
 mc.registerBehaviour("smoke_ai", function(self, state) end)

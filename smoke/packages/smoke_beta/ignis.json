@@ -1,0 +1,1 @@
+{ "id": "smoke_beta", "version": "1.0.0", "depends": { "pkg:smoke_alpha": ">=1.0" } }

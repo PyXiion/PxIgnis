@@ -1087,11 +1087,12 @@ end
 -- ==========================================================================
 -- Pattern 22: Module system — require "format", require "simple"
 -- ==========================================================================
--- The VFS-based require resolves dotted and namespaced module names:
+-- The VFS-based require resolves dotted module names and the namespaces core:, pkg: and ext::
 --   require "core:format"   → built-in module
 --   require "core:simple"   → built-in module
 --   require "foo.bar"       → config/ignis/foo/bar.lua
---   require "mymod:utils"   → config/ignis/mymod/utils.lua
+--   require "pkg:arena"     → script package packages/arena (see the packages docs)
+--   require "ext:voice"     → module of the plugin "voice"
 --
 -- require("core:format") returns a callable table:
 --   format(template)   — returns a function(args) that substitutes {expr}

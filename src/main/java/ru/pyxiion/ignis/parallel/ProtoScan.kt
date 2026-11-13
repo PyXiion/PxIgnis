@@ -6,6 +6,7 @@ import ru.pyxiion.luanova.vm2.LuaError
 import ru.pyxiion.luanova.vm2.LuaString
 import ru.pyxiion.luanova.vm2.LuaTable
 import ru.pyxiion.luanova.vm2.Prototype
+import ru.pyxiion.ignis.sandbox.PackageEnv
 import java.util.Collections
 import java.util.IdentityHashMap
 
@@ -13,7 +14,7 @@ private val ENV = LuaString.valueOf("_ENV")
 
 /**
  * Rejects, at definition time, the global accesses a worker could not satisfy: a read of a name that is not a
- * stdlib global and any write to a global. Only closures whose `_ENV` is the main [globals] are scanned (a closure
+ * stdlib global and any write to a global. Only closures whose `_ENV` is the main [globals] or a package's [PackageEnv] are scanned (a closure
  * with a custom environment keeps its own rules); the prototypes nested inside them are scanned too.
  *
  * Reads that happen through `_G[name]` are not visible here; the worker's globals guard reports those at run time.
@@ -22,7 +23,8 @@ internal fun checkGlobals(closures: Collection<LuaClosure>, globals: LuaTable, s
     val seen: MutableSet<Prototype> = Collections.newSetFromMap(IdentityHashMap())
     for (closure in closures) {
         val env = closure.p.upvalues.indexOfFirst { it.name == ENV }
-        if (env < 0 || closure.upValues.getOrNull(env)?.value !== globals) continue
+        val value = if (env < 0) null else closure.upValues.getOrNull(env)?.value
+        if (value !== globals && value !is PackageEnv) continue
         scan(closure.p, stdlib, seen)
     }
 }

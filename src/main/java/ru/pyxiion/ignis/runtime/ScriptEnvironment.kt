@@ -17,7 +17,10 @@ import ru.pyxiion.ignis.asFunction
 import ru.pyxiion.ignis.commands.CommandRegistrar
 import ru.pyxiion.ignis.luaFunction
 import ru.pyxiion.ignis.luaVarFunction
+import ru.pyxiion.ignis.packages.PackagePlan
+import ru.pyxiion.ignis.plugin.PluginManager
 import ru.pyxiion.ignis.sandbox.LuaPackage
+import ru.pyxiion.ignis.sandbox.PluginModules
 import ru.pyxiion.ignis.sandbox.Vfs
 import ru.pyxiion.ignis.parallel.StdlibRegistry
 import ru.pyxiion.ignis.parallel.installFreeze
@@ -55,12 +58,17 @@ internal fun installStrictGlobals(globals: LuaTable) {
  * The part of the environment that the main state and every parallel worker share: the compiler, the sandboxed
  * `package`, the standard libraries, `table.freeze` and `vec`. The returned registry describes exactly these globals.
  */
-internal fun installStdlib(state: LuaState, vfs: Vfs): StdlibRegistry {
+internal fun installStdlib(
+    state: LuaState,
+    vfs: Vfs,
+    packages: PackagePlan? = null,
+    plugins: PluginModules? = null,
+): StdlibRegistry {
     LuaC.install(state)
     val globals = state.globals
 
     // Default PackageLib is not safe, so we use our own
-    LuaPackage(state, vfs).call(LuaValue.valueOf("package"), globals)
+    LuaPackage(state, vfs, packages, plugins).call(LuaValue.valueOf("package"), globals)
 
     globals.load(JseBaseLib())
     globals.load(Bit32Lib())
@@ -90,11 +98,11 @@ class ScriptEnvironment(private val vfs: Vfs) {
     val luaState: LuaState get() = _state!!
     val luaStateOrNull: LuaState? get() = _state
 
-    fun rebuild(api: LuaMcApi, commandRegistrar: CommandRegistrar): LuaState {
+    fun rebuild(api: LuaMcApi, commandRegistrar: CommandRegistrar, plugins: PluginManager, packages: PackagePlan): LuaState {
         val state = LuaState.builder()
             .checkpointHandler(ScriptWatchdog::checkpoint)
             .build()
-        val stdlib = installStdlib(state, vfs)
+        val stdlib = installStdlib(state, vfs, packages, plugins.modules)
 
         val globals = state.globals
         globals.set("register", commandRegistrar.registerFunction)
@@ -105,6 +113,9 @@ class ScriptEnvironment(private val vfs: Vfs) {
 
         val asyncModule = api.asyncLib.buildModule(stdlib)
         globals.get("package").checktable().get("loaded").checktable().set("async", asyncModule)
+
+        // After `mc`, before any script: plugins add their modules and wrapper methods.
+        plugins.beginEnvironment(packages)
 
         installStrictGlobals(globals)
         return state

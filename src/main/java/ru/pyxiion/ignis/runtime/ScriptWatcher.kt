@@ -75,7 +75,7 @@ class ScriptWatcher(
                     for (event in key.pollEvents()) {
                         val path = dir?.resolve(event.context() as? Path ?: continue) ?: continue
                         if (event.kind() == ENTRY_CREATE && path.isDirectory()) registerTree(ws, path)
-                        if (path.name.endsWith(".lua") && !ScriptRoots.isPreload(path.name)) pendingSince = System.currentTimeMillis()
+                        if ((path.name.endsWith(".lua") && !ScriptRoots.isPreload(path.name)) || path.name == "ignis.json") pendingSince = System.currentTimeMillis()
                     }
                     if (!key.reset()) dirs.remove(key)
                 }

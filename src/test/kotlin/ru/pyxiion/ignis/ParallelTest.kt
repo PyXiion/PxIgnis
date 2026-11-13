@@ -25,10 +25,10 @@ import kotlin.test.assertTrue
  */
 class ParallelTest {
 
-    private class Env {
-        val vfs = Vfs(listOf(Files.createTempDirectory("ignis")))
+    private class Env(root: java.nio.file.Path = Files.createTempDirectory("ignis"), packages: ru.pyxiion.ignis.packages.PackagePlan? = null) {
+        val vfs = Vfs(listOf(root))
         val state = LuaState()
-        val stdlib = installStdlib(state, vfs)
+        val stdlib = installStdlib(state, vfs, packages)
         val queue = ConcurrentLinkedQueue<Runnable>()
         val scheduler = Scheduler { state }
         val asyncLib = AsyncLib({ state }, scheduler, vfs)
@@ -69,8 +69,7 @@ class ParallelTest {
     }
 
     /** Runs [script] as a coroutine to completion and returns the global `_result` table. */
-    private fun run(script: String): LuaTable {
-        val env = Env()
+    private fun run(script: String, env: Env = Env()): LuaTable {
         try {
             val co = env.root(script)
             env.pump(until = { co.status == "dead" })
@@ -94,6 +93,43 @@ class ParallelTest {
             """.trimIndent()
         )
         assertEquals(23, r.get(1).toint())
+    }
+
+    /** A script root with one package `p` whose entry is [body]. */
+    private fun packageEnv(body: String): Env {
+        val root = Files.createTempDirectory("ignis")
+        val dir = Files.createDirectories(root.resolve("packages/p"))
+        Files.writeString(dir.resolve("init.lua"), body)
+        val manifest = ru.pyxiion.ignis.packages.PackageManifest.parse("""{"id":"p","version":"1.0.0"}""", dir)
+        return Env(root, ru.pyxiion.ignis.packages.PackagePlan.build(listOf(manifest), emptyMap()))
+    }
+
+    @Test
+    fun `a closure defined in package code can use stdlib globals`() {
+        val r = run(
+            "local f = require('pkg:p'); _result = { f(3.7) }",
+            packageEnv("return async.parallel(function(x) return math.floor(x) end)"),
+        )
+        assertEquals(3, r.get(1).toint())
+    }
+
+    @Test
+    fun `a closure defined in package code without globals works`() {
+        val r = run(
+            "local f = require('pkg:p'); _result = { f(4, 5) }",
+            packageEnv("local k = 3; return async.parallel(function(a, b) return a * b + k end)"),
+        )
+        assertEquals(23, r.get(1).toint())
+    }
+
+    @Test
+    fun `package closures get the same global diagnostics as main ones`() {
+        val r = run(
+            "_result = { pcall(require, 'pkg:p') }",
+            packageEnv("x = 1; return async.parallel(function() return x end)"),
+        )
+        assertFalse(r.get(1).toboolean())
+        assertTrue(r.str(2).contains("global 'x' is not available"), r.str(2))
     }
 
     @Test
