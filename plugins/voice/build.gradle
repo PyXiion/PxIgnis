@@ -1,0 +1,128 @@
+// ignis-voice: a PxIgnis plugin. Built with the same two MC targets as the core (-PtargetVersion=...);
+// the target properties are the ones the root project already loaded from gradle/versions/<v>.properties.
+plugins {
+    id 'com.gradleup.shadow'
+}
+
+def buildTarget = rootProject.findProperty('targetVersion')
+def obfuscated = rootProject.ext.get('obfuscated').toBoolean()
+def targetJavaVersion = rootProject.ext.get('java_version').toInteger()
+
+apply plugin: obfuscated ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
+apply plugin: 'kotlin'
+
+version = rootProject.version
+group = rootProject.group
+
+base {
+    archivesName = 'ignis-voice'
+}
+
+// Per-target build dir (see root build.gradle); jars stay in build/libs.
+layout.buildDirectory = layout.projectDirectory.dir("build/${buildTarget}")
+base.libsDirectory = layout.projectDirectory.dir('build/libs')
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'MaxHenkel'
+        url = 'https://maven.maxhenkel.de/repository/public'
+        content { includeGroup 'de.maxhenkel.voicechat' }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${rootProject.ext.get('minecraft_version')}"
+    if (obfuscated) {
+        mappings loom.officialMojangMappings()
+    }
+    def modImpl = obfuscated ? 'modImplementation' : 'implementation'
+    add(modImpl, "net.fabricmc:fabric-loader:${rootProject.ext.get('loader_version')}")
+    add(modImpl, "net.fabricmc:fabric-language-kotlin:${rootProject.ext.get('flk_version')}")
+
+    // The PluginEnv API. The core jar is a separate mod at runtime, so it is never shaded.
+    if (obfuscated) {
+        compileOnly project(path: ':', configuration: 'namedElements')
+    } else {
+        compileOnly project(':')
+    }
+    compileOnly "com.pxluanova:pxluanova-core:3.1.0"
+    testImplementation "com.pxluanova:pxluanova-core:3.1.0"
+
+    // Simple Voice Chat ships its own API classes.
+    compileOnly "de.maxhenkel.voicechat:voicechat-api:2.6.27"
+
+    // Vorbis decoder (jorbis includes jogg); shaded and relocated.
+    implementation "org.jcraft:jorbis:0.0.17"
+    shadow "org.jcraft:jorbis:0.0.17"
+
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:${rootProject.ext.get('kotlin_version')}"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+shadowJar {
+    configurations = [project.configurations.shadow]
+    from sourceSets.main.output
+
+    relocate 'com.jcraft', 'ru.pyxiion.lib.jcraft'
+}
+
+if (obfuscated) {
+    remapJar {
+        dependsOn shadowJar
+        inputFile.set shadowJar.archiveFile
+        archiveBaseName.set "ignis-voice"
+        archiveVersion.set "${project.version}-fabric-${buildTarget}"
+        archiveClassifier.set null
+    }
+} else {
+    jar {
+        archiveClassifier.set 'slim'
+    }
+    shadowJar {
+        archiveBaseName.set "ignis-voice"
+        archiveVersion.set "${project.version}-fabric-${buildTarget}"
+        archiveClassifier.set null
+    }
+    tasks.named('assemble') {
+        dependsOn shadowJar
+    }
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "minecraft_version", rootProject.ext.get('minecraft_version')
+    inputs.property "loader_version", rootProject.ext.get('loader_version')
+    filteringCharset = "UTF-8"
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version,
+                "minecraft_version": rootProject.ext.get('minecraft_version'),
+                "loader_version": rootProject.ext.get('loader_version')
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = "UTF-8"
+    it.options.release.set(targetJavaVersion)
+}
+
+java {
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+    withSourcesJar()
+}
+
+tasks.named('sourcesJar') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+kotlin {
+    jvmToolchain(targetJavaVersion)
+}

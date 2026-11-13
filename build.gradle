@@ -39,6 +39,12 @@ base {
     archivesName = project.archives_base_name
 }
 
+// Per-target build directory: 1.21.11 and 26.3 compile the same package names against different Minecraft
+// APIs, so sharing build/classes lets one target's classes get picked up by the other's run/test tasks.
+// Jars stay in build/libs (names carry the target), which smoke/run.sh, CI and docs rely on.
+layout.buildDirectory = layout.projectDirectory.dir("build/${buildTarget}")
+base.libsDirectory = layout.projectDirectory.dir('build/libs')
+
 loom {
     accessWidenerPath = file("src/version-${buildTarget}/resources/pxignis.accesswidener")
 
@@ -96,7 +102,6 @@ shadowJar {
     configurations = [project.configurations.shadow]
     from sourceSets.main.output
 
-    relocate 'org.luaj', 'ru.pyxiion.luanova'
     relocate 'me.lucko.fabric.api.permissions', 'ru.pyxiion.lib.fabric.api.permissions'
 }
 

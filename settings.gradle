@@ -15,3 +15,5 @@ plugins {
 }
 
 includeBuild 'pxluanova'
+
+include 'plugins:voice'
