@@ -1,13 +1,13 @@
 package ru.pyxiion.ignis
 
 import com.sun.net.httpserver.HttpServer
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaThread
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
-import org.luaj.vm2.lib.jse.JsePlatform
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaThread
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.Varargs
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform
 import ru.pyxiion.ignis.parallel.StdlibRegistry
 import ru.pyxiion.ignis.sandbox.Vfs
 import java.nio.file.Files

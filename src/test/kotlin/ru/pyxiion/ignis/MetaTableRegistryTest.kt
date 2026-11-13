@@ -6,11 +6,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.assertFalse
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
-import org.luaj.vm2.lib.VarArgFunction
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.Varargs
+import ru.pyxiion.luanova.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.api.MetaTableRegistry
 
 class MetaTableRegistryTest {

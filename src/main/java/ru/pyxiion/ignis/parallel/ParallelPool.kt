@@ -1,11 +1,11 @@
 package ru.pyxiion.ignis.parallel
 
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.interrupt.InterruptAction
-import org.luaj.vm2.interrupt.InterruptHandler
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.interrupt.InterruptAction
+import ru.pyxiion.luanova.vm2.interrupt.InterruptHandler
 import ru.pyxiion.ignis.luaFunction
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.runtime.installStdlib

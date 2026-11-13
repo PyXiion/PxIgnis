@@ -8,7 +8,7 @@ import net.minecraft.world.phys.AABB
 import net.minecraft.world.phys.Vec3
 import net.minecraft.world.level.ClipContext
 import net.minecraft.world.level.Level
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.luaTableOf
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.vecTable

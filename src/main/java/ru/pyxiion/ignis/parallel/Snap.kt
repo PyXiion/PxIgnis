@@ -1,8 +1,8 @@
 package ru.pyxiion.ignis.parallel
 
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Prototype
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.Prototype
 
 /**
  * A thread-neutral description of a Lua value. A [Snapshotter] builds it on the sending thread (a copy, never

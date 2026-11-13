@@ -1,9 +1,9 @@
 package ru.pyxiion.ignis.parallel
 
-import org.luaj.vm2.LuaClosure
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaClosure
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.forEach
 import ru.pyxiion.ignis.luaFunction
 import java.util.Collections

@@ -4,9 +4,9 @@ import ru.pyxiion.ignis.wrapObject
 import net.minecraft.world.SimpleContainer
 import net.minecraft.world.inventory.AbstractContainerMenu
 import net.minecraft.server.level.ServerPlayer
-import org.luaj.vm2.LuaFunction
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaFunction
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.ContainerManager
 import ru.pyxiion.ignis.api.util.metaTable

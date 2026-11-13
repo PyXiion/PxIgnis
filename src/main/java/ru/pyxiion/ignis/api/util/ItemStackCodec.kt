@@ -6,7 +6,7 @@ import com.mojang.serialization.JsonOps
 import net.minecraft.world.item.ItemStack
 import net.minecraft.resources.RegistryOps
 import net.minecraft.core.HolderLookup
-import org.luaj.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaError
 
 object ItemStackCodec {
     fun encode(stack: ItemStack, lookup: HolderLookup.Provider): String {

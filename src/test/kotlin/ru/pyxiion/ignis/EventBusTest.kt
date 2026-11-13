@@ -4,9 +4,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
-import org.luaj.vm2.lib.VarArgFunction
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.Varargs
+import ru.pyxiion.luanova.vm2.lib.VarArgFunction
 import ru.pyxiion.ignis.events.EventCatalog
 
 /** Registration, removal and throttling, on custom (`ns:name`) events of a bus without built-in ones. */

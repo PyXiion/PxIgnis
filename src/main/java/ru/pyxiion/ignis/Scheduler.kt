@@ -1,10 +1,10 @@
 package ru.pyxiion.ignis
 
-import org.luaj.vm2.LuaClosure
-import org.luaj.vm2.LuaFunction
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaThread
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaClosure
+import ru.pyxiion.luanova.vm2.LuaFunction
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaThread
+import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import java.util.PriorityQueue

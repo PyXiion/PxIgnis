@@ -1,16 +1,16 @@
 package ru.pyxiion.ignis.runtime
 
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.compiler.LuaC
-import org.luaj.vm2.lib.Bit32Lib
-import org.luaj.vm2.lib.CoroutineLib
-import org.luaj.vm2.lib.StringLib
-import org.luaj.vm2.lib.TableLib
-import org.luaj.vm2.lib.jse.JseBaseLib
-import org.luaj.vm2.lib.jse.JseMathLib
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.compiler.LuaC
+import ru.pyxiion.luanova.vm2.lib.Bit32Lib
+import ru.pyxiion.luanova.vm2.lib.CoroutineLib
+import ru.pyxiion.luanova.vm2.lib.StringLib
+import ru.pyxiion.luanova.vm2.lib.TableLib
+import ru.pyxiion.luanova.vm2.lib.jse.JseBaseLib
+import ru.pyxiion.luanova.vm2.lib.jse.JseMathLib
 import ru.pyxiion.ignis.api.LuaMcApi
 import ru.pyxiion.ignis.api.vecTable
 import ru.pyxiion.ignis.asFunction

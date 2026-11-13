@@ -1,8 +1,8 @@
 package ru.pyxiion.ignis
 
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.lib.jse.JsePlatform
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector
 import ru.pyxiion.ignis.api.initVecMeta

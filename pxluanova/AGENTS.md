@@ -6,17 +6,18 @@
 ./gradlew build                          # Build all modules
 ./gradlew test                           # Run all tests
 ./gradlew :pxluanova-core:build          # Build core only
-./gradlew :pxluanova-test:test --tests "org.luaj.vm2.CoroutineYieldTest"  # Single test
+./gradlew :pxluanova-test:test --tests "ru.pyxiion.luanova.vm2.CoroutineYieldTest"  # Single test
 ```
 
 ## Architecture
 
 **Three Gradle modules:**
-- `pxluanova-core` — Interpreter, compiler, standard libs. Package: `org.luaj.vm2.*`
+- `pxluanova-core` — Interpreter, compiler, standard libs. Package: `ru.pyxiion.luanova.vm2.*`
 - `pxluanova-jse` — Java SE platform (JSE libs, luajava, LuaJC bytecode compiler). Depends on core.
 - `pxluanova-test` — JUnit 4 test suite. Depends on both.
 
-**Package names are `org.luaj.vm2.*`** — NOT renamed from LuaJ. This is intentional for API compatibility.
+**Package names are `ru.pyxiion.luanova.vm2.*`** — the LuaJ sources are vendored with renamed packages, so the
+shaded PxIgnis jar needs no relocation.
 
 **Key files:**
 - `LuaThread.java` — Coroutine state; `resume` runs `FrameInterpreter` on the caller's thread
@@ -83,6 +84,5 @@ call; it runs `checkpoint()` on `LuaState.current()` every 100 calls.
 
 ## What NOT to Change
 
-- **Don't rename packages** — `org.luaj.vm2` is intentional for drop-in LuaJ replacement
 - **Don't add JME code** — Java ME support was deliberately removed
 - **Don't change `synchronized` in DebugLib** — those are per-coroutine and uncontended

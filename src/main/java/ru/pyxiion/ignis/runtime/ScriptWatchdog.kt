@@ -1,7 +1,7 @@
 package ru.pyxiion.ignis.runtime
 
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.interrupt.InterruptAction
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.interrupt.InterruptAction
 
 /**
  * Stops Lua code that holds the server thread for too long (e.g. `while true do end` in a handler).

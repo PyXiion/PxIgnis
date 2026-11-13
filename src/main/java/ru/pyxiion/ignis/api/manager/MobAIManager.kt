@@ -5,10 +5,10 @@ import net.minecraft.world.entity.ai.Brain
 import net.minecraft.world.entity.Mob
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaFunction
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaFunction
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.Compat
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.util.LuaGoal

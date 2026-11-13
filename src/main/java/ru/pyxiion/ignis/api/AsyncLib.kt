@@ -2,8 +2,8 @@ package ru.pyxiion.ignis.api
 
 import com.google.gson.*
 import java.util.concurrent.ConcurrentLinkedQueue
-import org.luaj.vm2.*
-import org.luaj.vm2.lib.LuaContinuableFunction
+import ru.pyxiion.luanova.vm2.*
+import ru.pyxiion.luanova.vm2.lib.LuaContinuableFunction
 import ru.pyxiion.ignis.*
 import ru.pyxiion.ignis.storage.LuaJson
 import java.net.URI

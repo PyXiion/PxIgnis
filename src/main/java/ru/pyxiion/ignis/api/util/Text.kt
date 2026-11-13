@@ -10,8 +10,8 @@ import net.minecraft.nbt.Tag
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.ComponentSerialization
 import net.minecraft.resources.RegistryOps
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.PxIgnis
 
 /**

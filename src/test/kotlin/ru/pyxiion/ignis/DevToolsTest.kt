@@ -12,7 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.luaj.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaError
 import ru.pyxiion.ignis.runtime.EditorSupport
 import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatcher

@@ -1,7 +1,7 @@
 package ru.pyxiion.ignis
 
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.Varargs
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.Varargs
 import ru.pyxiion.ignis.runtime.installStdlib
 import ru.pyxiion.ignis.runtime.installStrictGlobals
 import ru.pyxiion.ignis.sandbox.Vfs

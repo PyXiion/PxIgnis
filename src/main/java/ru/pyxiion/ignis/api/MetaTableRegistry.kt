@@ -1,6 +1,6 @@
 package ru.pyxiion.ignis.api
 
-import org.luaj.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaTable
 import ru.pyxiion.ignis.api.wrapper.*
 
 /**

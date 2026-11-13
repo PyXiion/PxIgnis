@@ -7,17 +7,17 @@ A modernized, maintained fork of LuaJ 3.0.2 with bug fixes from [wagyourtail/lua
 - **Modern Java**: Requires Java 21+; coroutines are frame-based and need no threads
 - **Bug fixes**: Comprehensive fixes from wagyourtail/luaj and Cobalt
 - **Enhanced stdlib**: Lua 5.3+ additions (`math.type`, multi-arg `math.min`/`max`, `math.atan(y, x)`)
-- **API compatible**: Drop-in replacement for LuaJ 3.0.2 (`org.luaj.vm2.*` packages)
+- **Fork packages**: LuaJ 3.0.2 API under `ru.pyxiion.luanova.vm2.*`
 
 ## Quick Start
 
 ```java
-import org.luaj.vm2.Globals;
-import org.luaj.vm2.LuaValue;
-import org.luaj.vm2.lib.jse.JsePlatform;
+import ru.pyxiion.luanova.vm2.LuaTable;
+import ru.pyxiion.luanova.vm2.LuaValue;
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform;
 
 // Create globals with standard libraries
-Globals globals = JsePlatform.standardGlobals();
+LuaTable globals = JsePlatform.standardGlobals();
 
 // Run a Lua script
 globals.load("print('hello, world')").call();
@@ -90,7 +90,7 @@ See [TODO.md](TODO.md) for the complete roadmap and deferred items.
 
 ## Migration from LuaJ
 
-PxLuaNova is API-compatible with LuaJ 3.0.2. The package names remain `org.luaj.vm2.*`, so you can drop it in as a replacement.
+PxLuaNova is API-compatible with LuaJ 3.0.2, but the packages are renamed to `ru.pyxiion.luanova.vm2.*`, so imports need to change.
 
 **Breaking changes:**
 - Minimum Java version raised from 11 to 21

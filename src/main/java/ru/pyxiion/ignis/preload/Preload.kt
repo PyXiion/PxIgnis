@@ -3,10 +3,10 @@ package ru.pyxiion.ignis.preload
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.resources.Identifier
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.luaFunction
 import ru.pyxiion.ignis.runtime.ScriptErrors

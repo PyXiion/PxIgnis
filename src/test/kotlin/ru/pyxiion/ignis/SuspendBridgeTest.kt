@@ -12,11 +12,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaThread
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
-import org.luaj.vm2.lib.jse.JsePlatform
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaThread
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.Varargs
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform
 
 class SuspendBridgeTest {
 

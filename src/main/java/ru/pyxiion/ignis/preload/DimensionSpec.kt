@@ -2,8 +2,8 @@ package ru.pyxiion.ignis.preload
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
 
 /** A rejected `preload.dimension` call. The message is what the script author sees. */
 class SpecError(message: String) : IllegalArgumentException(message)

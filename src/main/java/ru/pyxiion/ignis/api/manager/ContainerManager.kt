@@ -10,7 +10,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu
 import net.minecraft.world.inventory.MenuType
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.network.chat.Component
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap

@@ -30,10 +30,10 @@ import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
 
-import org.luaj.vm2.LuaState;
-import org.luaj.vm2.Lua;
-import org.luaj.vm2.lib.jse.JsePlatform;
-import org.luaj.vm2.luajc.LuaJC;
+import ru.pyxiion.luanova.vm2.LuaState;
+import ru.pyxiion.luanova.vm2.Lua;
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform;
+import ru.pyxiion.luanova.vm2.luajc.LuaJC;
 
 /**
  * Compiler for lua files to compile lua sources or lua binaries into java classes. 

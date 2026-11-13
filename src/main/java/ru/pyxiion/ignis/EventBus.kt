@@ -1,13 +1,13 @@
 package ru.pyxiion.ignis
 
-import org.luaj.vm2.LuaClosure
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaFunction
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaThread
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
+import ru.pyxiion.luanova.vm2.LuaClosure
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaFunction
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaThread
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.Varargs
 import ru.pyxiion.ignis.events.EventCatalog
 import ru.pyxiion.ignis.events.EventDef
 import ru.pyxiion.ignis.runtime.ScriptErrors

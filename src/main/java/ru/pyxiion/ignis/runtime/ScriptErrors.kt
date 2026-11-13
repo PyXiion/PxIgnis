@@ -1,6 +1,6 @@
 package ru.pyxiion.ignis.runtime
 
-import org.luaj.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaError
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 

@@ -13,9 +13,9 @@ import net.minecraft.resources.RegistryOps
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.component.CustomModelData
 import net.minecraft.world.item.component.UseCooldown
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.PxIgnis
 import java.util.Optional
 

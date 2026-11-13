@@ -1,10 +1,10 @@
 package ru.pyxiion.ignis.parallel
 
-import org.luaj.vm2.LuaClosure
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.UpValue
+import ru.pyxiion.luanova.vm2.LuaClosure
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.UpValue
 import ru.pyxiion.ignis.api.Vector
 import java.util.IdentityHashMap
 

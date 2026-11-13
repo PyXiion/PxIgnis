@@ -29,14 +29,14 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Vector;
 
-import org.luaj.vm2.LuaState;
-import org.luaj.vm2.Lua;
-import org.luaj.vm2.LuaTable;
-import org.luaj.vm2.LuaValue;
-import org.luaj.vm2.Print;
-import org.luaj.vm2.Varargs;
-import org.luaj.vm2.lib.jse.JsePlatform;
-import org.luaj.vm2.luajc.LuaJC;
+import ru.pyxiion.luanova.vm2.LuaState;
+import ru.pyxiion.luanova.vm2.Lua;
+import ru.pyxiion.luanova.vm2.LuaTable;
+import ru.pyxiion.luanova.vm2.LuaValue;
+import ru.pyxiion.luanova.vm2.Print;
+import ru.pyxiion.luanova.vm2.Varargs;
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform;
+import ru.pyxiion.luanova.vm2.luajc.LuaJC;
 
 
 /**

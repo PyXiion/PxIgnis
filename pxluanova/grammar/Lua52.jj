@@ -20,11 +20,11 @@ options {
   DEBUG_LOOKAHEAD = false;
   DEBUG_PARSER = false;
   DEBUG_TOKEN_MANAGER = false;
-  OUTPUT_DIRECTORY = "org/luaj/vm2/parser";
+  OUTPUT_DIRECTORY = "ru/pyxiion/luanova/vm2/parser";
 }
 
 PARSER_BEGIN(LuaParser)
-package org.luaj.vm2.parser;
+package ru.pyxiion.luanova.vm2.parser;
 
 public class LuaParser {
 

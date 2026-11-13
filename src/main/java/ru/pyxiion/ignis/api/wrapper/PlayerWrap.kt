@@ -21,9 +21,9 @@ import net.minecraft.resources.Identifier
 import net.minecraft.world.phys.Vec3
 import net.minecraft.world.level.GameType
 import net.minecraft.world.level.portal.TeleportTransition
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
 import me.lucko.fabric.api.permissions.v0.Permissions
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.DialogApi

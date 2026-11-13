@@ -8,7 +8,7 @@ import net.minecraft.ChatFormatting
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.commands.Commands
 import net.minecraft.network.chat.Component
-import org.luaj.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaError
 import ru.pyxiion.ignis.IgnisRuntime
 import ru.pyxiion.ignis.PxIgnis
 

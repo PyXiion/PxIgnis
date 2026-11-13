@@ -1,11 +1,11 @@
 package ru.pyxiion.ignis.sandbox
 
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaString
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.lib.OneArgFunction
-import org.luaj.vm2.lib.TwoArgFunction
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaString
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.lib.OneArgFunction
+import ru.pyxiion.luanova.vm2.lib.TwoArgFunction
 import ru.pyxiion.ignis.PxIgnis
 import java.io.ByteArrayInputStream
 

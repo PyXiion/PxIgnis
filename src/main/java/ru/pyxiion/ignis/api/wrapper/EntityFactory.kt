@@ -5,7 +5,7 @@ import net.minecraft.world.entity.Display
 import net.minecraft.world.entity.Mob
 import net.minecraft.server.level.ServerPlayer
 import ru.pyxiion.ignis.api.manager.HologramManager
-import org.luaj.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.LuaValue
 
 object EntityFactory {
     fun wrap(entity: Entity): LuaValue = when (entity) {

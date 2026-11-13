@@ -18,7 +18,7 @@ import net.minecraft.world.SimpleContainer
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.level.Level
 import net.minecraft.world.phys.Vec3
-import org.luaj.vm2.*
+import ru.pyxiion.luanova.vm2.*
 import ru.pyxiion.ignis.*
 import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.runtime.ScriptErrors

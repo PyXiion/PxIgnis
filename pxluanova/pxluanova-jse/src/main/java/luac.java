@@ -28,12 +28,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 
-import org.luaj.vm2.LuaState;
-import org.luaj.vm2.Lua;
-import org.luaj.vm2.Print;
-import org.luaj.vm2.Prototype;
-import org.luaj.vm2.compiler.DumpState;
-import org.luaj.vm2.lib.jse.JsePlatform;
+import ru.pyxiion.luanova.vm2.LuaState;
+import ru.pyxiion.luanova.vm2.Lua;
+import ru.pyxiion.luanova.vm2.Print;
+import ru.pyxiion.luanova.vm2.Prototype;
+import ru.pyxiion.luanova.vm2.compiler.DumpState;
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform;
 
 
 /**

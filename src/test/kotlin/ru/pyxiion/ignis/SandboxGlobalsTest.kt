@@ -1,7 +1,7 @@
 package ru.pyxiion.ignis
 
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.lib.jse.JsePlatform
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform
 import ru.pyxiion.ignis.runtime.restrictGlobals
 import kotlin.test.Test
 import kotlin.test.assertEquals

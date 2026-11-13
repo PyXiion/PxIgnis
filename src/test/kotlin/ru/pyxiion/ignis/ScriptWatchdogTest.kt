@@ -6,14 +6,14 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
-import org.luaj.vm2.LoadState
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaThread
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.compiler.LuaC
-import org.luaj.vm2.lib.jse.JseBaseLib
-import org.luaj.vm2.lib.jse.JseOsLib
+import ru.pyxiion.luanova.vm2.LoadState
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaThread
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.compiler.LuaC
+import ru.pyxiion.luanova.vm2.lib.jse.JseBaseLib
+import ru.pyxiion.luanova.vm2.lib.jse.JseOsLib
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 
 class ScriptWatchdogTest {

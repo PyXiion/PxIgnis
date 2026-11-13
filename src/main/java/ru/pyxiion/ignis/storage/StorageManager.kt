@@ -1,7 +1,7 @@
 package ru.pyxiion.ignis.storage
 
 import com.google.gson.JsonObject
-import org.luaj.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaTable
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 

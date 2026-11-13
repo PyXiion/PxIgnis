@@ -1,8 +1,8 @@
 package ru.pyxiion.ignis
 
-import org.luaj.vm2.LuaState
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.compiler.LuaC
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.compiler.LuaC
 import ru.pyxiion.ignis.preload.DimensionJson
 import ru.pyxiion.ignis.preload.DimensionSpec
 import ru.pyxiion.ignis.preload.FlatLayer

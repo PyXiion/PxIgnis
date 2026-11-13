@@ -1,11 +1,11 @@
 package ru.pyxiion.ignis.parallel
 
-import org.luaj.vm2.Lua
-import org.luaj.vm2.LuaClosure
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaString
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.Prototype
+import ru.pyxiion.luanova.vm2.Lua
+import ru.pyxiion.luanova.vm2.LuaClosure
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaString
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.Prototype
 import java.util.Collections
 import java.util.IdentityHashMap
 

@@ -4,8 +4,8 @@ import com.mojang.brigadier.context.CommandContext
 import com.mojang.brigadier.exceptions.CommandSyntaxException
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.network.chat.Component
-import org.luaj.vm2.*
-import org.luaj.vm2.LuaValue.NIL
+import ru.pyxiion.luanova.vm2.*
+import ru.pyxiion.luanova.vm2.LuaValue.NIL
 import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
 import ru.pyxiion.ignis.luaTableOf

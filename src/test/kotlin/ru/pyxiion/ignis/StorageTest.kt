@@ -1,10 +1,10 @@
 package ru.pyxiion.ignis
 
 import com.google.gson.JsonParser
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.lib.jse.JsePlatform
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform
 import ru.pyxiion.ignis.storage.JsonBackend
 import ru.pyxiion.ignis.storage.LuaJson
 import ru.pyxiion.ignis.storage.StorageManager

@@ -32,13 +32,13 @@ options {
   DEBUG_LOOKAHEAD = false;
   DEBUG_PARSER = false;
   DEBUG_TOKEN_MANAGER = false;
-  OUTPUT_DIRECTORY = "src/jse/org/luaj/vm2/parser";
+  OUTPUT_DIRECTORY = "src/jse/ru/pyxiion/luanova/vm2/parser";
 }
 
 PARSER_BEGIN(LuaParser)
-package org.luaj.vm2.parser;
-import org.luaj.vm2.*;
-import org.luaj.vm2.ast.*;
+package ru.pyxiion.luanova.vm2.parser;
+import ru.pyxiion.luanova.vm2.*;
+import ru.pyxiion.luanova.vm2.ast.*;
 import java.util.*;
 
 public class LuaParser {

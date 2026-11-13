@@ -3,10 +3,10 @@ package ru.pyxiion.ignis.api
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.google.gson.JsonSyntaxException
-import org.luaj.vm2.LuaError
-import org.luaj.vm2.LuaTable
-import org.luaj.vm2.LuaValue
-import org.luaj.vm2.Varargs
+import ru.pyxiion.luanova.vm2.LuaError
+import ru.pyxiion.luanova.vm2.LuaTable
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.Varargs
 import ru.pyxiion.ignis.forEach
 import ru.pyxiion.ignis.luaFunction
 import ru.pyxiion.ignis.luaVarFunction

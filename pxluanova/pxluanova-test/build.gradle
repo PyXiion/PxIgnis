@@ -26,7 +26,7 @@ test {
     // CompatibiltyTest/ErrorsTest compare against reference output captured from C Lua in 2012-2013
     // (lua/luaj3.0-tests.zip). Remove an entry once the difference is fixed.
     filter {
-        def compat = 'org.luaj.vm2.CompatibiltyTest$'
+        def compat = 'ru.pyxiion.luanova.vm2.CompatibiltyTest$'
         [
             // Depends on the clock and time zone of the machine that produced the reference.
             "${compat}JseCompatibilityTest.testOsLib",
@@ -49,12 +49,12 @@ test {
             "${compat}LuaJCCompatibilityTest.testStringLib",
             "${compat}LuaJCCompatibilityTest.testBaseLib",
             // Error message wording and Lua 5.1-only APIs (package.seeall, math.atan2 arity, ...).
-            'org.luaj.vm2.ErrorsTest.testBaseLibArgs',
-            'org.luaj.vm2.ErrorsTest.testDebugLibArgs',
-            'org.luaj.vm2.ErrorsTest.testIoLibArgs',
-            'org.luaj.vm2.ErrorsTest.testMathLibArgs',
-            'org.luaj.vm2.ErrorsTest.testModuleLibArgs',
-            'org.luaj.vm2.ErrorsTest.testStringLibArgs',
+            'ru.pyxiion.luanova.vm2.ErrorsTest.testBaseLibArgs',
+            'ru.pyxiion.luanova.vm2.ErrorsTest.testDebugLibArgs',
+            'ru.pyxiion.luanova.vm2.ErrorsTest.testIoLibArgs',
+            'ru.pyxiion.luanova.vm2.ErrorsTest.testMathLibArgs',
+            'ru.pyxiion.luanova.vm2.ErrorsTest.testModuleLibArgs',
+            'ru.pyxiion.luanova.vm2.ErrorsTest.testStringLibArgs',
         ].each { excludeTestsMatching it }
     }
 }
