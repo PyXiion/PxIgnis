@@ -24,12 +24,31 @@ description: Release history for PxIgnis.
   (missing dependency, version mismatch, cycle, error in its entry) is skipped together with everything that
   `depends` on it. Inside a package a plain `require("util")` resolves in the package folder only. See
   [Packages and plugins](/reference/packages).
+  ```json
+  { "id": "arena", "version": "1.0.0", "depends": { "ext:voice": "*" } }
+  ```
+  ```lua
+  -- packages/arena/init.lua
+  local menu = require("ui.menu")       -- packages/arena/ui/menu.lua
+  -- any other script
+  local arena = require("pkg:arena")    -- the entry of package 'arena'
+  ```
 - **Plugins.** Separate Fabric mods can add Lua modules backed by Kotlin: `require("ext:<id>")`. Without the plugin
   `require` fails with `plugin '<id>' is not installed`; packages declare `"ext:<id>": "<range>"` in `depends`. Plugin
   Lua stubs are copied to `config/ignis/.types/plugins/<id>/`. The Kotlin API (`IgnisPlugin`, `PluginEnv`,
   `LuaConvert`) is described in [Packages and plugins](/reference/packages#writing-a-plugin).
+  ```lua
+  local ok, voice = pcall(require, "ext:voice")  -- ok is false when the plugin is not installed
+  ```
 - **ignis-voice** plugin (`require("ext:voice")`): play `.ogg`/`.wav` files to players through Simple Voice Chat —
   emitters on entities, positions or player lists, volume categories, no resource pack.
+  ```lua
+  local voice = require("ext:voice")
+  voice.category({ id = "music", name = "Music" })
+  local theme = voice.load("music/theme.ogg")  -- relative to the script root or the calling package
+  local h = voice.play(theme, { entity = player, category = "music", distance = 16 })
+  -- h:stop() ends it early
+  ```
 
 - **Mob AI helpers.** `entity.onGround`; `world:isSolid(pos)`, `world:isPassable(pos)` (collision shape),
   `world:hasBlockTag(pos, tag)`; `world:breakBlock(pos, { drops, effects })` (break sound and particles, no
