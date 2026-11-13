@@ -5,6 +5,8 @@ description: Release history for PxIgnis.
 
 ## Unreleased
 
+## 0.19.0 — Script packages, plugins and ignis-voice (2026-11-13)
+
 ### Breaking
 
 - **`require` namespaces are a closed set: `core:`, `pkg:`, `ext:`.** `require("ns:a.b")` used to fall back to the

@@ -77,7 +77,7 @@ Add the entrypoint key `pxignis` and depend on `pxignis`:
 ```json
 {
   "entrypoints": { "pxignis": [ { "adapter": "kotlin", "value": "my.plugin.MyPlugin" } ] },
-  "depends": { "pxignis": "~0.18" }
+  "depends": { "pxignis": "~0.19" }
 }
 ```
 

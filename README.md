@@ -1,6 +1,6 @@
 # PxIgnis
 
-![version](https://img.shields.io/badge/version-0.18.0-purple)
+![version](https://img.shields.io/badge/version-0.19.0-purple)
 ![version](https://img.shields.io/badge/MC-1.21.11-green)
 ![version](https://img.shields.io/badge/MC-26.3-green)
 
@@ -81,6 +81,8 @@ end, "px.ignis.shop")
 | **UI**        | Per-player sidebar, chest GUI lib, boss bars, holograms, titles                                                            |
 | **Async**     | `require "async"`: `async.fetch()` for HTTP, `async.sleep()` for delays, tasks, `async.parallel` for heavy calculations |
 | **Storage**   | Per-player and global JSON-backed key-value tables                                                                         |
+| **Packages**  | Folders with an `ignis.json` manifest: dependencies, load order, `require("pkg:id")`; Kotlin plugins add `ext:` modules   |
+| **Voice**     | `ignis-voice` plugin: play `.ogg`/`.wav` to players through Simple Voice Chat, no resource pack                            |
 | **Dev tools** | LuaLS types for IntelliSense, `mc.dump()`, metatable extension hooks                                                       |
 
 ## Install
@@ -90,6 +92,8 @@ Minecraft 1.21.x · Fabric Loader ≥0.19.2 · Fabric API ≥0.141.4 · Fabric L
 1. Drop the mod into `mods/`.
 2. Start the server — `config/ignis/demo.lua` is created.
 3. Edit scripts, run `/ignis reload` (OP-4 or `px.ignis`).
+
+Optional: put `ignis-voice` (a separate jar) next to it for [custom audio](https://ignis.pyxiion.ru/reference/voice/); players need Simple Voice Chat.
 
 ## License
 
