@@ -222,6 +222,10 @@ bar.progress = 0.5
 
 Returns a table of all active boss bars.
 
+### `mc.displays()`
+
+All live [virtual displays](/reference/display-api) across all worlds.
+
 ### `mc.getBossBar(uuid)`
 
 Returns the boss bar with the given UUID, or `nil`.

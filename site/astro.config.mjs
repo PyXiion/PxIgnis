@@ -69,6 +69,7 @@ export default defineConfig({
             { label: "Sidebar", slug: "reference/sidebar-api" },
             { label: "BossBar", slug: "reference/bossbar-api" },
             { label: "Hologram", slug: "reference/hologram-api" },
+            { label: "Display", slug: "reference/display-api" },
             { label: "Region", slug: "reference/region-api" },
             { label: "Mob AI", slug: "reference/mob-ai" },
           ],
@@ -82,6 +83,7 @@ export default defineConfig({
             { label: "Chest GUI", slug: "libraries/chestgui" },
             { label: "Particles", slug: "libraries/particles" },
             { label: "Dialog", slug: "libraries/dialog" },
+            { label: "Display", slug: "libraries/display" },
           ],
         },
         {

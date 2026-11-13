@@ -351,6 +351,108 @@ local function dialogPhase()
     step("dialog: shapes shown", function() assert(n == 11, n) end)
 end
 
+-- Виртуальные дисплеи: игроков на смоук-сервере нет, поэтому пакеты клиентам не уходят; проверяются ядро, валидация,
+-- Lua-обвязка и то, что reload убирает всё.
+local function displayPhase(w, mob)
+    local display = require "core:display"
+    local before = #mc.displays()
+    local persist
+    step("display: spawn item/block/text/interaction", function()
+        local item = w:display("item", vec(0, 90, 0), {
+            item = "minecraft:stone", mode = "gui", transform = { s = 0.5, t = { 0, 1, 0 } }, glow = 0xFF0000,
+            brightness = { 15, 15 }, viewRange = 0.5, interp = 3, teleport = 2, billboard = "center", shadow = { 1, 0.5 },
+        })
+        local blk = w:display("block", vec(2, 90, 0), { block = "minecraft:oak_stairs[facing=north]", viewers = "manual" })
+        local txt = w:display("text", vec(4, 90, 0), {
+            text = "§cHi", background = 0x80000000, opacity = 200, align = "left", textShadow = true, seeThrough = true,
+            lineWidth = 120, size = { 1, 1 }, billboard = "center",
+        })
+        local hit = w:display("interaction", vec(6, 90, 0), { hitbox = { w = 1.5, h = 2, responsive = true } })
+        assert(item.valid and blk.valid and txt.valid and hit.valid)
+        assert(item.kind == "item" and hit.kind == "interaction")
+        local ids = {}
+        for _, d in ipairs({ item, blk, txt, hit }) do assert(type(d.id) == "number" and not ids[d.id]); ids[d.id] = true end
+        assert(item.pos.y == 90 and txt.pos.x == 4)
+        hit:onClick(function(player, hand) end)
+        hit:onAttack(function(player) end)
+        assert(#mc.displays() == before + 4, #mc.displays())
+        item:set { opacity = nil, transform = { l = { x = 0, y = 0.7071, z = 0, w = 0.7071 } }, interp = 5 }
+        item:set { transform = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 } }
+        txt:set { text = { text = "x", color = "red" }, background = 0 }
+        item:moveTo(vec(1, 91, 1), 90, 10)
+        assert(item.pos.x == 1 and math.abs(item.yaw - 90) < 1e-3 and math.abs(item.pitch - 10) < 1e-3)
+        blk:set { viewers = {} }
+        for _, d in ipairs({ item, blk, txt, hit }) do d:remove() end
+        assert(not item.valid and not hit.valid)
+        assert(#mc.displays() == before)
+        assert(fails(item.set, item, { glow = true }), "set after remove")
+    end)
+    step("display: validation", function()
+        assert(fails(w.display, w, "armor_stand", vec(0, 90, 0)), "bad kind")
+        assert(fails(w.display, w, "block", vec(0, 90, 0), { item = "minecraft:stone" }), "item on block")
+        assert(fails(w.display, w, "item", vec(0, 90, 0), { nonsense = 1 }), "unknown prop")
+        assert(fails(w.display, w, "item", vec(0, 90, 0), { billboard = "diagonal" }), "bad billboard")
+        assert(fails(w.display, w, "text", vec(0, 90, 0), { teleport = 60 }), "teleport range")
+        assert(fails(w.display, w, "block", vec(0, 90, 0), { block = "minecraft:nonexistent_block" }), "bad block")
+        assert(fails(w.display, w, "interaction", vec(0, 90, 0), { transform = { s = 1 } }), "transform on interaction")
+        assert(#mc.displays() == before, "failed spawns leaked: " .. (#mc.displays() - before))
+        local d = w:display("block", vec(0, 90, 0), { block = "minecraft:stone" })
+        assert(fails(d.onClick, d, function() end), "onClick on a block display")
+        assert(fails(d.show, d, "not a player"), "show non-player")
+        d:remove(); d:remove()
+    end)
+    step("display: attach to a mob, detach, remove", function()
+        local d = w:display("item", mob.pos, { item = "minecraft:stone", viewers = "manual" })
+        d:attach(mob, vec(0, 0.5, 0))
+        d:detach()
+        d:attach(mob)
+        d:remove()
+        local k = w:display("text", mob.pos, { text = "k", dieWithHost = true })
+        k:attach(mob)
+        k:remove()
+        assert(fails(d.attach, d, mob), "attach after remove")
+        assert(fails(d.attach, d, "mob"), "attach non-entity")
+    end)
+    step("display: core:display helpers", function()
+        local o = display.item(w, vec(0, 92, 0), "minecraft:stone", { scale = 0.4, glow = true, billboard = "center" })
+        o:animate({ transform = { s = 0.8 } }, 5)
+        o:spin({ 0, 1, 0 }, 40)
+        o:flyTo(vec(1, 93, 1), 10)
+        o:life(2)
+        local bl = display.block(w, vec(0, 92, 2), "minecraft:red_concrete")
+        bl:fade(3, true)
+        local tx = display.text(w, vec(0, 92, 4), "§aok")
+        tx:fade(3, true)
+        local q = display.quad(w, vec(0, 92, 6), 0xFFFF0000, 1, 0.5)
+        q:remove()
+        local rig = display.group(w, vec(0, 92, 8), {
+            body = { kind = "block", block = "minecraft:stone", transform = { s = 0.5 } },
+            head = { kind = "item", item = "minecraft:stone", parent = "body", transform = { t = { 0, 1, 0 } } },
+        })
+        rig:transform({ t = { 0, 1, 0 }, l = display.quat.euler(1, 0, 0) }, 4)
+        rig:node("head"):set { transform = { t = { 0, 2, 0 } } }
+        rig:attach(mob, vec(0, 1, 0))
+        rig:detach()
+        local anim = display.timeline { loop = true, step = 4, tracks = { head = {
+            { t = 0, rot = { 0, 0, 0 } }, { t = 20, rot = { 0, 1.57, 0 }, ease = "inOut" } } } }
+        local play = display.play(rig, anim)
+        local bar = display.bar(w, vec(0, 92, 10), { w = 1.0, h = 0.1 })
+        bar:set(0.4, 5)
+        bar:attach(mob, vec(0, 2.2, 0))
+        assert(#mc.displays() >= before + 7)
+        mc.schedule(20, function()
+            step("display: scheduled sugar finished", function()
+                assert(not o.valid and not bl.valid and not tx.valid, "life/fade did not remove")
+                play:stop(); assert(play.done)
+                rig:remove(); bar:remove()
+                assert(#mc.displays() == before + 1, #mc.displays() - before)
+            end)
+        end)
+    end)
+    persist = w:display("text", vec(0, 95, 0), { text = "persist", viewers = "manual" })
+    mc.data.smoke_display_persist = true
+end
+
 -- Сущности: чанк удерживается forceload, а проверки идут через 10 секунд, когда чанк точно принимает сущности.
 local function entityPhase(w)
     particlePhase(w)
@@ -362,6 +464,7 @@ local function entityPhase(w)
     step("entity type id", function() assert(mob.type == "minecraft:zombie", mob.type) end)
     step("invulnerable", function() mob.invulnerable = true; assert(mob.invulnerable == true) end)
     step("tags", function() mob.tags.smoke = true; assert(mob.tags.smoke, "tag missing") end)
+    displayPhase(w, mob)
     step("entity: rotation, gravity, noAi, scale, remove", function()
         local pig = w:spawn("minecraft:pig", vec(3, 80, 3), {})
         assert(pig, "no pig")
@@ -516,7 +619,7 @@ mc.on("server_start", function()
     -- 17. строгие глобальные: чтение необъявленного — ошибка, rawget — проба
     step("strict globals: undefined read fails", function() assert(fails(function() return smoke_undefined_global end)) end)
     step("strict globals: rawget probe", function() assert(rawget(_G, "smoke_undefined_global") == nil) end)
-    step("builtin modules load", function() for _, m in ipairs({ "format", "simple", "chestgui", "items" }) do require("core:" .. m) end end)
+    step("builtin modules load", function() for _, m in ipairs({ "format", "simple", "chestgui", "items", "display" }) do require("core:" .. m) end end)
 
     parallelPhase("")
     print("[SMOKE] done")
@@ -525,6 +628,10 @@ end)
 mc.on("init", function()
     local phase = mc.data.smoke_phase
     if phase == 2 then
+        step("display: reload removes every display", function()
+            assert(mc.data.smoke_display_persist, "display phase never ran")
+            assert(#mc.displays() == 0, #mc.displays() .. " displays survived the reload")
+        end)
         step("reload: ai survives /ignis reload", function()
             local mob = mc.getEntity(mc.data.smoke_mob)
             local _, zombies = mc.execute("execute if entity @e[type=zombie]")

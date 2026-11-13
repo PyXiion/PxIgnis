@@ -37,6 +37,7 @@ import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.Vector.Companion.toBlockPos
 import ru.pyxiion.ignis.api.Vector.Companion.toVec3d
 import ru.pyxiion.ignis.api.manager.HologramManager
+import ru.pyxiion.ignis.api.DisplayLib
 import ru.pyxiion.ignis.api.manager.RegionManager
 import ru.pyxiion.ignis.lookup
 import ru.pyxiion.ignis.api.util.BlockStateCodec
@@ -146,6 +147,15 @@ object WorldWrap {
             }
 
             lua
+        }
+
+        // world:display(kind, pos, props?) -> virtual (packet-only) display entity
+        method("display") { args ->
+            val w = args.arg(1).checktable().unwrap<ServerLevel>()
+            val kind = args.arg(2).checkjstring()
+            val pos = args.arg(3).toVec3d()
+            val props = args.arg(4).let { if (it.isnil()) null else it.checktable() }
+            DisplayLib.spawn(w, kind, pos, props).lua
         }
 
         // world:captureStructure(pos1, pos2, { entities = false, ignore = blockId }) -> structure

@@ -28,6 +28,7 @@ object MetaTableRegistry {
         Entry("hologram") { HologramWrapper.initMeta(it) },
         Entry("region") { RegionWrap.initMeta(it) },
         Entry("bossbar") { BossBarWrapper.initMeta(it) },
+        Entry("display") { DisplayWrap.initMeta(it) },
     )
 
     private val byName: Map<String, Entry> = entries.associateBy { it.name }
@@ -47,6 +48,7 @@ object MetaTableRegistry {
     val HOLOGRAM: LuaTable get() = table("hologram")
     val REGION: LuaTable get() = table("region")
     val BOSS_BAR: LuaTable get() = table("bossbar")
+    val DISPLAY: LuaTable get() = table("display")
 
     /** Builds every table first and assigns them together, so a failing fill leaves the previous tables intact. */
     fun init() {

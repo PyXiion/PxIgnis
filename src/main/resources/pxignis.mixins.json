@@ -16,7 +16,9 @@
     "LivingEntityConsumeMixin",
     "LivingEntityHurtMixin",
     "ItemEntityPickup",
-    "BlockItemMixin"
+    "BlockItemMixin",
+    "SetPassengersPacketMixin",
+    "DisplayInteractMixin"
   ],
   "client": [],
   "server": [],

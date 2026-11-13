@@ -21,6 +21,7 @@ import net.minecraft.world.entity.EntitySpawnReason
 import net.minecraft.world.entity.EntitySpawnRequest
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.EntityTypes
+import net.minecraft.world.entity.Interaction
 import net.minecraft.world.entity.LightningBolt
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate
@@ -99,6 +100,12 @@ object Compat {
     fun lightningBoltType(): EntityType<LightningBolt> = EntityTypes.LIGHTNING_BOLT
 
     fun textDisplayType(): EntityType<Display.TextDisplay> = EntityTypes.TEXT_DISPLAY
+
+    fun itemDisplayType(): EntityType<Display.ItemDisplay> = EntityTypes.ITEM_DISPLAY
+
+    fun blockDisplayType(): EntityType<Display.BlockDisplay> = EntityTypes.BLOCK_DISPLAY
+
+    fun interactionType(): EntityType<Interaction> = EntityTypes.INTERACTION
 
     fun createBossEvent(
         name: Component,

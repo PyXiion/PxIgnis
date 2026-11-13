@@ -340,6 +340,11 @@ world:strike({ x = 0, y = 64, z = 0 }, { effect = true })
 
 ## Holograms
 
+### `world:display(kind, pos, props?)`
+
+Spawns a virtual (packet-only) display entity and returns a [`Display`](/reference/display-api) handle. `kind` is
+`"item"`, `"block"`, `"text"` or `"interaction"`.
+
 ### `world:spawnHologram(pos, text, opts?)`
 
 Spawns a hologram at the given position.

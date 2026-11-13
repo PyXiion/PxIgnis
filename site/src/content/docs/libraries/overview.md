@@ -12,6 +12,7 @@ local chestgui = require "core:chestgui"
 local items = require "core:items"
 local fx = require "core:particles"
 local dialog = require "core:dialog"
+local display = require "core:display"
 ```
 
 ## Available Libraries
@@ -24,6 +25,7 @@ local dialog = require "core:dialog"
 | [items](/libraries/items)       | Custom item templates with scripted callbacks         |
 | [particles](/libraries/particles) | Tick-driven particle effects: shapes, sequences, loops |
 | [dialog](/libraries/dialog)     | Server dialogs with inputs and click handlers (1.21.6+) |
+| [display](/libraries/display)   | Virtual display entities: items, blocks, text, rigs, timelines, bars |
 
 ## Loading from Subdirectories
 

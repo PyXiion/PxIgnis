@@ -5,6 +5,17 @@ description: Release history for PxIgnis.
 
 ## Unreleased
 
+### Added
+
+- **Virtual display entities.** `world:display(kind, pos, props)` (`item`, `block`, `text`, `interaction`) creates a
+  display that exists only in packets: nothing is saved to chunks, a script reload or shutdown removes it from every
+  client, and visibility is per player (`viewers = "auto" | "manual" | {players}`). One flat `props` dictionary for
+  spawn and `set`; changes made during a tick go out as one entity-data packet per viewer. `h:moveTo`, `h:attach`
+  (a virtual passenger that rides an entity), `h:show`/`hide`, and `onClick`/`onAttack` on `interaction` hitboxes.
+  New library `core:display` with quaternion/matrix math, `item`/`block`/`text`/`quad` helpers,
+  `animate`/`spin`/`flyTo`/`fade`/`life`, rigs (`group`), timelines (`timeline`/`play`) and a `bar` widget.
+  `mc.displays()` lists the live ones. See [Display](/reference/display-api) and [core:display](/libraries/display).
+
 ## 0.19.0 — Script packages, plugins and ignis-voice (2026-11-13)
 
 ### Breaking

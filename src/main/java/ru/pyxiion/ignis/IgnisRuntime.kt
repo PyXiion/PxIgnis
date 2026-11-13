@@ -145,6 +145,7 @@ class IgnisRuntime(private val server: MinecraftServer) {
         SidebarManager.closeAll()
         MobAIManager.restoreAll()
         HologramManager.closeAll()
+        DisplayManager.closeAll()
         RegionManager.closeAll()
         BossBarManager.closeAll()
 
@@ -248,6 +249,7 @@ class IgnisRuntime(private val server: MinecraftServer) {
         step("plugins.stop") { plugins.onServerStop() }
         step("async.invalidate") { api.asyncLib.invalidate() }
         step("holograms.closeAll") { HologramManager.closeAll() }
+        step("displays.closeAll") { DisplayManager.closeAll() }
         step("storage.close") { storage.close() }
     }
 

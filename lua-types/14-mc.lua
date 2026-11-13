@@ -67,6 +67,10 @@ function mc.getRegion(id) end
 ---@return Hologram[]
 function mc.holograms() end
 
+---Returns all live virtual displays (`world:display`) across all worlds.
+---@return Display[]
+function mc.displays() end
+
 ---@param uuid string
 ---@return Hologram|nil
 function mc.getHologram(uuid) end

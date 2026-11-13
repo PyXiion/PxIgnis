@@ -319,6 +319,7 @@ class LuaMcApi(
             "getEntity" to this::luaGetEntity.asVarArgFunction(),
             "getRegion" to this::luaGetRegion.asVarArgFunction(),
             "holograms" to luaFunctionZero { HologramManager.all().map { it.toLuaValue() }.toLuaArray() },
+            "displays" to luaFunctionZero { DisplayManager.all().map { it.lua }.toLuaArray() },
             "getHologram" to luaFunction { a ->
                 val uuid = UUID.fromString(a.checkjstring())
                 HologramManager.get(uuid)?.toLuaValue().orNil()

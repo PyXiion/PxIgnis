@@ -19,7 +19,7 @@
 - **Loaded libs**: `math`, `string`, `table`, `bit32`, `package` (custom), `coroutine`. **Not loaded**: `io`,
   `os`, `debug`.
 - **Globals injected**: `mc` (table), `vec(x,y,z)`, `register(syntax, handler, permission?)`.
-- **Built-in Lua libs** (via `require`): `format`, `simple`, `chestgui`, `items`, `particles`, `dialog`, always as
+- **Built-in Lua libs** (via `require`): `format`, `simple`, `chestgui`, `items`, `particles`, `dialog`, `display`, always as
   `core:<name>`.
 - **`require` names** (`sandbox/ModuleNames.kt` parses, `sandbox/LuaPackage.kt` loads): a closed namespace set
   `core:`, `pkg:`, `ext:`; any other `x:` is an error (no `ns:a.b` folder fallback). `pkg:id` is a package's entry,

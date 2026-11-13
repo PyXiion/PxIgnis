@@ -20,6 +20,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import ru.pyxiion.ignis.api.PlayerMoveDispatcher
 import ru.pyxiion.ignis.api.manager.BossBarManager
+import ru.pyxiion.ignis.api.manager.DisplayManager
 import ru.pyxiion.ignis.api.manager.HologramManager
 import ru.pyxiion.ignis.api.manager.MobAIManager
 import ru.pyxiion.ignis.api.manager.RegionManager
@@ -97,14 +98,18 @@ class PxIgnis : ModInitializer {
 
         ServerTickEvents.END_SERVER_TICK.register(fun(server) {
             HologramManager.tick()
-            val rt = runtimeOrNull ?: return
-            // After the scheduler, so a coroutine whose sleep ends this tick resumes this tick.
-            rt.scheduler.tick()
-            rt.api.asyncLib.drain()
-            rt.eventManager.fire("tick")
-            rt.eventManager.tick()
-            RegionManager.tick()
-            if (server.tickCount % AUTOSAVE_TICKS == 0) rt.storage.saveAll()
+            val rt = runtimeOrNull
+            if (rt != null) {
+                // After the scheduler, so a coroutine whose sleep ends this tick resumes this tick.
+                rt.scheduler.tick()
+                rt.api.asyncLib.drain()
+                rt.eventManager.fire("tick")
+                rt.eventManager.tick()
+                RegionManager.tick()
+                if (server.tickCount % AUTOSAVE_TICKS == 0) rt.storage.saveAll()
+            }
+            // Last: display changes made by this tick's scripts go out in this tick's batch.
+            DisplayManager.tick()
         })
 
         ServerEntityEvents.ENTITY_LOAD.register { entity, world ->
@@ -126,9 +131,13 @@ class PxIgnis : ModInitializer {
             GameEvents.login(handler.player)?.let { handler.disconnect(Component.literal(it)) }
         })
 
-        ServerPlayerEvents.JOIN.register { player -> GameEvents.join(player) }
+        ServerPlayerEvents.JOIN.register { player ->
+            DisplayManager.requestRecheck()
+            GameEvents.join(player)
+        }
 
         ServerPlayerEvents.AFTER_RESPAWN.register { oldPlayer, newPlayer, alive ->
+            DisplayManager.requestRecheck()
             GameEvents.respawn(newPlayer, alive)
         }
 
