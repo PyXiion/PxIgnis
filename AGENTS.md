@@ -22,6 +22,10 @@ config and internals are allowed and expected whenever they make the design simp
 ./gradlew test                            # unit tests, no MC runtime
 ```
 
+- `./gradlew runServer -PtargetVersion=<v>` is the dev server (run dir `run/`). It also loads `plugins/voice` and
+  `plugins/mapcanvas` (the `devPlugins` configuration in `build.gradle`; Simple Voice Chat stays optional). Rebuild
+  and restart it to pick plugin changes up. `-PdevRunDir=<dir>` uses another run directory (needs `eula.txt` there).
+  The plugins' own `runServer` tasks are disabled: they would start without the core.
 - Run Gradle on JDK 25. Targets are defined by `gradle/versions/<v>.properties`.
 - Artifact: `build/libs/PxIgnis-<mod_version>-fabric-<v>.jar`.
 - Every change must build for both targets.

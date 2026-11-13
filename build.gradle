@@ -61,7 +61,22 @@ repositories {
     mavenCentral()
 }
 
+// Dev server (`runServer`): the bundled plugins load next to the core, like the jars of a real install.
+// A separate configuration, not localRuntime: the plugins compile against this project, and extending its own
+// variants from them would be circular. Voice's Simple Voice Chat API is compileOnly and optional at runtime.
+configurations {
+    devPlugins {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+}
+
 dependencies {
+    ['voice', 'mapcanvas'].each { plugin ->
+        devPlugins project(path: ":plugins:${plugin}", configuration: obfuscated ? 'namedElements' : 'runtimeElements')
+    }
+    devPlugins "org.jcraft:jorbis:0.0.17"
+
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     if (obfuscated) {
@@ -128,6 +143,17 @@ if (obfuscated) {
     }
 }
 
+// The plugins have no dev server of their own (it would lack the core): a bare `./gradlew runServer` starts only
+// this project's, which loads them.
+subprojects {
+    tasks.matching { it.name == 'runServer' }.configureEach { enabled = false }
+}
+
+// `-PdevRunDir=<dir>` points runServer at another run directory (e.g. a throwaway one for checks).
+if (project.hasProperty('devRunDir')) {
+    loom.runs.named('server') { runDir project.property('devRunDir') as String }
+}
+
 sourceSets {
     main {
         kotlin.srcDirs = ["src/version-${buildTarget}/kotlin", "src/main/java"]
@@ -135,6 +161,8 @@ sourceSets {
         resources.srcDirs += "src/version-${buildTarget}/resources"
     }
 }
+
+sourceSets.main.runtimeClasspath += configurations.devPlugins
 
 processResources {
     inputs.property "version", project.version
