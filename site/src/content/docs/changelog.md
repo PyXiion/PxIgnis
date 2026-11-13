@@ -7,6 +7,7 @@ description: Release history for PxIgnis.
 
 ### Added
 
+- `entity:swing(hand?)` plays the arm swing animation of a living entity or player (also shown to the player itself).
 - **Virtual display entities.** `world:display(kind, pos, props)` (`item`, `block`, `text`, `interaction`) creates a
   display that exists only in packets: nothing is saved to chunks, a script reload or shutdown removes it from every
   client, and visibility is per player (`viewers = "auto" | "manual" | {players}`). One flat `props` dictionary for

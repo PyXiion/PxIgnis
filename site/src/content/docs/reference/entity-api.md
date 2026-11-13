@@ -258,6 +258,11 @@ entity.tags["old_tag"] = false -- remove
 
 ## Methods
 
+### `entity:swing(hand?)`
+
+Plays the arm swing (`"main"`, the default, or `"off"`). Trackers see it, and so does the entity itself when it is a
+player. Living entities only; anything else raises an error.
+
 ### `entity:damage(amount, source?)`
 
 Deals damage to the entity.

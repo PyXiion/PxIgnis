@@ -155,6 +155,10 @@ Entity.feet = nil
 ---@type table<string, boolean>
 Entity.tags = nil
 
+---Plays the arm swing for trackers and the entity itself. Living entities only; raises an error otherwise.
+---@param hand? "main"|"off"
+function Entity:swing(hand) end
+
 ---Deals damage to the entity.
 ---@param amount number
 ---@param source? Entity|Player   -- if omitted, generic damage is used

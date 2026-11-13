@@ -251,6 +251,22 @@ object EntityWrap {
             LuaValue.NIL
         }
 
+        // entity:swing(hand?): arm swing animation for trackers and the entity itself
+        method("swing") { args ->
+            val e = args.arg(1).checktable().unwrap<Entity>()
+            if (e !is LivingEntity) throw LuaError("entity:swing(): только живые сущности")
+            val hand = when (val h = args.arg(2)) {
+                LuaValue.NIL -> net.minecraft.world.InteractionHand.MAIN_HAND
+                else -> when (h.checkjstring()) {
+                    "main" -> net.minecraft.world.InteractionHand.MAIN_HAND
+                    "off" -> net.minecraft.world.InteractionHand.OFF_HAND
+                    else -> throw LuaError("entity:swing(): hand must be \"main\" or \"off\"")
+                }
+            }
+            Compat.swing(e, hand)
+            LuaValue.NIL
+        }
+
         method("damage") { args ->
             val self = args.arg(1).checktable()
             val e = self.unwrap<Entity>()

@@ -77,6 +77,11 @@ object Compat {
         return template
     }
 
+    /** Swing animation sent to trackers and the entity itself (26.x takes the item's swing animation). */
+    fun swing(entity: net.minecraft.world.entity.LivingEntity, hand: net.minecraft.world.InteractionHand) {
+        entity.swing(hand, net.minecraft.world.item.component.SwingAnimation.DEFAULT, true)
+    }
+
     fun entityTags(entity: Entity): Set<String> = entity.entityTags()
 
     fun setInvulnerable(entity: Entity, value: Boolean) {

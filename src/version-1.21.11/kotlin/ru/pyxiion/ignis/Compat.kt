@@ -60,6 +60,11 @@ object Compat {
     fun readStructure(server: MinecraftServer, nbt: CompoundTag): StructureTemplate =
         server.structureManager.readStructure(nbt)
 
+    /** Swing animation sent to trackers and the entity itself. */
+    fun swing(entity: net.minecraft.world.entity.LivingEntity, hand: net.minecraft.world.InteractionHand) {
+        entity.swing(hand, true)
+    }
+
     fun entityTags(entity: Entity): Set<String> = entity.tags
 
     fun setInvulnerable(entity: Entity, value: Boolean) {
