@@ -4,6 +4,8 @@ import net.minecraft.nbt.CompoundTag
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket
 import net.minecraft.world.inventory.ClickType
 import net.minecraft.network.chat.Component
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket
+import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerBossEvent
 import net.minecraft.server.level.ServerLevel
@@ -15,6 +17,7 @@ import net.minecraft.world.entity.EntityProcessor
 import net.minecraft.world.entity.EntitySpawnReason
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.LightningBolt
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager
@@ -65,6 +68,11 @@ object Compat {
     /** Makes the tracker send the entity's motion to clients (`needsSync` on 26.x). */
     fun syncMotion(entity: Entity) {
         entity.hurtMarked = true
+
+        // Immediately send sync packet for players, because it doesn't work on them with just .hurtMarked
+        if (entity is ServerPlayer) {
+            entity.connection.send(ClientboundSetEntityMotionPacket(entity))
+        }
     }
 
     fun giveItem(player: ServerPlayer, stack: ItemStack) {

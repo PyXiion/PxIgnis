@@ -6,6 +6,7 @@ import net.minecraft.network.protocol.game.ServerboundContainerClickPacket
 import net.minecraft.world.inventory.ContainerInput
 import net.minecraft.nbt.NbtUtils
 import net.minecraft.network.chat.Component
+import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerBossEvent
 import net.minecraft.server.level.ServerLevel
@@ -84,6 +85,11 @@ object Compat {
     /** Makes the tracker send the entity's motion to clients (`hurtMarked` on 1.21.x). */
     fun syncMotion(entity: Entity) {
         entity.needsSync = true
+
+        // Immediately send sync packet for players, because it doesn't work on them with just .hurtMarked
+        if (entity is ServerPlayer) {
+            entity.connection.send(ClientboundSetEntityMotionPacket(entity))
+        }
     }
 
     fun giveItem(player: ServerPlayer, stack: ItemStack) {
