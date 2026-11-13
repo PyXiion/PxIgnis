@@ -543,7 +543,7 @@ end
 
 -- async.parallel: вызовы приостанавливают корутину, а yield не проходит через pcall Lua-функции,
 -- поэтому каждая проверка идёт отдельной задачей с защищённым wait.
-local function parallelPhase(tag)
+local function parallelPhase(tag, onDone)
     local async = require("async")
     local function astep(name, fn)
         local ok, err = async.task(fn):wait(true)
@@ -572,6 +572,7 @@ local function parallelPhase(tag)
             local add = async.parallel(function(v) return v.x + v.y + v.z end)
             assert(add(vec(1, 2, 3)) == 6, "sum of components")
         end)
+        if onDone then onDone() end
     end)
 end
 
@@ -651,9 +652,9 @@ mc.on("init", function()
             assert(mob.aiActive, "aiActive false after reload")
             assert(mob.tags["pxrp_behaviour:smoke_ai"], "tag lost")
         end)
-        parallelPhase("reload 1: ")
+        -- The next reload cancels pending async work, so it waits for this phase (each check takes several ticks).
         mc.data.smoke_phase = 3
-        mc.schedule(20, function() mc.execute("reload") end)
+        parallelPhase("reload 1: ", function() mc.schedule(5, function() mc.execute("reload") end) end)
     elseif phase == 3 then
         mc.data.smoke_phase = nil
         -- init стреляет до registerAll(): команды проверяем на следующих тиках
