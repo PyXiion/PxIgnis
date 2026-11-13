@@ -30,7 +30,7 @@ public class JseStringLib extends ru.pyxiion.luanova.vm2.lib.StringLib {
 	protected String format(String src, double x) {
 		String out;
 		try {
-			out = String.format(src, new Object[] {Double.valueOf(x)});
+			out = String.format(java.util.Locale.ROOT, src, new Object[] {Double.valueOf(x)});
 		} catch (Throwable e) {
 			out = super.format(src, x);
 		}

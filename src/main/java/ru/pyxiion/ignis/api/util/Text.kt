@@ -42,7 +42,7 @@ object Text {
                 val v = tag.get(k)!!
                 c.put(k, when {
                     k == "shadow_color" && v is StringTag -> argb(v.value())?.let { IntTag.valueOf(it) } ?: v
-                    k == "color" && v is NumericTag -> StringTag.valueOf("#%06X".format(v.intValue() and 0xFFFFFF))
+                    k == "color" && v is NumericTag -> StringTag.valueOf("#%06X".format(java.util.Locale.ROOT, v.intValue() and 0xFFFFFF))
                     k == "extra" || k == "with" -> fix(v)
                     else -> v
                 })

@@ -62,7 +62,7 @@ object Preload {
         files.associate { Source(it.root, it.relative) to hash(it.path) }
 
     private fun hash(file: Path): String = try {
-        MessageDigest.getInstance("SHA-1").digest(Files.readAllBytes(file)).joinToString("") { "%02x".format(it) }
+        MessageDigest.getInstance("SHA-1").digest(Files.readAllBytes(file)).joinToString("") { "%02x".format(java.util.Locale.ROOT, it) }
     } catch (e: Exception) {
         "unreadable"
     }

@@ -314,7 +314,7 @@ public class StringLib extends TwoArgFunction {
 				else if (value == Double.POSITIVE_INFINITY) buf.append("1e9999");
 				else if (value == Double.NEGATIVE_INFINITY) buf.append("-1e9999");
 				else if ((long) value == value) buf.append(Long.toString((long) value));
-				else buf.append(String.format("%.17g", value));
+				else buf.append(String.format(java.util.Locale.ROOT, "%.17g", value));
 			}
 			break;
 		case LuaValue.TBOOLEAN:
@@ -485,7 +485,7 @@ public class StringLib extends TwoArgFunction {
 				digits = Long.toUnsignedString(number, radix);
 			}
 			if ( conversion == 'X' )
-				digits = digits.toUpperCase();
+				digits = digits.toUpperCase(java.util.Locale.ROOT);
 
 			if (number == 0) {
 				if (precision == 0 && (conversion != 'o' || !alternateForm)) digits = "";
@@ -554,24 +554,24 @@ public class StringLib extends TwoArgFunction {
 			case 'G': {
 				int computedPrecision = prec == -1 ? 6 : (prec == 0 ? 1 : prec);
 				String fmt = "%." + computedPrecision + (conversion == 'G' ? "G" : "g");
-				buf.append(String.format(fmt, x));
+				buf.append(String.format(java.util.Locale.ROOT, fmt, x));
 				break;
 			}
 			case 'e':
 			case 'E': {
 				int p = prec == -1 ? 6 : prec;
 				String fmt = "%." + p + (conversion == 'E' ? "E" : "e");
-				buf.append(String.format(fmt, x));
+				buf.append(String.format(java.util.Locale.ROOT, fmt, x));
 				break;
 			}
 			case 'f': {
 				int p = prec == -1 ? 6 : prec;
-				buf.append(String.format("%." + p + "f", x));
+				buf.append(String.format(java.util.Locale.ROOT, "%." + p + "f", x));
 				break;
 			}
 			case 'a':
 			case 'A':
-				buf.append(String.format(conversion == 'A' ? "%A" : "%a", x));
+				buf.append(String.format(java.util.Locale.ROOT, conversion == 'A' ? "%A" : "%a", x));
 				break;
 			default:
 				buf.append(StringLib.this.format(src, x));
@@ -756,7 +756,7 @@ public class StringLib extends TwoArgFunction {
 	 */
 	static final class lower extends OneArgFunction {
 		public LuaValue call(LuaValue arg) {
-			return valueOf( arg.checkjstring().toLowerCase() );
+			return valueOf( arg.checkjstring().toLowerCase(java.util.Locale.ROOT) );
 		}
 	}
 
@@ -850,7 +850,7 @@ public class StringLib extends TwoArgFunction {
 	 */
 	static final class upper extends OneArgFunction {
 		public LuaValue call(LuaValue arg) {
-			return valueOf(arg.checkjstring().toUpperCase());
+			return valueOf(arg.checkjstring().toUpperCase(java.util.Locale.ROOT));
 		}
 	}
 	

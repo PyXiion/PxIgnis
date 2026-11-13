@@ -11,6 +11,7 @@
 #
 # Needs the Minecraft EULA accepted: eula=true in run/eula.txt, or MINECRAFT_EULA=true in the environment.
 # PXIGNIS_SMOKE_EXTRA="a.lua b.lua" copies extra scripts next to the smoke script (for one-off checks).
+# PXIGNIS_SMOKE_JVM_ARGS="-Duser.language=ru -Duser.country=RU" adds JVM flags to the server (e.g. a non-English locale).
 # PXIGNIS_SMOKE_MODS="a.jar b.jar" copies extra mod jars into mods/ (a plugin under test).
 # PXIGNIS_SMOKE_MENU=true|false|flip (default true; flip starts with the menu off, turns it on and runs /reload: nothing may change) sets menu.enabled in config/pxignis.json; the run then checks that the
 # generated pxignis:menu data pack is enabled (true) or absent (false).
@@ -30,7 +31,7 @@ find_java() { # find_java <major>: a JDK of at least that major version
         "${JAVA_HOME:+$JAVA_HOME/bin/java}" "$(command -v java || true)"; do
         [[ -n $c && -x $c ]] || continue
         local major
-        major=$("$c" -version 2>&1 | sed -n '1s/.*version "\([0-9]*\).*/\1/p')
+        major=$("$c" -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -n1)
         [[ ${major:-0} -ge $want ]] && { echo "$c"; return; }
     done
     echo "smoke: no JDK >= $want found" >&2
@@ -112,7 +113,7 @@ EOF
 
     mkfifo "$fifo"
     exec 3<>"$fifo" # keeps the pipe open so the server never sees EOF
-    (cd "$run" && exec "$java" -Xmx768M -jar "$c/fabric-server-launch.jar" nogui <&3 > "$run/server.log" 2>&1) &
+    (cd "$run" && exec "$java" -Xmx768M ${PXIGNIS_SMOKE_JVM_ARGS:-} -jar "$c/fabric-server-launch.jar" nogui <&3 > "$run/server.log" 2>&1) &
     pid=$!
 
     local waited=0
