@@ -17,3 +17,4 @@ plugins {
 includeBuild 'pxluanova'
 
 include 'plugins:voice'
+include 'plugins:mapcanvas'

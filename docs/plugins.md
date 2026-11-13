@@ -4,7 +4,7 @@ Status: implemented (core: `plugin/`, `packages/`, `sandbox/LuaPackage.kt`; firs
 
 Two extension layers:
 
-- **Plugins**: separate Fabric mods that add Lua modules backed by Kotlin. The first one is `ignis-voice` ([voice.md](./voice.md)).
+- **Plugins**: separate Fabric mods that add Lua modules backed by Kotlin. The first one is `ignis-voice` ([voice.md](./voice.md)).  Also `ignis-mapcanvas` ([mapcanvas.md](./mapcanvas.md)).
 - **Script packages**: folders of Lua code with a manifest, a basic version of issue #5. Packages can declare that they
   need a plugin.
 
