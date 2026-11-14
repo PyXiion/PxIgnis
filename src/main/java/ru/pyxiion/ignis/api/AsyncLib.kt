@@ -86,6 +86,7 @@ class AsyncLib(
 
         val state: String get() = _state
         val isDone: Boolean get() = _state != STATE_PENDING
+        val hasWaiters: Boolean get() = waiters.isNotEmpty()
         val error: Throwable? get() = _error
 
         fun resolve(result: Varargs = LuaValue.NONE): Boolean {
@@ -213,6 +214,12 @@ class AsyncLib(
 
     // ── Tasks ──────────────────────────────────────────────────────────
 
+    /** A task nobody waits for has no one to receive its error: report it instead of dropping it. */
+    private fun rejectTask(awaitable: Awaitable, error: Throwable) {
+        if (!awaitable.hasWaiters) ScriptErrors.error("async task", error)
+        awaitable.reject(error)
+    }
+
     private fun runTask(thread: LuaThread, args: Varargs, awaitable: Awaitable, gen: Int) {
         if (gen != generation || thread.status == "dead") return
         val previous = LuaState.current()
@@ -223,11 +230,11 @@ class AsyncLib(
                 if (result.arg1().toboolean()) {
                     awaitable.resolve(result.subargs(2))
                 } else {
-                    awaitable.reject(LuaError(result.arg(2).optjstring("task error")))
+                    rejectTask(awaitable, LuaError(result.arg(2).optjstring("task error")))
                 }
             }
         } catch (e: Throwable) {
-            awaitable.reject(e)
+            rejectTask(awaitable, e)
         } finally {
             LuaState.setCurrent(previous)
         }

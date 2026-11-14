@@ -28,6 +28,7 @@ import ru.pyxiion.ignis.api.manager.SidebarManager
 import ru.pyxiion.ignis.commands.IgnisCommand
 import ru.pyxiion.ignis.events.GameEvents
 import ru.pyxiion.ignis.runtime.EditorSupport
+import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 
 class PxIgnis : ModInitializer {
@@ -97,19 +98,27 @@ class PxIgnis : ModInitializer {
         }
 
         ServerTickEvents.END_SERVER_TICK.register(fun(server) {
-            HologramManager.tick()
+            // Each stage on its own: one that throws must not silently stop the stages after it, every tick.
+            fun stage(name: String, f: () -> Unit) {
+                try {
+                    f()
+                } catch (e: Throwable) {
+                    ScriptErrors.error("server tick: $name", e)
+                }
+            }
+            stage("holograms") { HologramManager.tick() }
             val rt = runtimeOrNull
             if (rt != null) {
                 // After the scheduler, so a coroutine whose sleep ends this tick resumes this tick.
-                rt.scheduler.tick()
-                rt.api.asyncLib.drain()
-                rt.eventManager.fire("tick")
-                rt.eventManager.tick()
-                RegionManager.tick()
-                if (server.tickCount % AUTOSAVE_TICKS == 0) rt.storage.saveAll()
+                stage("scheduler") { rt.scheduler.tick() }
+                stage("async") { rt.api.asyncLib.drain() }
+                stage("tick event") { rt.eventManager.fire("tick") }
+                stage("event bus") { rt.eventManager.tick() }
+                stage("regions") { RegionManager.tick() }
+                if (server.tickCount % AUTOSAVE_TICKS == 0) stage("autosave") { rt.storage.saveAll() }
             }
             // Last: display changes made by this tick's scripts go out in this tick's batch.
-            DisplayManager.tick()
+            stage("displays") { DisplayManager.tick() }
         })
 
         ServerEntityEvents.ENTITY_LOAD.register { entity, world ->

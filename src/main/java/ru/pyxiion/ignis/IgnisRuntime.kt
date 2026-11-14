@@ -103,7 +103,13 @@ class IgnisRuntime(private val server: MinecraftServer) {
     }
 
     private fun reloadFromWatcher() {
-        val result = reload()
+        PxIgnis.logger.info("PxIgnis: script files changed, reloading")
+        val result = try {
+            reload()
+        } catch (e: Throwable) {
+            PxIgnis.logger.error("PxIgnis: automatic reload failed", e)
+            return
+        }
         val color = if (result.ok) ChatFormatting.GREEN else ChatFormatting.RED
         notifyOperators(Component.literal("файлы изменились: ${result.summary()}").withStyle(color))
     }
@@ -115,6 +121,11 @@ class IgnisRuntime(private val server: MinecraftServer) {
      * is reported and the remaining ones still load.
      */
     fun reload(): ReloadResult {
+        val startedAt = System.nanoTime()
+        PxIgnis.logger.info(
+            "PxIgnis reload: starting ({} scheduled tasks, {} displays, {} event handlers)",
+            scheduler.pendingCount(), DisplayManager.all().size, eventManager.stats().values.sum(),
+        )
         Preload.warnIfChanged()
         val discovered = PackageDiscovery.scan(scriptRoots, plugins.versions)
         val compiled = mutableListOf<Pair<String, Prototype>>()
@@ -128,6 +139,7 @@ class IgnisRuntime(private val server: MinecraftServer) {
         }
         compileErrors.forEach { PxIgnis.logger.error("Ошибка компиляции скрипта {}", it) }
         if (compileErrors.isNotEmpty() && environment.luaStateOrNull != null) {
+            PxIgnis.logger.error("PxIgnis reload: cancelled, {} file(s) failed to compile; running scripts kept", compileErrors.size)
             return ReloadResult(total = compiled.size + compileErrors.size, errors = compileErrors, applied = false)
         }
 
@@ -169,6 +181,11 @@ class IgnisRuntime(private val server: MinecraftServer) {
 
         commandManager.registerAll()
         PxIgnis.logger.info("PxIgnis зарегистрировал свои команды")
+        PxIgnis.logger.info(
+            "PxIgnis reload: done in {} ms, {} scripts, {} error(s); now {} scheduled tasks, {} event handlers",
+            (System.nanoTime() - startedAt) / 1_000_000, compiled.size + packagesRun.total, errors.size,
+            scheduler.pendingCount(), eventManager.stats().values.sum(),
+        )
         val result = ReloadResult(
             compiled.size + compileErrors.size + packagesRun.total, errors, applied = true,
             files = packagesRun.loaded.map { "pkg:$it" } + compiled.map { it.first },

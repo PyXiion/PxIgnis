@@ -8,6 +8,7 @@ import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import java.util.PriorityQueue
+import org.slf4j.LoggerFactory
 
 /** Server-thread only: Lua runs on one thread, so there is no locking. */
 class Scheduler(private val stateProvider: () -> LuaState) {
@@ -15,6 +16,7 @@ class Scheduler(private val stateProvider: () -> LuaState) {
         private const val MAX_TASKS_PER_TICK = 1024
     }
 
+    private val log = LoggerFactory.getLogger("pxignis")
     private var nextId = 0
     var currentTick = 0L
         private set
@@ -24,6 +26,7 @@ class Scheduler(private val stateProvider: () -> LuaState) {
     fun tick() {
         val due = ArrayList<ScheduledTask>()
         currentTick++
+        ScriptWatchdog.resetIfLeaked()
         var processed = 0
         while (tasks.isNotEmpty() && tasks.peek().fireAtTick <= currentTick && processed < MAX_TASKS_PER_TICK) {
             val task = tasks.poll()
@@ -35,12 +38,22 @@ class Scheduler(private val stateProvider: () -> LuaState) {
             }
 
             if (task.repeating && task.interval > 0) {
-                tasks.offer(task.copy(fireAtTick = task.fireAtTick + task.interval))
+                // From the later of "was due" and "now": a backlog of overdue repeats must not pile up and starve
+                // tasks scheduled after it (the per-tick cap below handles the oldest first).
+                tasks.offer(task.copy(fireAtTick = maxOf(task.fireAtTick + task.interval, currentTick + 1)))
             }
             due.add(task)
         }
 
-        val state = stateProvider()
+        if (processed >= MAX_TASKS_PER_TICK && tasks.isNotEmpty() && tasks.peek().fireAtTick <= currentTick) {
+            ScriptErrors.error("scheduler", "more than $MAX_TASKS_PER_TICK tasks are due in one tick; the rest wait for the next ones")
+        }
+        val state = try {
+            stateProvider()
+        } catch (e: Throwable) {
+            ScriptErrors.error("scheduler", e)
+            return
+        }
         for (task in due) {
             try {
                 val cb = task.callback
@@ -64,6 +77,7 @@ class Scheduler(private val stateProvider: () -> LuaState) {
     fun scheduleRepeating(delay: Int, interval: Int, callback: LuaFunction): Int {
         val id = nextId++
         val safeInterval = interval.coerceAtLeast(1)
+        if (log.isDebugEnabled) log.debug("scheduler: repeating task #{} every {} ticks (delay {}), {} pending", id, safeInterval, delay, tasks.size + 1)
         tasks.offer(ScheduledTask(id, currentTick + delay.coerceAtLeast(0), safeInterval, true, callback))
         return id
     }
@@ -71,6 +85,7 @@ class Scheduler(private val stateProvider: () -> LuaState) {
     /** `true` if a pending task was cancelled; `false` for an unknown id, a task that already ran, or a repeat of it. */
     fun cancel(id: Int): Boolean {
         if (tasks.none { it.id == id }) return false
+        if (log.isDebugEnabled) log.debug("scheduler: task #{} cancelled", id)
         return cancelledIds.add(id)
     }
 
@@ -78,6 +93,7 @@ class Scheduler(private val stateProvider: () -> LuaState) {
     fun pendingCount(): Int = tasks.count { it.id !in cancelledIds }
 
     fun clear() {
+        if (log.isDebugEnabled) log.debug("scheduler: cleared {} pending tasks", tasks.size)
         tasks.clear()
         cancelledIds.clear()
         nextId = 0

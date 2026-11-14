@@ -155,7 +155,9 @@ object MobAIManager {
             val mixin = mob as MobEntityMixin
             mixin.goalSelector.removeGoal(entry.goal)
             mixin.targetSelector.removeGoal(entry.targetGoal)
-        } catch (_: Throwable) {}
+        } catch (e: Throwable) {
+            PxIgnis.logger.debug("MobAI: removing goals of {} failed: {}", mob.uuid, e.toString())
+        }
         cleanUp(mob.uuid)
     }
 
@@ -191,7 +193,9 @@ object MobAIManager {
                 if (!mob.isRemoved && mob.isAlive) {
                     detach(mob)
                 }
-            } catch (_: Throwable) {}
+            } catch (e: Throwable) {
+                PxIgnis.logger.debug("MobAI: detaching {} on reload failed: {}", entry.mob.uuid, e.toString())
+            }
         }
         activeMobs.clear()
         mobWrappers.clear()

@@ -23,6 +23,7 @@ object ScriptWatchdog {
     var serverThread: Thread? = null
 
     private var depth = 0
+    private val logger = org.slf4j.LoggerFactory.getLogger("pxignis")
     private var sliceStart = 0L
     private var tripped = false
 
@@ -49,9 +50,24 @@ object ScriptWatchdog {
         depth--
     }
 
+    /**
+     * Start of a server tick: no Lua call can be running, so a non-zero depth is a leaked [enter] and would make the
+     * next timeout stick forever. Logs and clears it.
+     */
+    fun resetIfLeaked() {
+        if (depth != 0) {
+            logger.error("Script watchdog depth was {} at the start of a tick (leaked guard); resetting", depth)
+            depth = 0
+        }
+        tripped = false
+    }
+
     fun checkpoint(): InterruptAction {
         if (Thread.currentThread() !== serverThread || depth == 0 || timeoutMillis <= 0) return InterruptAction.CONTINUE
         if (tripped || System.nanoTime() - sliceStart > timeoutMillis * 1_000_000) {
+            // Logged here, not only where the error surfaces: a script that pcalls around the failing code would
+            // otherwise swallow every trace of it.
+            if (!tripped) logger.warn("Script exceeded the {}ms time limit; its Lua calls are failing until it returns", timeoutMillis)
             tripped = true
             throw LuaError("script exceeded the ${timeoutMillis}ms time limit and was stopped")
         }
