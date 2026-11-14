@@ -41,6 +41,11 @@ Callback errors are reported like other script errors. A click on a virtual id n
 
 In `"auto"` mode `hide` lasts until the next re-check; use `"manual"` to keep a player excluded.
 
+Viewers are tracked by player UUID, not by object: a respawn replaces the player object while the client keeps
+whatever it was sent. On respawn or world change the client gets a remove for the display and the next check decides
+whether to show it again. `remove()`, `hide` and a reload reach every connected client that was sent the display, even
+one that is now far away or in another world.
+
 ## Properties
 
 One flat table, the same for `world:display` and `h:set`. A property of another kind is an error.

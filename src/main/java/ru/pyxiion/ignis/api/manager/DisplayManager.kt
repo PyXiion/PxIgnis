@@ -26,8 +26,7 @@ import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 import ru.pyxiion.luanova.vm2.LuaFunction
 import ru.pyxiion.luanova.vm2.LuaValue
-import java.util.Collections
-import java.util.IdentityHashMap
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 private typealias ClientPacket = Packet<in ClientGamePacketListener>
@@ -58,10 +57,17 @@ internal class TransformSpec(
 
 /** Packets collected during one flush, sent as one bundle per player. */
 internal class PacketBatch {
-    private val perPlayer = IdentityHashMap<ServerPlayer, MutableList<ClientPacket>>()
+    private class Slot(var player: ServerPlayer) {
+        val packets = ArrayList<ClientPacket>(4)
+    }
+
+    /** By UUID: a respawn replaces the player object mid-tick; the packets go to the latest one. */
+    private val perPlayer = HashMap<UUID, Slot>()
 
     fun add(player: ServerPlayer, packet: ClientPacket) {
-        perPlayer.getOrPut(player) { ArrayList(4) }.add(packet)
+        val slot = perPlayer.getOrPut(player.uuid) { Slot(player) }
+        slot.player = player
+        slot.packets.add(packet)
     }
 
     fun addAll(players: Iterable<ServerPlayer>, packet: ClientPacket) {
@@ -69,7 +75,7 @@ internal class PacketBatch {
     }
 
     fun send() {
-        for ((player, packets) in perPlayer) deliver(player, packets)
+        for (slot in perPlayer.values) deliver(slot.player, slot.packets)
         perPlayer.clear()
     }
 
@@ -117,13 +123,16 @@ class DisplayHandle internal constructor(
 
     internal val lua: LuaValue by lazy { DisplayWrap.wrap(this) }
 
-    /** Viewer to the level it was spawned in; a different level means the client dropped the entity. */
-    internal val viewers = IdentityHashMap<ServerPlayer, ServerLevel>()
+    /**
+     * Players that were sent the spawn, by UUID, with the object and level they had then. A respawn replaces the
+     * object and a world change the level, but the client may still hold the entity, so those get a remove.
+     */
+    internal val viewers = ViewerBook<ServerPlayer, ServerLevel> { it.uuid }
 
     internal var host: Entity? = null
         private set
     private var hostOffset: Vector3f? = null
-    private val attachSeen: MutableSet<ServerPlayer> = Collections.newSetFromMap(IdentityHashMap())
+    private val attachSeen = HashSet<UUID>()
 
     private val display: Display? get() = entity as? Display
 
@@ -169,23 +178,42 @@ class DisplayHandle internal constructor(
         teleportDirty = true
         if (notify && !h.isRemoved) {
             val packet = ClientboundSetPassengersPacket(h)
-            for (p in attachSeen) if (viewers.containsKey(p)) p.connection?.send(packet)
+            for (uuid in attachSeen) if (viewers.contains(uuid)) resolve(uuid)?.connection?.send(packet)
         }
         attachSeen.clear()
     }
 
+    /** The online player with this UUID, which after a respawn is not the object that was given the spawn. */
+    internal fun resolve(uuid: UUID): ServerPlayer? = world.server.playerList.getPlayer(uuid)
+
+    private fun resolveLive(uuid: UUID): ServerPlayer? = resolve(uuid)?.takeIf { it.connection != null }
+
     fun show(player: ServerPlayer) {
-        if (!valid || viewers.containsKey(player) || player.isRemoved || player.level() !== world) return
-        viewers[player] = world
-        val out = ArrayList<ClientPacket>(3)
+        if (!valid || player.isRemoved || player.level() !== world) return
+        val out = ArrayList<ClientPacket>(4)
+        val old = viewers.entry(player.uuid)
+        if (old != null) {
+            if (old.player === player && old.level === world) return
+            // a respawned or moved client may still hold the old entity
+            out.add(ClientboundRemoveEntitiesPacket(id))
+        }
+        viewers.add(player, world)
         addSpawnPackets(out)
         PacketBatch.deliver(player, out)
     }
 
-    fun hide(player: ServerPlayer) {
-        if (viewers.remove(player) == null) return
-        attachSeen.remove(player)
-        player.connection?.send(ClientboundRemoveEntitiesPacket(id))
+    fun hide(player: ServerPlayer) = hide(player.uuid)
+
+    internal fun hide(uuid: UUID) {
+        if (viewers.remove(uuid) == null) return
+        attachSeen.remove(uuid)
+        resolve(uuid)?.connection?.send(ClientboundRemoveEntitiesPacket(id))
+    }
+
+    /** Hides every viewer whose UUID is not in [keep]. */
+    internal fun hideExcept(keep: Collection<ServerPlayer>) {
+        val wanted = keep.mapTo(HashSet()) { it.uuid }
+        for (uuid in viewers.uuids()) if (uuid !in wanted) hide(uuid)
     }
 
     fun remove() {
@@ -193,8 +221,10 @@ class DisplayHandle internal constructor(
         detachInternal(notify = false)
         valid = false
         val packet = ClientboundRemoveEntitiesPacket(id)
-        for ((p, lvl) in viewers) if (!p.isRemoved && p.level() === lvl) p.connection?.send(packet)
+        // every client that was sent the spawn and is still connected, wherever it is now
+        for (p in viewers.live(::resolveLive)) p.connection?.send(packet)
         viewers.clear()
+        attachSeen.clear()
         onClick = null
         onAttack = null
         DisplayManager.unregister(this)
@@ -214,27 +244,30 @@ class DisplayHandle internal constructor(
 
     /** Drops viewers that left, died, changed world or are out of range; in auto mode adds players that came close. */
     internal fun updateViewers(batch: PacketBatch, rangeCheck: Boolean) {
-        val it = viewers.entries.iterator()
         val exitR = (viewRange * 64.0 + 8.0).let { r -> r * r }
         var worldChanged = false
-        while (it.hasNext()) {
-            val (p, lvl) = it.next()
-            val gone = p.isRemoved || p.connection == null
-            val moved = !gone && (p.level() !== lvl || lvl !== world)
-            val far = !gone && !moved && mode == Mode.AUTO && rangeCheck && p.distanceToSqr(pos) > exitR
-            if (!(gone || moved || far)) continue
-            it.remove()
-            attachSeen.remove(p)
-            if (far) batch.add(p, ClientboundRemoveEntitiesPacket(id))
-            if (moved) worldChanged = true
+        for (uuid in viewers.uuids()) {
+            val entry = viewers.entry(uuid) ?: continue
+            val live = resolveLive(uuid)
+            val fate = ViewerBook.fate(
+                online = live != null,
+                sameObject = live === entry.player,
+                sameLevel = live != null && live.level() === entry.level && entry.level === world,
+                far = live != null && mode == Mode.AUTO && rangeCheck && live.distanceToSqr(pos) > exitR,
+            )
+            if (fate == ViewerBook.Fate.KEEP) continue
+            viewers.remove(uuid)
+            attachSeen.remove(uuid)
+            if (live != null && fate != ViewerBook.Fate.DROP) batch.add(live, ClientboundRemoveEntitiesPacket(id))
+            if (fate == ViewerBook.Fate.REMOVE_RECHECK) worldChanged = true
         }
         if (worldChanged) DisplayManager.requestRecheck()
         if (mode != Mode.AUTO || !rangeCheck) return
         val enterR = (viewRange * 64.0).let { r -> r * r }
         for (p in world.players()) {
-            if (p.isRemoved || p.connection == null || viewers.containsKey(p)) continue
+            if (p.isRemoved || p.connection == null || viewers.contains(p)) continue
             if (p.distanceToSqr(pos) > enterR) continue
-            viewers[p] = world
+            viewers.add(p, world)
             val out = ArrayList<ClientPacket>(3)
             addSpawnPackets(out)
             for (pk in out) batch.add(p, pk)
@@ -252,19 +285,21 @@ class DisplayHandle internal constructor(
         val lvl = h.level()
         if (lvl is ServerLevel && lvl !== world) {
             world = lvl
+            val gone = ClientboundRemoveEntitiesPacket(id)
+            for (p in viewers.live(::resolveLive)) batch.add(p, gone)
             viewers.clear()
             attachSeen.clear()
             DisplayManager.requestRecheck()
             return
         }
         if (viewers.isEmpty()) return
-        val tracking: MutableSet<ServerPlayer> = Collections.newSetFromMap(IdentityHashMap())
-        if (h is ServerPlayer) tracking.add(h)
-        tracking.addAll(PlayerLookup.tracking(h))
-        attachSeen.retainAll { it in tracking }
+        val tracking = HashSet<UUID>()
+        if (h is ServerPlayer) tracking.add(h.uuid)
+        for (t in PlayerLookup.tracking(h)) tracking.add(t.uuid)
+        attachSeen.retainAll(tracking)
         var packet: ClientboundSetPassengersPacket? = null
-        for (p in viewers.keys) {
-            if (p !in tracking || !attachSeen.add(p)) continue
+        for (p in viewers.live(::resolveLive)) {
+            if (p.uuid !in tracking || !attachSeen.add(p.uuid)) continue
             batch.add(p, packet ?: ClientboundSetPassengersPacket(h).also { packet = it })
         }
     }
@@ -283,12 +318,13 @@ class DisplayHandle internal constructor(
             if (values == null) values = ArrayList(1)
             if (values.none { it.id() == startId.id }) values.add(SynchedEntityData.DataValue.create(startId, 0))
         }
-        if (!values.isNullOrEmpty()) batch.addAll(viewers.keys, ClientboundSetEntityDataPacket(id, values))
+        val targets = viewers.live(::resolveLive)
+        if (!values.isNullOrEmpty()) batch.addAll(targets, ClientboundSetEntityDataPacket(id, values))
         if (tele && host == null) {
             val packet = ClientboundTeleportEntityPacket(
                 id, PositionMoveRotation(pos, Vec3.ZERO, yaw, pitch), emptySet(), false,
             )
-            batch.addAll(viewers.keys, packet)
+            batch.addAll(targets, packet)
         }
     }
 
@@ -362,7 +398,7 @@ object DisplayManager {
     @JvmStatic
     fun onInteract(player: ServerPlayer, id: Int, hand: InteractionHand?) {
         val handle = handles[id] ?: return
-        if (handle.kind != "interaction" || !handle.viewers.containsKey(player)) return
+        if (handle.kind != "interaction" || !handle.viewers.contains(player)) return
         if (hand == null) handle.fireAttack(player) else handle.fireClick(player, hand)
     }
 

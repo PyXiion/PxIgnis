@@ -95,7 +95,7 @@ object DisplayLib {
                     })
                     i++
                 }
-                for (p in h.viewers.keys.toList()) if (wanted.none { it === p }) h.hide(p)
+                h.hideExcept(wanted)
                 wanted.forEach { h.show(it) }
             }
             else -> throw LuaError("display viewers: expected \"auto\", \"manual\" or a list of players")
