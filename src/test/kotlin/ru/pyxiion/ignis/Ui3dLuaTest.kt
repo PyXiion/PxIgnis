@@ -51,6 +51,7 @@ class Ui3dLuaTest {
             cores = {}
             rayResult = nil
             world = {
+                name = "overworld",
                 display = function(_, kind, pos, props)
                     local c = setmetatable({ kind = kind, pos = pos, props = {}, sets = 0, valid = true }, Core)
                     for k, v in pairs(props or {}) do c.props[k] = v end
@@ -356,6 +357,32 @@ class Ui3dLuaTest {
             eq(liveCores(), before, "leaving player's displays removed")
             q:remove()
             eq(liveCores(), 0)
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `factory panels follow the player's dimension`() {
+        run(
+            """
+            local built = 0
+            local q = ui.panel { at = { x = 0, y = 64, z = 0 }, width = 2, world = world } (function(pl)
+                built = built + 1
+                return ui.text("hi")
+            end)
+            local pl = player(1, 64, 1, 0, 0, -1)
+            pl.world = { name = "the_nether" }
+            mc.players[1] = pl
+            tick(1)
+            eq(built, 0, "other dimension gets no tree")
+            pl.world = world
+            tick(1)
+            eq(built, 1)
+            local live = liveCores()
+            pl.world = { name = "the_end" }
+            tick(1)
+            assert(liveCores() < live, "tree dropped on world change")
+            q:remove()
             """.trimIndent()
         )
     }

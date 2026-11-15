@@ -657,6 +657,7 @@ end
 --- The node `player` hovers: on the panel, under the ray, with no block in between.
 function Instance:hovered(player)
     local panel = self.panel
+    if not panel:inWorld(player) then return nil end
     local eye, dir = player.eyePos, player.dir
     local x, y, t = ui.project(self.frame, eye, dir, panel.reach)
     if not x then return nil end
@@ -713,11 +714,20 @@ local function newInstance(panel, tree, player)
     return inst
 end
 
-local function near(panel, player)
-    return dist(player.pos, panel.at) <= panel.range
+local function sameWorld(panel, player)
+    local w = player.world
+    return w == nil or w.name == panel.world.name
 end
 
--- Per-player panels: one instance per player within range.
+local function near(panel, player)
+    return sameWorld(panel, player) and dist(player.pos, panel.at) <= panel.range
+end
+
+function Panel:inWorld(player)
+    return sameWorld(self, player)
+end
+
+-- Per-player panels: one instance per player within range; a player who left, moved away or changed world loses it.
 function Panel:sync()
     local seen = {}
     for _, player in ipairs(mc.players) do
