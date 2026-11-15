@@ -17,7 +17,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LuaRequireTest {
-    private val root: Path = Files.createTempDirectory("ignis-require")
+    private val root: Path = TestTemp.dir("ignis-require")
 
     private fun file(rel: String, text: String) {
         val p = root.resolve(rel)

@@ -44,7 +44,7 @@ class ModuleNamesTest {
 
     @Test
     fun `sandbox keeps paths inside the root`() {
-        val tmp = Files.createTempDirectory("sandbox")
+        val tmp = TestTemp.dir("sandbox")
         val root = Files.createDirectories(tmp.resolve("root"))
         Files.writeString(root.resolve("a.txt"), "x")
         Files.writeString(tmp.resolve("secret.txt"), "s")

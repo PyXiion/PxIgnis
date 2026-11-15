@@ -25,7 +25,7 @@ import kotlin.test.assertTrue
  */
 class ParallelTest {
 
-    private class Env(root: java.nio.file.Path = Files.createTempDirectory("ignis"), packages: ru.pyxiion.ignis.packages.PackagePlan? = null) {
+    private class Env(root: java.nio.file.Path = TestTemp.dir("ignis"), packages: ru.pyxiion.ignis.packages.PackagePlan? = null) {
         val vfs = Vfs(listOf(root))
         val state = LuaState()
         val stdlib = installStdlib(state, vfs, packages)
@@ -97,7 +97,7 @@ class ParallelTest {
 
     /** A script root with one package `p` whose entry is [body]. */
     private fun packageEnv(body: String): Env {
-        val root = Files.createTempDirectory("ignis")
+        val root = TestTemp.dir("ignis")
         val dir = Files.createDirectories(root.resolve("packages/p"))
         Files.writeString(dir.resolve("init.lua"), body)
         val manifest = ru.pyxiion.ignis.packages.PackageManifest.parse("""{"id":"p","version":"1.0.0"}""", dir)

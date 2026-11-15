@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 class PluginTypesTest {
     @Test
     fun `plugin stubs go to their own folder and survive the core copy`() {
-        val tmp = Files.createTempDirectory("types")
+        val tmp = TestTemp.dir("types")
         val ignis = Files.createDirectories(tmp.resolve("ignis"))
         val core = Files.createDirectories(tmp.resolve("core")).also { it.resolve("00-core.lua").writeText("---@meta\n") }
         val voice = Files.createDirectories(tmp.resolve("voice")).also { it.resolve("voice.lua").writeText("---@meta voice\n") }

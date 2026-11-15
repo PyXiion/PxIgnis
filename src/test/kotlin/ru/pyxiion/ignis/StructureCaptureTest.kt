@@ -50,7 +50,7 @@ class StructureCaptureTest {
 
     @Test
     fun `write target creates parents and stays inside the root`() {
-        val root = Files.createTempDirectory("root")
+        val root = TestTemp.dir("root")
         val vfs = Vfs(listOf(root))
         val t = vfs.writeTarget(root, "structures/rooms/hall.nbt")
         assertTrue(t.startsWith(root.toRealPath()))
@@ -60,8 +60,8 @@ class StructureCaptureTest {
 
     @Test
     fun `write target refuses a symlink that leaves the root`() {
-        val root = Files.createTempDirectory("root")
-        val outside = Files.createTempDirectory("outside")
+        val root = TestTemp.dir("root")
+        val outside = TestTemp.dir("outside")
         Files.createSymbolicLink(root.resolve("link"), outside)
         Files.createFile(outside.resolve("f.nbt"))
         Files.createSymbolicLink(root.resolve("file.nbt"), outside.resolve("f.nbt"))

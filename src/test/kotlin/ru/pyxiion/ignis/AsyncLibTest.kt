@@ -32,7 +32,7 @@ class AsyncLibTest {
         val state: LuaState = JsePlatform.standardState()
         val queue = ConcurrentLinkedQueue<Runnable>()
         val scheduler = Scheduler { state }
-        val asyncLib = AsyncLib({ state }, scheduler, Vfs(listOf(Files.createTempDirectory("ignis"))))
+        val asyncLib = AsyncLib({ state }, scheduler, Vfs(listOf(TestTemp.dir("ignis"))))
         val failures = mutableListOf<String>()
 
         init {

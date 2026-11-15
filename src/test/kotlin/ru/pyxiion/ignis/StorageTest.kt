@@ -29,7 +29,7 @@ class StorageTest {
     private fun roundTrip(table: LuaTable): LuaTable =
         LuaJson.fromJson(JsonParser.parseString(LuaJson.toJson(table).toString())).checktable()
 
-    private fun tempDir(): Path = Files.createTempDirectory("ignis-storage")
+    private fun tempDir(): Path = TestTemp.dir("ignis-storage")
 
     // ── codec ──────────────────────────────────────────────────────
 

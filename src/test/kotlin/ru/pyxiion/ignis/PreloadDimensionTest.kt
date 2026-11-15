@@ -94,7 +94,7 @@ class PreloadDimensionTest {
 
     @Test
     fun `preload files are found at any depth in order`() {
-        val a = Files.createTempDirectory("a"); val b = Files.createTempDirectory("b")
+        val a = TestTemp.dir("a"); val b = TestTemp.dir("b")
         Files.createDirectories(a.resolve("sub/deep"))
         listOf("z.preload.lua", "sub/deep/m.preload.lua", "x.lua", "sub/a.preload.lua").forEach { Files.writeString(a.resolve(it), "") }
         Files.writeString(b.resolve("q.preload.lua"), "")

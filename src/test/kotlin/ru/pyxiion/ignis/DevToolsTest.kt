@@ -18,7 +18,7 @@ import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatcher
 
 class DevToolsTest {
-    private val tmp: Path = Files.createTempDirectory("pxignis-test")
+    private val tmp: Path = TestTemp.dir("pxignis-test")
 
     @AfterTest
     fun tearDown() {
