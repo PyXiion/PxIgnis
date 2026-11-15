@@ -230,13 +230,13 @@ function Async.fetch(request) end
 ---@field hideLabel? boolean
 
 ---@class DialogButtonOpts
----@field tooltip? string
+---@field tooltip? string|TextComponent
 ---@field width? integer
 ---@field after? '"wait"'|'"keep"'|'"close"'  -- what happens to the dialog after the click (default "wait" = closed
 ---                                           -- unless the handler shows another one; "keep" leaves it open)
 
 ---@class DialogSpec
----@field title string
+---@field title string|TextComponent
 ---@field externalTitle? string  -- the name on the pause-menu button
 ---@field canEscape? boolean     -- default true
 ---@field columns? integer       -- button columns
@@ -293,27 +293,34 @@ function Dialog.option(key, label, options, opts) end
 function Dialog.bool(key, label, opts) end
 
 ---A button whose handler gets the player and the checked input values by key.
----@param label string
+---@param label string|TextComponent  -- a string, or a component: `{ text = "", extra = { Dialog.sprite(...), " Buy" } }`
 ---@param fn fun(player: Player, values: table)
 ---@param opts? DialogButtonOpts
 ---@return DialogEntry
 function Dialog.button(label, fn, opts) end
 
 ---A button that runs a command as the player (their own permissions, no confirmation screen).
----@param label string
+---@param label string|TextComponent
 ---@param command string
 ---@param opts? DialogButtonOpts
 ---@return DialogEntry
 function Dialog.command(label, command, opts) end
 
 ---A button that opens a URL on the client.
----@param label string
+---@param label string|TextComponent
 ---@param url string
 ---@return DialogEntry
 function Dialog.link(label, url) end
 
 ---A button that copies text to the client's clipboard.
----@param label string
+---@param label string|TextComponent
 ---@param text string
 ---@return DialogEntry
 function Dialog.copy(label, text) end
+
+---An icon for a text component (a button label's `extra`): `{ type = "object", atlas, sprite }`. `atlas` defaults to
+---"minecraft:items" (item icons); use "minecraft:blocks" for block textures. Needs a Minecraft 1.21.9+ client.
+---@param sprite string  -- e.g. "minecraft:item/diamond"
+---@param atlas? string
+---@return TextComponent
+function Dialog.sprite(sprite, atlas) end

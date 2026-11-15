@@ -62,6 +62,9 @@ function Player:sendMessage(text) end
 ---@field strikethrough? boolean
 ---@field obfuscated? boolean
 ---@field extra? (TextComponent|string)[]
+---@field type? string                  -- "object" with `atlas` and `sprite` is an icon (Minecraft 1.21.9+)
+---@field atlas? string                 -- "minecraft:items" for item icons, "minecraft:blocks" (default) for block textures
+---@field sprite? string                -- e.g. "minecraft:item/diamond", "planefall:item/<id>"
 ---Any other field of the vanilla text component format (`translate`, `object`, `hover_event`, ...) is accepted too.
 
 ---Sends an action bar message: a string, or a text component table (see TextComponent).

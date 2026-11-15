@@ -89,6 +89,23 @@ Inside a handler show the next dialog with `dialog.show`; a dialog opened with `
 again. A dialog that is not `"keep"` takes one click: later clicks on it are ignored. A failing handler is reported
 like an event handler error.
 
+### Icons in buttons
+
+A button `label` (and a `tooltip`, and the dialog `title`) is a string or a text component table, the same shape as
+item names and `tellraw` (`text`, `color`, `extra`, ...; see `TextComponent` in the types). A component can contain a
+sprite, `{ type = "object", atlas = ..., sprite = ... }`, so a button can carry an icon. `dialog.sprite(sprite, atlas?)`
+builds one; `atlas` defaults to `"minecraft:items"` (item icons), blocks use `"minecraft:blocks"`:
+
+```lua
+dialog.button({ text = "", extra = { dialog.sprite("minecraft:item/diamond"), " Buy" } }, function(player) end)
+dialog.command({ text = "", extra = { dialog.sprite("mypack:item/ruby"), " Ruby" } }, "give @s minecraft:emerald")
+```
+
+Sprites need a 1.21.9+ client. The sprite must exist in the atlas (a resource pack texture under `textures/item` is
+`mypack:item/ruby` in `minecraft:items`); a missing one shows the "missing texture" square. A malformed component is an
+error from `dialog.show`. Vanilla has no separate icon field on a button; an item can be shown only in the dialog
+body (`dialog.item`).
+
 ### Checked input
 
 Before a handler runs the values are checked against the spec: text length, number range and step, option ids, and the
@@ -134,6 +151,6 @@ end)
 ## Notes
 
 - Needs a Minecraft 1.21.6+ client. Dialogs shown before joining (configuration phase) are not supported.
-- Labels and text are plain strings; rich text components are not supported.
+- Input labels and text in the body are plain strings; button labels, tooltips and the title can be components.
 - For anything the library does not cover use the raw [`player:showDialog(spec)`](/reference/player-api#playershowdialogspec)
   with the vanilla dialog JSON.
