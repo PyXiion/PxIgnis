@@ -462,7 +462,8 @@ local function displayPhase(w, mob)
         local ref, ui = require "core:ref", require "core:ui3d"
         local before = #mc.displays()
         local score, flag = ref.new(0), ref.new(false)
-        local p = ui.panel { at = vec(0, 96, 4), facing = "north", width = 3, world = w } {
+        local p = ui.panel { at = vec(0, 96, 4), facing = "north", width = 3, world = w,
+                theme = { icons = { coin = { glyph = "\u{E001}", font = "minecraft:default" }, gem = { item = "minecraft:emerald" } } } } {
             ui.col { gap = 0.05, pad = 0.1,
                 ui.text { id = "t", function() return "Score: " .. score:get() end },
                 ui.bar { value = function() return score:get() / 10 end },
@@ -471,12 +472,17 @@ local function displayPhase(w, mob)
                     ui.button { "Exit", style = "danger", disabled = function() return score:get() < 10 end },
                     ui.toggle { value = flag },
                     ui.icon("minecraft:apple"),
+                    ui.icon "gem",
+                    ui.icon { sprite = "minecraft:block/stone", atlas = "minecraft:blocks" },
+                    ui.icon { head = "Steve", hat = true },
+                    ui.icon { item = "minecraft:diamond", model = true },
+                    ui.text { "Price: ", ui.icon "coin", ui.icon "minecraft:apple", " 10" },
                 },
                 ui.show(flag, ui.text("shown")),
                 ui.each({ "a", "b" }, function(item) return ui.text(item) end),
             },
         }
-        assert(#mc.displays() > before + 8, "panel displays missing")
+        assert(#mc.displays() > before + 14, "panel displays missing")
         score:set(10)
         flag:set(true)
         assert(p:get("t").p.text == "Score: 10")

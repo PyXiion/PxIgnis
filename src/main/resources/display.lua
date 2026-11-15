@@ -345,6 +345,11 @@ end
 local QUAD_X, QUAD_Y, QUAD_SKEW = 8.0, 4.0, 0.1
 display.QUAD = { x = QUAD_X, y = QUAD_Y, skew = QUAD_SKEW }
 
+-- An object component (`{type = "object", atlas =, sprite =}` or a player head) in a text display is one glyph:
+-- advance 8 px (`AtlasGlyphProvider.GLYPH_INFO = GlyphInfo.simple(8.0f)` in the 26.3 client jar) and an 8 x 8 px
+-- sprite, 0.025 blocks per pixel at scale 1. The vertical position of the sprite inside the line is not read from the jar.
+display.ICON = { w = 8 * 0.025, h = 8 * 0.025 }
+
 local function quadTransform(w, h, t)
     local o = t and vec3(t, "offset") or { x = 0, y = 0, z = 0 }
     o.x = o.x - QUAD_SKEW * w

@@ -24,6 +24,10 @@ local ui = {}
 -- Scales that make a text-display background `w` x `h` blocks, and how far left of the quad's origin its rectangle
 -- begins (fraction of `w`): see `core:display`.
 local QUAD_X, QUAD_Y, QUAD_SKEW = display.QUAD.x, display.QUAD.y, display.QUAD.skew
+-- Size of an icon glyph in a text display at scale 1 (the one source of layout width, render size and hit rectangle).
+local ICON_W, ICON_H = display.ICON.w, display.ICON.h
+-- The text of a text display starts 1 px right of the entity origin (the 1 px padding of its background is on the left).
+local TEXT_SHIFT = 0.025
 local LINE = 9 * 0.025   -- line height at scale 1
 local CHAR = 6 * 0.025   -- average glyph advance at scale 1
 local DEFAULT_REACH = 8
@@ -263,7 +267,9 @@ end
 function ui.theme(user)
     local t = {}
     for name, s in pairs(DEFAULT_THEME) do t[name] = s end
-    for name, s in pairs(user or {}) do t[name] = mergeStyle(t[name], s) end
+    for name, s in pairs(user or {}) do
+        if name == "icons" then t.icons = shallow(t.icons, s) else t[name] = mergeStyle(t[name], s) end
+    end
     return t
 end
 
@@ -289,14 +295,77 @@ local function hex(argb)
     return string.format("#%06x", argb % 0x1000000)
 end
 
-local function component(str, argb)
-    return { text = tostring(str), color = hex(argb) }
+-- ── Icons ──────────────────────────────────────────────────────────────
+
+--- Sprite of an item id in the `minecraft:items` atlas: `ns:path` -> `ns:item/path`. Block items without an item
+--- sprite need an explicit `sprite` and `atlas`, or `model = true`.
+function ui.itemSprite(id)
+    local ns, path = tostring(id):match("^([^:]+):(.+)$")
+    if not ns then ns, path = "minecraft", tostring(id) end
+    return ns .. ":item/" .. path
+end
+
+--- The icon fields of `spec`, with the `theme.icons[spec.name]` entry as the base when it has a `name`.
+function ui.resolveIcon(spec, theme)
+    if spec.name == nil then return spec end
+    local base = theme and theme.icons and theme.icons[spec.name]
+    if not base then error("ui3d: unknown icon '" .. tostring(spec.name) .. "' (add it to theme.icons)", 0) end
+    local r = shallow(base)
+    for k, v in pairs(spec) do
+        if k ~= "name" then r[k] = v end
+    end
+    return r
+end
+
+local function profileOf(head)
+    if type(head) == "table" and getmetatable(head) == nil then return head end -- a profile table
+    return head.name or head                                                    -- a player, or a name
+end
+
+--- The text component of a resolved icon spec: `glyph` (+ `font`), `head` (player, profile or name; `hat`), `sprite`
+--- (+ `atlas`, default `minecraft:items`) or `item`.
+function ui.iconComponent(spec)
+    if spec.glyph then return { text = spec.glyph, font = spec.font } end
+    if spec.head ~= nil then return { type = "object", player = profileOf(spec.head), hat = spec.hat ~= false } end
+    local sprite = spec.sprite or (spec.item and ui.itemSprite(spec.item))
+    if not sprite then error("ui3d.icon: one of item, sprite, glyph, head is required", 0) end
+    return { type = "object", atlas = spec.atlas or "minecraft:items", sprite = sprite }
+end
+
+--- Width in blocks of a line of text parts (strings and icon descriptors) at text size `size` (line height).
+function ui.partsWidth(parts, size)
+    local w = 0
+    for _, part in ipairs(parts) do
+        if type(part) == "table" then w = w + ICON_W else w = w + textLen(part) * CHAR end
+    end
+    return w * size / LINE
+end
+
+-- Text component of a widget label. A single string is plain text; parts with icons become one component whose
+-- `extra` holds the strings and icons.
+local function component(parts, argb, theme)
+    if #parts == 1 and type(parts[1]) ~= "table" then return { text = tostring(parts[1]), color = hex(argb) } end
+    local extra = {}
+    for i, part in ipairs(parts) do
+        if type(part) == "table" then
+            local spec = ui.resolveIcon(part, theme)
+            if spec.model then error("ui3d: an icon inside text cannot be a model", 0) end
+            local c = ui.iconComponent(spec)
+            if c.type == "object" then c.color = "#ffffff" end
+            extra[i] = c
+        else
+            extra[i] = { text = tostring(part) }
+        end
+    end
+    return { text = "", color = hex(argb), extra = extra }
 end
 
 local function sizeOf(node) return node.p.size or 0.2 end
 
-local function labelWidth(node, str)
-    return textLen(str) * CHAR * sizeOf(node) / LINE
+local function partsOf(node) return node.p.parts or { node.p.text or "" } end
+
+local function labelWidth(node, parts)
+    return ui.partsWidth(parts, sizeOf(node))
 end
 
 local function spawn(node, kind, props)
@@ -337,11 +406,11 @@ local function quadSet(h, frame, u, v, z, w, hh, argb, interp)
     }
 end
 
-local function labelSet(node, h, frame, u, v, z, str, argb, k, interp)
+local function labelSet(node, h, frame, u, v, z, parts, argb, k, interp)
     local s = sizeOf(node) / LINE * k
     h:set {
-        interp = interp, text = component(str, argb),
-        transform = { t = ui.offset(frame, u, v - LINE * s / 2, z), l = frame.q, s = { x = s, y = s, z = 1 } },
+        interp = interp, text = component(parts, argb, node.ctx.theme),
+        transform = { t = ui.offset(frame, u - TEXT_SHIFT * s, v - LINE * s / 2, z), l = frame.q, s = { x = s, y = s, z = 1 } },
     }
 end
 
@@ -351,32 +420,32 @@ KINDS.box = { measure = function() return 0, 0 end, render = function() end }
 
 KINDS.text = {
     measure = function(node)
-        return labelWidth(node, node.p.text or ""), sizeOf(node)
+        return labelWidth(node, partsOf(node)), sizeOf(node)
     end,
     render = function(node, frame, st, interp)
         if not node.vis then node.vis = { label(node) } end
         local r = node.rect
-        local str = node.p.text or ""
-        local tw = labelWidth(node, str)
+        local parts = partsOf(node)
+        local tw = labelWidth(node, parts)
         local u, v = centre(node, frame)
         local al = node.p.align
         if al == "left" then u = r.x + tw / 2 - frame.w / 2
         elseif al == "right" then u = r.x + r.w - tw / 2 - frame.w / 2 end
-        labelSet(node, node.vis[1], frame, u, v, st.z or 0, str, node.p.fg or st.fg, st.scale or 1, interp)
+        labelSet(node, node.vis[1], frame, u, v, st.z or 0, parts, node.p.fg or st.fg, st.scale or 1, interp)
     end,
 }
 
 KINDS.button = {
     interactive = true,
     measure = function(node)
-        return labelWidth(node, node.p.text or "") + 0.24, sizeOf(node) + 0.14
+        return labelWidth(node, partsOf(node)) + 0.24, sizeOf(node) + 0.14
     end,
     render = function(node, frame, st, interp)
         if not node.vis then node.vis = { quad(node, 0), label(node) } end
         local r, k, z = node.rect, st.scale or 1, st.z or 0
         local u, v = centre(node, frame)
         quadSet(node.vis[1], frame, u, v, z, r.w * k, r.h * k, node.p.bg or st.bg, interp)
-        labelSet(node, node.vis[2], frame, u, v, z + DEPTH, node.p.text or "", node.p.fg or st.fg, k, interp)
+        labelSet(node, node.vis[2], frame, u, v, z + DEPTH, partsOf(node), node.p.fg or st.fg, k, interp)
     end,
 }
 
@@ -408,24 +477,44 @@ KINDS.toggle = {
     end,
 }
 
+-- An icon is a text display holding one object (or glyph) component, `model = true` an item display. The layout box is
+-- the glyph box at the text size; `size` is the line height like for text.
 KINDS.icon = {
-    measure = function(node) return sizeOf(node) * 2, sizeOf(node) * 2 end,
+    measure = function(node)
+        local s = sizeOf(node)
+        if node.p.model then return s, s end
+        return ICON_W * s / LINE, ICON_H * s / LINE
+    end,
     render = function(node, frame, st, interp)
         local r, k = node.rect, st.scale or 1
-        if not node.vis then
-            node.vis = { spawn(node, "item", { item = node.p.item or "minecraft:air", mode = "gui", billboard = "fixed", transform = { s = 0 } }) }
-        end
+        local spec = ui.resolveIcon(node.p, node.ctx.theme)
         local u, v = centre(node, frame)
-        local sz = math.min(r.w, r.h) * k
+        if spec.model then
+            if not node.vis then
+                node.vis = { spawn(node, "item", { item = spec.item or "minecraft:air", mode = "gui", billboard = "fixed", transform = { s = 0 } }) }
+            end
+            local sz = math.min(r.w, r.h) * k
+            node.vis[1]:set {
+                interp = interp, item = spec.item or "minecraft:air",
+                transform = { t = ui.offset(frame, u, v, st.z or 0), l = frame.q, s = { x = sz, y = sz, z = 0.01 } },
+            }
+            return
+        end
+        if not node.vis then node.vis = { label(node) } end
+        local s = math.min(r.w / ICON_W, r.h / ICON_H) * k
+        local c = ui.iconComponent(spec)
+        if c.text and not c.type then c.color = hex(node.p.fg or st.fg or 0xFFFFFFFF) end
         node.vis[1]:set {
-            interp = interp, item = node.p.item or "minecraft:air",
-            transform = { t = ui.offset(frame, u, v, st.z or 0), l = frame.q, s = { x = sz, y = sz, z = 0.01 } },
+            interp = interp, text = c,
+            transform = { t = ui.offset(frame, u - TEXT_SHIFT * s, v - LINE * s / 2, st.z or 0), l = frame.q, s = { x = s, y = s, z = 1 } },
         }
     end,
 }
 
 -- Props whose change alters the layout.
-local LAYOUT = { w = true, h = true, gap = true, pad = true, grow = true, align = true, text = true, size = true }
+local LAYOUT = {
+    w = true, h = true, gap = true, pad = true, grow = true, align = true, text = true, size = true, model = true,
+}
 
 -- ── Nodes ──────────────────────────────────────────────────────────────
 
@@ -572,7 +661,8 @@ function instantiate(desc, ctx, parent)
     if desc.dyn then return instantiateDyn(desc, ctx, parent) end
     local node = newNode(desc, ctx, parent)
     for k, v in pairs(desc) do
-        if type(k) == "string" and k ~= "kind" and k ~= "id" and k ~= "children" and k ~= "style" and not k:match("^on%u") then
+        if type(k) == "string" and k ~= "kind" and k ~= "id" and k ~= "children" and k ~= "style" and k ~= "parts"
+            and not k:match("^on%u") then
             node.p[k] = bindSource(node, v, function(new)
                 node.p[k] = new
                 if LAYOUT[k] then ctx.inst:relayout() end
@@ -581,6 +671,20 @@ function instantiate(desc, ctx, parent)
         end
     end
     node.p.style = desc.style
+    if desc.parts then
+        node.p.parts = {}
+        for i, part in ipairs(desc.parts) do
+            if type(part) == "table" and not ref.isRef(part) then
+                node.p.parts[i] = part -- an inline icon descriptor
+            else
+                node.p.parts[i] = bindSource(node, part, function(new)
+                    node.p.parts[i] = new
+                    ctx.inst:relayout()
+                    node:render(0)
+                end)
+            end
+        end
+    end
     node.handlers = { click = desc.onClick, change = desc.onChange }
     buildChildren(node, desc.children or {})
     return node
@@ -610,12 +714,44 @@ local function leaf(kind, primary)
     end
 end
 
---- `ui.text("str" | ref | fn)` or `ui.text { "str", size =, fg =, align = }`.
-ui.text = leaf("text", "text")
---- `ui.button { "label", onClick = fn(player), style =, disabled = }`.
-ui.button = leaf("button", "text")
---- `ui.icon("minecraft:apple")` or `ui.icon { item =, size = }`.
-ui.icon = leaf("icon", "item")
+-- text and button: one content value (string, Ref or function) is the `text` prop; several values, or an icon among
+-- them, are `parts`, shown as one line of text with the icons inline.
+local function textual(kind)
+    return function(props)
+        if type(props) ~= "table" or ref.isRef(props) then props = { props } end
+        local d, parts = { kind = kind }, {}
+        for k, v in pairs(props) do
+            if type(k) ~= "number" then d[k] = v end
+        end
+        for i = 1, #props do parts[i] = props[i] end
+        if #parts == 1 and (type(parts[1]) ~= "table" or ref.isRef(parts[1])) then
+            d.text = parts[1]
+        elseif #parts > 0 then
+            d.parts = parts
+        end
+        return d
+    end
+end
+
+--- `ui.text("str" | ref | fn)` or `ui.text { "str", size =, fg =, align = }`; `ui.text { "Price: ", ui.icon "coin", " 10" }`
+--- is one line with an inline icon.
+ui.text = textual("text")
+--- `ui.button { "label", onClick = fn(player), style =, disabled = }`; the label takes parts like `ui.text`.
+ui.button = textual("button")
+
+--- Icon: `ui.icon "minecraft:diamond"` (item), `ui.icon "coin"` (a name from `theme.icons`), or
+--- `ui.icon { item = | sprite =, atlas = | glyph =, font = | head = player|profile, hat =, model = true, size = }`.
+function ui.icon(props)
+    if type(props) ~= "table" then props = { props } end
+    local d = { kind = "icon" }
+    for k, v in pairs(props) do d[k] = v end
+    local first = d[1]
+    d[1] = nil
+    if first ~= nil then
+        if tostring(first):find(":", 1, true) then d.item = first else d.name = first end
+    end
+    return d
+end
 --- `ui.bar { value = 0..1 }`.
 ui.bar = leaf("bar", "value")
 --- `ui.toggle { value = ref|bool, onChange = fn(new, player) }`.

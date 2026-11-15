@@ -47,7 +47,12 @@ p:remove()           -- removes displays and disconnects every binding
 ```
 
 - Containers: `col`, `row`, `stack` (layers on top of each other). Props: `gap`, `pad`, `align`, fixed or `grow` size.
-- Widgets (stage 1): `text`, `button`, `icon` (item), `bar`, `toggle`.
+- Widgets (stage 1): `text`, `button`, `icon`, `bar`, `toggle`.
+- Icons are text-component glyphs, not item displays: `ui.icon { item = | sprite =, atlas = | glyph =, font = |
+  head = player|profile }` is one object/font component in a text display (`{type = "object", atlas, sprite}`, item
+  id `ns:path` -> sprite `ns:item/path`); `model = true` gives a 3D item display. `theme.icons` names them
+  (`ui.icon "coin"`). In `ui.text { "Price: ", ui.icon "coin", " 10" }` icons sit inline in one component. The glyph
+  box is `display.ICON` (8 x 8 px; advance 8 px from `AtlasGlyphProvider`); width of mixed lines is estimated.
 - Structure changes: `ui.show(cond, node)`, `ui.each(listRef, fn)`; only that subtree is rebuilt.
 - Per-player state: `ui.panel{...}(function(player) return tree end)` builds one tree per viewer.
 

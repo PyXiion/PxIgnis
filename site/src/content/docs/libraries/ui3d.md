@@ -65,9 +65,30 @@ binding.
 |---|---|
 | `ui.text("str")` / `ui.text { "str", size =, fg =, align = }` | `size` is the line height in blocks (default 0.2); `align`: `"left"`, `"center"` (default), `"right"` |
 | `ui.button { "label", onClick = fn(player), disabled = }` | also `size`, `fg`, `bg`, `style` |
-| `ui.icon("minecraft:apple")` | `item`, `size` |
+| `ui.icon("minecraft:apple")` | see [Icons](#icons) |
 | `ui.bar { value = 0..1 }` | `bg`, `fg` |
 | `ui.toggle { value = ref, onChange = fn(new, player) }` | `disabled`; a `Ref` value is written on click |
+
+## Icons
+
+An icon is a text display with one glyph, sized by the text size (`size`, default 0.2 blocks line height).
+
+```lua
+ui.icon "minecraft:diamond"                         -- item sprite minecraft:item/diamond (minecraft:items atlas)
+ui.icon { sprite = "minecraft:block/stone", atlas = "minecraft:blocks" }
+ui.icon { glyph = "\u{E001}", font = "ns:icons" }   -- a font glyph
+ui.icon { head = player, hat = true }               -- a player head; `head` is a player, a name or a profile table
+ui.icon { item = "minecraft:diamond", model = true } -- 3D item display
+```
+
+- `item = "ns:path"` uses the sprite `ns:item/path`. Block items such as `minecraft:stone` have no `item/` sprite: give
+  `sprite` and `atlas` (`minecraft:block/stone` in `minecraft:blocks`), or `model = true`.
+- `theme.icons = { coin = { glyph = "\u{E001}", font = "ns:icons" }, gem = { item = "ns:gem" } }` names icons;
+  `ui.icon "coin"` uses the entry, fields given on the widget override it. A string without `:` is a name.
+- Inside `ui.text` and `ui.button`, icons sit in the line: `ui.text { "Price: ", ui.icon "coin", " 10" }` is one text
+  component. A plain string part stays plain text. Inline icons are fixed (no reactive props, no `model`).
+- An icon glyph is 8 px wide and 8 px tall (`display.ICON`), a character counts as 6 px on average, so widths of
+  mixed lines are estimates. The layout rectangle, the render size and the hit rectangle all use the glyph box.
 
 ## Reactivity
 

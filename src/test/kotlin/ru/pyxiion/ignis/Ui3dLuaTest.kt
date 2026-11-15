@@ -681,4 +681,99 @@ class Ui3dLuaTest {
             """.trimIndent()
         )
     }
+
+    @Test
+    fun `icon components, item sprites and theme icons`() {
+        run(
+            """
+            eq(ui.itemSprite("minecraft:diamond"), "minecraft:item/diamond")
+            eq(ui.itemSprite("mymod:gem/ruby"), "mymod:item/gem/ruby")
+            eq(ui.itemSprite("diamond"), "minecraft:item/diamond")
+
+            local c = ui.iconComponent({ item = "minecraft:diamond" })
+            eq(c.type, "object"); eq(c.atlas, "minecraft:items"); eq(c.sprite, "minecraft:item/diamond")
+            c = ui.iconComponent({ sprite = "minecraft:block/stone", atlas = "minecraft:blocks" })
+            eq(c.atlas, "minecraft:blocks"); eq(c.sprite, "minecraft:block/stone")
+            c = ui.iconComponent({ glyph = "\u{E001}", font = "ns:id" })
+            eq(c.text, "\u{E001}"); eq(c.font, "ns:id"); eq(c.type, nil)
+            c = ui.iconComponent({ head = "Steve" })
+            eq(c.type, "object"); eq(c.player, "Steve"); eq(c.hat, true)
+            c = ui.iconComponent({ head = setmetatable({ name = "Alex" }, {}), hat = false })
+            eq(c.player, "Alex"); eq(c.hat, false)
+            local profile = { name = "N", id = { 1, 2, 3, 4 } }
+            eq(ui.iconComponent({ head = profile }).player, profile, "a plain table is a profile")
+            assert(not pcall(ui.iconComponent, {}), "an empty icon is rejected")
+
+            local th = ui.theme({ icons = { coin = { glyph = "C", font = "a:b" }, gem = { item = "a:gem" } } })
+            local r = ui.resolveIcon({ name = "coin" }, th)
+            eq(r.glyph, "C"); eq(r.font, "a:b")
+            r = ui.resolveIcon({ name = "coin", font = "c:d" }, th)
+            eq(r.font, "c:d", "widget fields override the theme icon"); eq(r.glyph, "C")
+            eq(ui.resolveIcon({ name = "gem" }, th).item, "a:gem")
+            eq(ui.resolveIcon({ item = "x:y" }, th).item, "x:y", "no name: unchanged")
+            assert(not pcall(ui.resolveIcon, { name = "nope" }, th), "unknown icon")
+
+            local d = ui.icon "minecraft:diamond"; eq(d.item, "minecraft:diamond"); eq(d.name, nil)
+            d = ui.icon "coin"; eq(d.name, "coin"); eq(d.item, nil)
+            d = ui.icon { glyph = "G", size = 0.3 }; eq(d.kind, "icon"); eq(d.size, 0.3)
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `icon width is one constant for layout, render and hit rectangle`() {
+        run(
+            """
+            local display = package_loaded["core:display"]
+            local ICON = display.ICON
+            near(ICON.w, 0.2); near(ICON.h, 0.2)
+            -- an icon counts as ICON.w, a character as 0.15, scaled by size / 0.225
+            local parts = { "ab", { kind = "icon" }, "c" }
+            near(ui.partsWidth(parts, 0.225), 3 * 0.15 + ICON.w)
+            near(ui.partsWidth(parts, 0.45), 2 * (3 * 0.15 + ICON.w), "scales with the size")
+
+            local theme = { icons = { coin = { glyph = "C", font = "a:b" } } }
+            local p = ui.panel { at = { x = 0, y = 64, z = 0 }, width = 4, world = world, theme = theme } {
+                ui.row { align = "start",
+                    ui.text { id = "line", "Price: ", ui.icon "coin", " 10", align = "left" },
+                    ui.icon { id = "dia", item = "minecraft:diamond" },
+                    ui.icon { id = "mdl", item = "minecraft:diamond", model = true },
+                },
+            }
+            local f = p.instances.shared.frame
+
+            -- the text line: the layout width is the inline width, and the label is centred in that rectangle
+            local line = p:get("line")
+            near(line.rect.w, ui.partsWidth({ "Price: ", { kind = "icon" }, " 10" }, 0.2), "layout width")
+            local label
+            for _, k in ipairs(cores) do if k.props.text and type(k.props.text) == "table" and k.props.text.extra then label = k end end
+            assert(label, "inline text component")
+            eq(label.props.text.extra[1].text, "Price: ")
+            eq(label.props.text.extra[2].text, "C"); eq(label.props.text.extra[2].font, "a:b")
+            eq(label.props.text.extra[3].text, " 10")
+            local s = label.props.transform.s.x
+            local centre = label.props.transform.t.x + 0.025 * s + f.w / 2
+            near(centre, line.rect.x + line.rect.w / 2, "label centred on the layout rectangle")
+
+            -- a standalone icon: scale * glyph width == the layout rectangle
+            local dia = p:get("dia")
+            near(dia.rect.w, ICON.w * 0.2 / 0.225, "icon layout width"); near(dia.rect.h, ICON.h * 0.2 / 0.225)
+            local sprite
+            for _, k in ipairs(cores) do
+                if k.props.text and type(k.props.text) == "table" and k.props.text.sprite then sprite = k end
+            end
+            assert(sprite, "sprite display")
+            eq(sprite.props.text.sprite, "minecraft:item/diamond"); eq(sprite.props.text.atlas, "minecraft:items")
+            near(sprite.props.transform.s.x * ICON.w, dia.rect.w, "render width")
+            near(sprite.props.transform.s.y * ICON.h, dia.rect.h, "render height")
+
+            -- hit: just inside the rectangle's edges the ray picks the icon's widget, via the same rectangle
+            local mdl = p:get("mdl")
+            eq(mdl.kind, "icon"); near(mdl.rect.w, 0.2)
+            local item
+            for _, k in ipairs(cores) do if k.kind == "item" then item = k end end
+            assert(item and item.props.mode == "gui", "model icon is an item display")
+            """.trimIndent()
+        )
+    }
 }

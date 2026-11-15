@@ -41,7 +41,7 @@
 ---@field align? Ui3dProp<"stretch"|"start"|"center"|"end">
 
 ---@class Ui3dTextProps : Ui3dCommon
----@field [1]? Ui3dProp<string|number>
+---@field [1]? Ui3dProp<string|number>|Ui3dNode   -- more values, or an icon, make one line with inline icons
 ---@field text? Ui3dProp<string|number>
 ---@field size? Ui3dProp<number>       -- line height in blocks (default 0.2)
 ---@field fg? Ui3dProp<integer>
@@ -65,9 +65,26 @@
 ---@field onChange? fun(value: boolean, player: Player)
 
 ---@class Ui3dIconProps : Ui3dCommon
----@field [1]? Ui3dProp<string>
----@field item? Ui3dProp<string>
----@field size? Ui3dProp<number>
+---@field [1]? string                  -- an item id (contains ":") or a name from `theme.icons`
+---@field name? string                 -- `theme.icons` entry; the other fields override it
+---@field item? Ui3dProp<string>       -- sprite `ns:item/<path>` in the `minecraft:items` atlas
+---@field sprite? string
+---@field atlas? string                -- default "minecraft:items"
+---@field glyph? string
+---@field font? string
+---@field head? Player|string|table    -- player, name or profile table
+---@field hat? boolean                 -- head: second skin layer (default true)
+---@field model? boolean               -- item: 3D item display
+---@field size? Ui3dProp<number>       -- line height in blocks (default 0.2)
+
+---@class Ui3dIconDef
+---@field item? string
+---@field sprite? string
+---@field atlas? string
+---@field glyph? string
+---@field font? string
+---@field head? Player|string|table
+---@field hat? boolean
 
 ---@class Ui3dPanelOpts
 ---@field at Vec|Vec3Like          -- panel centre
@@ -75,7 +92,7 @@
 ---@field width? number
 ---@field height? number
 ---@field world? World             -- default: the overworld
----@field theme? table<string, Ui3dStyle>
+---@field theme? table<string, Ui3dStyle>|{icons: table<string, Ui3dIconDef>}  -- plus `icons` by name
 ---@field reach? number            -- hover/click distance (default 8)
 ---@field hover? "viewer"|"shared" -- hover look: an overlay only the hovering player sees (default), or the widget itself
 ---@field press? "viewer"|"shared" -- same for the press look
