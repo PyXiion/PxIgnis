@@ -39,15 +39,12 @@ Player.isFlying = nil
 ---@type Sidebar|SidebarConfig|nil
 Player.sidebar = nil
 
----Per-player persistent storage. Auto-saved to JSON. The key `flush` is reserved.
----@type PlayerData
+---Per-player persistent storage. Auto-saved to JSON.
+---@type table<string, any>
 Player.data = nil
 
----@class PlayerData : table<string, any>
-local PlayerData = {}
-
 ---Writes this player's data to disk now, if it changed since the last write.
-function PlayerData:flush() end
+function Player:saveData() end
 
 ---@param permission string  -- e.g. "px.example.use"
 ---@return boolean

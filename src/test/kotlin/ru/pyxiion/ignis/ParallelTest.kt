@@ -10,6 +10,8 @@ import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.initVecMeta
 import ru.pyxiion.ignis.runtime.installStdlib
 import ru.pyxiion.ignis.sandbox.Vfs
+import ru.pyxiion.ignis.storage.JsonBackend
+import ru.pyxiion.ignis.storage.StorageManager
 import java.nio.file.Files
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.test.BeforeTest
@@ -183,6 +185,24 @@ class ParallelTest {
         assertEquals(3, r.get(2).toint())
         assertEquals("y", r.str(3))
         assertTrue(r.get(4).isnil())
+    }
+
+    @Test
+    fun `player data crosses as a copy`() {
+        val env = Env()
+        val data = StorageManager(JsonBackend(TestTemp.dir("ignis-player-data"))).getPlayerData("u")
+        data.set("visits", 2)
+        env.state.globals.set("pdata", data)
+        val r = run(
+            """
+            local f = async.parallel(function(d) d.visits = d.visits + 1; d.extra = true; return d.visits end)
+            _result = { f(pdata), pdata.visits, pdata.extra }
+            """.trimIndent(),
+            env,
+        )
+        assertEquals(3, r.get(1).toint())
+        assertEquals(2, r.get(2).toint())
+        assertTrue(r.get(3).isnil())
     }
 
     @Test

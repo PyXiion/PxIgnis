@@ -39,9 +39,7 @@ import ru.pyxiion.ignis.toLuaArray
 import ru.pyxiion.ignis.isAdmin
 import ru.pyxiion.ignis.SCRIPT_PERMISSION_LEVEL
 import ru.pyxiion.ignis.unwrap
-import ru.pyxiion.ignis.luaFunction
 import ru.pyxiion.ignis.luaGuard
-import ru.pyxiion.ignis.luaTableOf
 
 object PlayerWrap {
 
@@ -50,29 +48,9 @@ object PlayerWrap {
 
     fun wrap(entity: ServerPlayer): LuaValue {
         val t = wrapObject(MetaTableRegistry.PLAYER, "player", entity)
-        t.rawset("data", playerData(entity.uuid.toString()))
+        t.rawset("data", PxIgnis.runtimeOrNull?.storage?.getPlayerData(entity.uuid.toString())
+            ?: throw IllegalStateException("PxIgnis not initialized"))
         return t
-    }
-
-    /** `player.data`: the stored table. Its metatable, attached on first use, adds `flush` and reserves that key. */
-    private fun playerData(uuid: String): LuaTable {
-        val storage = PxIgnis.runtimeOrNull?.storage ?: throw IllegalStateException("PxIgnis not initialized")
-        val data = storage.getPlayerData(uuid)
-        if (data.getmetatable() == null) {
-            val flush = luaFunction { _ ->
-                luaGuard { storage.save(uuid) }
-                LuaValue.NIL
-            }
-            data.setmetatable(luaTableOf(
-                "__index" to luaTableOf("flush" to flush),
-                "__newindex" to luaFunction { t, k, v ->
-                    if (k.isstring() && k.tojstring() == "flush") throw LuaError("player.data: 'flush' is a reserved key")
-                    (t as LuaTable).rawset(k, v)
-                    LuaValue.NIL
-                },
-            ))
-        }
-        return data
     }
 
     private val BUILT by lazy { metaTable<ServerPlayer> {
@@ -132,6 +110,13 @@ object PlayerWrap {
             }
         )
         propWithTable("data") { self -> self.rawget("data") }
+
+        method("saveData") { args ->
+            val player = args.arg(1).checktable().unwrap<ServerPlayer>()
+            val storage = PxIgnis.runtimeOrNull?.storage ?: throw IllegalStateException("PxIgnis not initialized")
+            luaGuard { storage.save(player.uuid.toString()) }
+            LuaValue.NIL
+        }
 
         method("hasPermission") { args ->
             val self = args.arg(1).checktable()

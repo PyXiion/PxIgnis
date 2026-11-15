@@ -30,8 +30,7 @@ local coins = ctx.player.data.coins
 Supports numbers, strings, booleans, tables, and `nil` (deletes the key). The data tables are ordinary Lua
 tables: nested writes (`data.stats.kills = 5`) just work.
 
-`player.data:flush()` writes that player's table to disk now, if it changed since the last write. `flush` is reserved
-in `player.data`: assigning to it is an error. `player.data` has a metatable, so it cannot be passed to `async` or `parallel`; copy its fields into a plain table first.
+`ctx.player:saveData()` writes that player's table to disk now, if it changed since the last write. Other tables are not touched.
 
 ## Data Validation
 
@@ -56,7 +55,7 @@ Data is written to disk on:
 - **Player disconnect** (per-player data only)
 - **`/ignis reload`**
 - **Every 5 minutes** (only tables that changed are rewritten)
-- **`player.data:flush()`**, when a script calls it (only that player's data, and only if it changed)
+- **`ctx.player:saveData()`**, when a script calls it (only that player's data, and only if it changed)
 
 Per-player data is removed from memory on disconnect (but remains on disk).
 
