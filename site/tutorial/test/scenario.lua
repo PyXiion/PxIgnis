@@ -33,7 +33,7 @@ M.openGui:click(alice, 5) -- second kit (col 5)
 assert(alice.data.arenaKit == "archer", tostring(alice.data.arenaKit))
 
 -- inventories to stash
-alice.inv = { [0] = { id = "minecraft:diamond" }, [38] = { id = "minecraft:elytra" } }
+alice.inv = { [1] = { id = "minecraft:diamond" }, [38] = { id = "minecraft:elytra" } }
 bob.inv = { [5] = { id = "minecraft:stone" } }
 
 M.run(alice, "arena join")
@@ -45,7 +45,7 @@ M.seconds(1)
 assert(M.bar.title:find("Starting in"), M.bar.title)
 M.seconds(10)
 assert(M.bar.title:find("Alive: 2"), M.bar.title)
-assert(alice.data.arenaStash["0"] == "json:minecraft:diamond" and alice.data.arenaStash["38"] == "json:minecraft:elytra")
+assert(alice.data.arenaStash["1"] == "json:minecraft:diamond" and alice.data.arenaStash["38"] == "json:minecraft:elytra")
 assert(alice:has("minecraft:bow") and not alice:has("minecraft:diamond"), "archer kit, own items stashed")
 assert(bob:has("minecraft:iron_sword"), "warrior kit default")
 assert(alice.chestItem.id == "minecraft:leather_chestplate")
@@ -77,7 +77,7 @@ M.seconds(6)
 assert(alice.pos.x == 50 and alice.inv[38].id == "minecraft:elytra" and not alice:has("minecraft:bow"), "alice restored")
 assert(#M.emitted == 1 and M.emitted[1][1] == "arena:win" and M.emitted[1][2] == alice and M.emitted[1][3] == 1)
 if arg[3] then
-    local d = alice.inv[1]
+    local d = alice.inv[2]
     assert(d and d.id == "minecraft:diamond" and d.count == 2, "reward kept after restore")
 end
 assert(alice.data.arenaStats.deaths == 0 and alice.data.arenaStats.wins == 1)

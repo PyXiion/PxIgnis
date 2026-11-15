@@ -13,6 +13,18 @@ The convenient layer is Lua (`core:dialog`). It can change without a Kotlin rele
 scripting API (constructors and closures), and it needs no per-version code: the vanilla dialog classes are identical on
 1.21.11 and 26.3, and only the JSON shape crosses the boundary.
 
+## Rich labels
+
+Vanilla button labels are text components (`CommonButtonData.label`), and a component can hold an atlas sprite
+(`{type: "object", atlas, sprite}`); the only item-aware element is the `minecraft:item` body, which `dialog.item`
+already covers. So icons in buttons are component labels, not a new field: any table under `title`, `external_title`,
+`label`, `tooltip`, `contents` or `display` of the spec goes through `Text.fromLua` (the converter item names and
+`tellraw` use) and is encoded to the JSON the dialog codec reads; strings stay strings. The Lua library only relaxes its
+own checks (`label` and `title` may be a table) and adds `dialog.sprite`.
+
+Alternatives considered: an `icon = {atlas, sprite}` or `item = id` option on `dialog.button` (a second way to say the
+same thing, and it would need a layout rule for icon vs text), and a new Kotlin dialog node (the codec already does it).
+
 ## Click routing
 
 A button that must reach a script uses the `dynamic/custom` action. Its id is the only routing data we control: the

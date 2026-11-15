@@ -1,6 +1,9 @@
 package ru.pyxiion.ignis.mixins;
 
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -8,6 +11,8 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import ru.pyxiion.ignis.events.DropCapture;
 import ru.pyxiion.ignis.api.PlayerMoveDispatcher;
 import ru.pyxiion.ignis.api.manager.RegionManager;
 
@@ -39,5 +44,16 @@ public class EntityMixin {
                 PlayerMoveDispatcher.INSTANCE.onPlayerMoved(player, prev, cur);
             }
         }
+    }
+
+    // entity.drops: while a death runs vanilla's loot step, every stack the dying entity would spawn is collected
+    // instead. All of spawnAtLocation's overloads end here, so loot tables and mob equipment are covered.
+    @Inject(
+        method = "spawnAtLocation(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/entity/item/ItemEntity;",
+        at = @At("HEAD"),
+        cancellable = true
+    )
+    private void pxrp$captureDrop(ServerLevel level, ItemStack stack, Vec3 offset, CallbackInfoReturnable<ItemEntity> cir) {
+        if (DropCapture.offer((Entity) (Object) this, stack)) cir.setReturnValue(null);
     }
 }

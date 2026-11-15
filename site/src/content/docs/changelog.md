@@ -5,13 +5,25 @@ description: Release history for PxIgnis.
 
 ## Unreleased
 
+### Breaking
+
+- **Every slot number is 1-based now.** `player:getItem(slot)`, `player:setItem(slot, item)`, `player.selectedSlot`
+  and the `slot` argument of an `onInventoryTick` template callback used Minecraft's 0-based indices, while
+  `inv:getItem`, `inv:setItem`, `container:onClick` and `player.container_click` were already 1-based. Now the whole API
+  agrees: the player inventory is 1–9 hotbar, 10–36 main, 37–40 armor (feet to head), 41 offhand, and `selectedSlot`
+  is 1–9. Scripts that loop `for slot = 0, 40` or compare `selectedSlot` with a 0-based number must add 1
+  (`for slot = 1, 41`). Equipment stays name-based (`player.mainhand`, `head`, …). The conversion lives in one helper,
+  `Slots`, at the API boundary.
+
 ### Added
 
 - `mob.pathReaches` tells a complete path from a partial one (the closest reachable point). `entity.followRange` reads and
   writes the `follow_range` attribute, which also caps how many nodes the path finder may visit.
-- **`entity.drops`** (cancellable): a death's loot step. Cancel it to drop no items, equipment or XP; write `e.xp` to
-  change the XP. Lets a script turn drops off for its own mobs or dimension instead of the server-wide `mob_drops`
-  gamerule. See [Events](/reference/events).
+- **`entity.drops`** (cancellable): a death's loot step. `e.drops` is the editable list of Items vanilla would drop (loot
+  plus a mob's equipment): remove, replace or append entries and the final list is what spawns. Cancel it to drop no
+  items, equipment or XP; write `e.xp` to change the XP. Lets a script turn drops off or rewrite them for its own mobs
+  or dimension instead of the server-wide `mob_drops` gamerule. Captured by redirecting `Entity.spawnAtLocation` during
+  `dropAllDeathLoot`. See [Events](/reference/events).
 - `entity:swing(hand?)` plays the arm swing animation of a living entity or player (also shown to the player itself).
 - **Virtual display entities.** `world:display(kind, pos, props)` (`item`, `block`, `text`, `interaction`) creates a
   display that exists only in packets: nothing is saved to chunks, a script reload or shutdown removes it from every
@@ -24,6 +36,11 @@ description: Release history for PxIgnis.
 - **`player.container_click`** (cancellable) runs for every click in any open menu (chests, crafters, anvils, crafting
   grids, the player's own inventory) before vanilla applies it, so a script can keep items out of containers. See
   [Events](/reference/events).
+- **Icons in dialog buttons.** A `core:dialog` button label (and tooltip, and the dialog title) can be a text component
+  table instead of a string, so it can carry a sprite: `{ text = "", extra = { dialog.sprite("minecraft:item/diamond"),
+  " Buy" } }`. `dialog.sprite(sprite, atlas?)` builds the `{ type = "object", atlas, sprite }` component. The raw
+  `player:showDialog` converts component tables in the same fields through the shared text converter.
+  See [core:dialog](/libraries/dialog).
 
 ### Fixed
 

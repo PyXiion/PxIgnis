@@ -38,7 +38,7 @@ Creates a named item template and registers it for automatic event dispatch. Ret
 | `onPickup` | Player picks up the item | `fn(player, item, count, template)` | ✅ |
 | `onInteractEntity` | Right-click an entity with item | `fn(player, entity, hand, item, template)` | ✅ |
 | `onTick` | Each tick while held | `fn(player, item, hand, template)` — `hand` is `"main"\|"off"` | ❌ |
-| `onInventoryTick` | Each tick while in any inventory slot | `fn(player, item, slot, template)` | ❌ |
+| `onInventoryTick` | Each tick while in any inventory slot | `fn(player, item, slot, template)` — `slot` is 1-based, as `player:getItem` | ❌ |
 
 Returning `false` from a cancellable callback cancels the underlying event.
 

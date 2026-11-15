@@ -31,6 +31,7 @@ import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.SidebarManager
 import ru.pyxiion.ignis.lookup
 import ru.pyxiion.ignis.api.util.Cooldowns
+import ru.pyxiion.ignis.api.util.Slots
 import ru.pyxiion.ignis.api.util.Text
 import ru.pyxiion.ignis.api.util.ItemComponents
 import ru.pyxiion.ignis.api.util.metaTable
@@ -74,7 +75,7 @@ object PlayerWrap {
         prop("xpLevel") { LuaValue.valueOf(experienceLevel) }
         prop("xpProgress") { LuaValue.valueOf(experienceProgress.toDouble()) }
         prop("isOp") { LuaValue.valueOf(isAdmin()) }
-        prop("selectedSlot") { LuaValue.valueOf(inventory.selectedSlot) }
+        prop("selectedSlot") { LuaValue.valueOf(Slots.toLua(inventory.selectedSlot)) }
         prop("isFlying") { LuaValue.valueOf(abilities.flying) }
         prop(
             "sidebar",
@@ -242,8 +243,9 @@ object PlayerWrap {
             val itemVal = args.arg(3)
 
             val inv = e.inventory
-            if (slot < 0 || slot >= inv.containerSize) {
-                throw LuaError("setItem: слот $slot вне диапазона (0-${inv.containerSize - 1})")
+            val index = Slots.toIndex(slot, inv.containerSize)
+            if (index < 0) {
+                throw LuaError("setItem: слот $slot вне диапазона (1-${inv.containerSize})")
             }
 
             val stack = if (itemVal.isnil()) {
@@ -253,7 +255,7 @@ object PlayerWrap {
                     ?: throw LuaError("setItem: ожидается ItemStack от mc.createItem")
             }
 
-            inv.setItem(slot, stack)
+            inv.setItem(index, stack)
             e.containerMenu.broadcastChanges()
             LuaValue.NIL
         }
@@ -263,8 +265,9 @@ object PlayerWrap {
             val e = self.unwrap<ServerPlayer>()
             val slot = args.arg(2).checkint()
             val inv = e.inventory
-            if (slot < 0 || slot >= inv.containerSize) return@method LuaValue.NIL
-            val stack = inv.getItem(slot)
+            val index = Slots.toIndex(slot, inv.containerSize)
+            if (index < 0) return@method LuaValue.NIL
+            val stack = inv.getItem(index)
             if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
         }
 

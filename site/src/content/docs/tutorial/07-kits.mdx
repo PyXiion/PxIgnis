@@ -11,18 +11,18 @@ of their choice, and their own items wait in storage until the round is over.
 
 ## Putting items away
 
-A player's inventory is numbered: slots 0 to 35 are the main inventory and the hotbar, 36 to 39 the armor,
-40 the offhand. `item:serialise()` turns an item into a string with all its enchantments and names, and
+A player's inventory is numbered from 1: slots 1 to 36 are the main inventory and the hotbar, 37 to 40 the armor,
+41 the offhand. `item:serialise()` turns an item into a string with all its enchantments and names, and
 `mc.deserialise("item", text)` turns it back. Strings can be stored, so the items go into `player.data`:
 
 ```lua
--- Player inventory slots: 0-35 main, 36-39 armor, 40 offhand.
-local LAST_SLOT = 40
+-- Player inventory slots (1-based): 1-36 main and hotbar, 37-40 armor, 41 offhand.
+local LAST_SLOT = 41
 
 -- Saves the player's items in player.data and empties the inventory.
 local function stash(player)
     local saved = {}
-    for slot = 0, LAST_SLOT do
+    for slot = 1, LAST_SLOT do
         local item = player:getItem(slot)
         if item then
             saved[tostring(slot)] = item:serialise()
@@ -43,7 +43,7 @@ local function restore(player)
 end
 ```
 
-The slot numbers are stored as strings (`"0"`, `"38"`). Storage is JSON, and a table with gaps in its
+The slot numbers are stored as strings (`"1"`, `"38"`). Storage is JSON, and a table with gaps in its
 numbers comes back from JSON with string keys anyway; converting on both sides keeps it predictable.
 
 Why `player.data` and not a local table? If the server crashes in the middle of a round, a local table is

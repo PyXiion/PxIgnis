@@ -63,7 +63,8 @@ end)
 container:onClick(nil)  -- remove the handler
 ```
 
-PxIgnis uses **1-based** slot indexing in `inv:getItem`, `inv:setItem`, `container:onClick`
-callbacks, and `chestgui:button`. The exception is `chestgui:set(row, col, item, callback)`
-which uses **1-based** `(row, col)` for human-readable coordinates (rows 1–6, columns 1–9).
-`inv:getItem` / `inv:setItem` with a slot outside `1..size` raise an error.
+Every slot number PxIgnis shows or takes is **1-based**: `inv:getItem`, `inv:setItem`, `container:onClick`
+callbacks, `player.container_click`, `chestgui:button`, `player:getItem`, `player:setItem`, `player.selectedSlot`
+and the `slot` of `onInventoryTick`. `chestgui:set(row, col, item, callback)` takes 1-based `(row, col)` for
+human-readable coordinates (rows 1–6, columns 1–9). `inv:getItem` / `inv:setItem` with a slot outside `1..size`
+raise an error. Equipment is addressed by name (`player.mainhand`, `head`, `chest`, …), not by number.

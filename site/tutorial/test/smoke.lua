@@ -7,7 +7,7 @@ local admin = M.player("Admin", { perms = { ["arena.admin"] = true } })
 local alice = M.player("Alice")
 local bob = M.player("Bob")
 alice.pos = vec(100, 64, 100); bob.pos = vec(100, 64, 100)
-alice.inv = { [0] = { id = "minecraft:diamond" } }
+alice.inv = { [1] = { id = "minecraft:diamond" } }
 
 assert(loadfile(arg[2]))()
 

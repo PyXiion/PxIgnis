@@ -480,7 +480,7 @@ end
 
 function invseeHandler(ctx, target)
     local lines = {}
-    for slot = 0, 8 do
+    for slot = 1, 9 do
         local item = target:getItem(slot)
         if item then
             table.insert(lines, "§7[" .. slot .. "] §f" .. item.id .. " §7x" .. item.count)

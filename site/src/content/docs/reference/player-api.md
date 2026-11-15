@@ -25,7 +25,7 @@ Metatable name: `"player"`
 ### Movement
 
 - `player.isFlying` (`boolean`) — Read-only.
-- `player.selectedSlot` (`number`) — Hotbar slot 0–8. Read-only.
+- `player.selectedSlot` (`number`) — Selected hotbar slot, **1–9**. Read-only.
 
 ### Health & Stats
 
@@ -173,14 +173,14 @@ player:give("diamond", 16)
 
 Sets an item in a slot.
 
-- `slot` (`number`) — Slot index
+- `slot` (`number`) — **1-based** slot: 1–9 hotbar, 10–36 main inventory, 37–40 armor (feet to head), 41 offhand. A slot outside 1–41 is an error.
 - `item` ([`ItemStack`](/reference/itemstack-api) or `nil`) — Item or `nil` to clear
 
 ### `player:getItem(slot)`
 
 Gets the item in a slot.
 
-- `slot` (`number`) — Slot index
+- `slot` (`number`) — **1-based** slot, same layout as `setItem`. Returns `nil` for an empty or out-of-range slot.
 
 ### `player:setCooldown(group, ticks)`
 ### `player:getCooldown(group)`

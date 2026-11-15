@@ -18,6 +18,7 @@ import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.api.MetaTableRegistry
 import ru.pyxiion.ignis.api.manager.ContainerManager
 import ru.pyxiion.ignis.api.util.ItemStackCodec
+import ru.pyxiion.ignis.api.util.Slots
 import ru.pyxiion.ignis.api.util.metaTable
 import ru.pyxiion.ignis.unwrap
 
@@ -31,9 +32,9 @@ object InvWrap {
 
     /** Lua slot (1-based) to container index; an out-of-range slot is an error, not a silent no-op. */
     private fun slotIndex(inv: SimpleContainer, slot: Int, op: String): Int {
-        if (slot < 1 || slot > inv.containerSize)
-            throw LuaError("$op: слот $slot вне диапазона 1..${inv.containerSize}")
-        return slot - 1
+        val index = Slots.toIndex(slot, inv.containerSize)
+        if (index < 0) throw LuaError("$op: слот $slot вне диапазона 1..${inv.containerSize}")
+        return index
     }
 
     private val BUILT = metaTable<SimpleContainer> {

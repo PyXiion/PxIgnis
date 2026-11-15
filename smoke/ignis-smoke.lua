@@ -347,8 +347,17 @@ local function dialogPhase()
     ok("no escape, many buttons + inputs", { title = "t", canEscape = false, inputs = inputs, buttons = {
         dialog.button("a", noop), dialog.link("l", "https://example.com") } })
     ok("link only", { title = "t", canEscape = false, buttons = { dialog.link("l", "https://example.com") } })
+    local icon = dialog.sprite("minecraft:item/diamond")
+    ok("rich button labels: sprite + text, tooltip component, colors", { title = "t", columns = 2, buttons = {
+        dialog.button({ text = "", extra = { icon, " Buy" } }, noop, { tooltip = { text = "tip", color = "#ffaa00" } }),
+        dialog.command({ text = "", extra = { icon, " Run" } }, "say hi"),
+        dialog.link({ text = "Rules", color = "gold", extra = { dialog.sprite("minecraft:block/stone", "minecraft:blocks") } }, "https://example.com") } })
+    ok("rich title", { title = { text = "T", bold = true, extra = { icon } }, buttons = { dialog.button("b", noop) } })
     step("dialog: raw rejects bad type", function() assert(fails(mc.decodeDialog, { type = "minecraft:nonsense", title = "x" })) end)
-    step("dialog: shapes shown", function() assert(n == 11, n) end)
+    step("dialog: a sprite without an id is rejected by the codec", function()
+        assert(fails(dialog.show, fake, { title = "t", buttons = { dialog.button({ type = "object", atlas = "minecraft:items" }, noop) } }))
+    end)
+    step("dialog: shapes shown", function() assert(n == 13, n) end)
 end
 
 -- Виртуальные дисплеи: игроков на смоук-сервере нет, поэтому пакеты клиентам не уходят; проверяются ядро, валидация,

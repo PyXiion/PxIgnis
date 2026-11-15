@@ -95,6 +95,7 @@ function Event:cancel(reason) end
 ---@field source string        -- damage type of the killing blow
 ---@field attacker Entity|nil
 ---@field xp integer           -- XP that will drop; writable (0 = no XP). `e:cancel()` drops no items, equipment or XP
+---@field drops Item[]         -- stacks vanilla would drop (loot + mob equipment); remove, replace or append: the final list spawns. Not a player's inventory
 
 ---@class RegionEvent : Event
 ---@field region Region

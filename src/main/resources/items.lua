@@ -41,7 +41,7 @@ end
 
 function TemplateMethods:has(player)
     if not player then return false end
-    for i = 0, INVENTORY_SIZE - 1 do
+    for i = 1, INVENTORY_SIZE do
         local item = player:getItem(i)
         if item and self:matches(item) then
             return true
@@ -174,7 +174,7 @@ mc.on("tick", function()
             end
         end
         if _inventoryTickCount > 0 then
-            for i = 0, INVENTORY_SIZE - 1 do
+            for i = 1, INVENTORY_SIZE do
                 local item = p:getItem(i)
                 if item then
                     local tpl = items.find(item)

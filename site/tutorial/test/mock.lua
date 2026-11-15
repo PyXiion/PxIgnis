@@ -112,7 +112,7 @@ function M.player(name, opts)
     end
     function p:give(id, count)
         assert(type(id) == "string")
-        for slot = 0, 35 do
+        for slot = 1, 36 do
             if not self.inv[slot] then self.inv[slot] = { id = id, count = count or 1 }; return end
         end
     end
@@ -120,7 +120,7 @@ function M.player(name, opts)
         for _, it in pairs(self.inv) do if it.id == id then return it end end
     end
     function p:getItem(slot)
-        assert(slot >= 0 and slot <= 40)
+        assert(slot >= 1 and slot <= 41)
         return self.inv[slot] and M.item(self.inv[slot].id) or nil
     end
     function p:setItem(slot, item) assert(type(slot) == "number"); self.inv[slot] = item and { id = item.id } or nil end

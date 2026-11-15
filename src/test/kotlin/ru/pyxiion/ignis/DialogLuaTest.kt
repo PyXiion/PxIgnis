@@ -194,6 +194,44 @@ class DialogLuaTest {
     }
 
     @Test
+    fun `a button label can be a component with a sprite and still routes clicks`() {
+        run(
+        """
+        local p, hit = newPlayer(1), 0
+        local icon = dialog.sprite("planefall:item/escape_rune")
+        assert(icon.type == "object" and icon.atlas == "minecraft:items" and icon.sprite == "planefall:item/escape_rune")
+        assert(dialog.sprite("minecraft:block/stone", "minecraft:blocks").atlas == "minecraft:blocks")
+        local label = { text = "", extra = { icon, " Rune" } }
+        dialog.show(p, { title = "t", buttons = {
+            dialog.button(label, function() hit = hit + 1 end),
+            dialog.command({ icon, " cmd" }, "say hi"),
+            dialog.link(label, "https://x.y"),
+            dialog.copy("plain", "text"),
+        } })
+        local s = p.shown[1]
+        assert(s.actions[1].label == label, "the table goes to the vanilla spec as it is")
+        assert(s.actions[2].label[1] == icon and s.actions[4].label == "plain")
+        click(p, s, 1)
+        assert(hit == 1)
+        """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `labels that are neither text nor a component are refused`() {
+        run(
+        """
+        local p = newPlayer(1)
+        assert(not pcall(dialog.show, p, { title = "t", buttons = { dialog.button(5, function() end) } }))
+        assert(not pcall(dialog.show, p, { title = "t", buttons = { dialog.button(true, function() end) } }))
+        assert(not pcall(dialog.show, p, { title = "t", buttons = { dialog.button(dialog.item("minecraft:stone"), function() end) } }))
+        assert(not pcall(dialog.sprite, ""))
+        assert(not pcall(dialog.sprite, 7))
+        """.trimIndent()
+        )
+    }
+
+    @Test
     fun `bad specs raise errors`() {
         run(
         """

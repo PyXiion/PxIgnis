@@ -17,6 +17,11 @@
 -- One dialog per player is active at a time. Every button sends a one-shot `pxignis:d/<token>/<n>` custom click
 -- (`player.custom_click`); clicks with a stale or foreign token are dropped, and input values are checked against
 -- the spec (length, range and step, option ids) before a handler runs. The vanilla layer is `player:showDialog`.
+--
+-- A button label is a string or a text component table (the shape `mc.createItem` names and tellraw use), so a
+-- button can carry an icon:
+--   dialog.button({ text = "", extra = { dialog.sprite("minecraft:item/diamond"), " Buy" } }, fn)
+-- Sprites need a Minecraft 1.21.9+ client.
 -- ==========================================================================
 
 local dialog = {}
@@ -71,6 +76,16 @@ end
 
 function dialog.copy(label, text)
     return { _kind = "copy", label = label, text = text, opts = {} }
+end
+
+--- A sprite for a text component: `{ type = "object", atlas, sprite }`. Put it into a label's `extra`.
+--- `atlas` defaults to "minecraft:items" (item icons, e.g. "minecraft:item/diamond"); block textures live in
+--- "minecraft:blocks" ("minecraft:block/stone"), which is vanilla's own default for object components.
+---@param sprite string
+---@param atlas? string
+function dialog.sprite(sprite, atlas)
+    if type(sprite) ~= "string" or sprite == "" then error("dialog.sprite: a sprite id is expected", 2) end
+    return { type = "object", atlas = atlas or "minecraft:items", sprite = sprite }
 end
 
 -- ---------------------------------------------------------------------------
@@ -177,7 +192,8 @@ end
 
 local function buttonJson(b, token, n)
     need(type(b) == "table" and b._kind, "buttons are made with dialog.button/command/link/copy")
-    need(type(b.label) == "string", "a button needs a label")
+    need(type(b.label) == "string" or (type(b.label) == "table" and b.label._kind == nil),
+        "a button needs a label: a string or a text component table")
     local o = b.opts
     local action
     if b._kind == "button" then
@@ -220,7 +236,7 @@ end
 
 function dialog.show(player, spec)
     need(type(spec) == "table", "show(player, spec): spec must be a table")
-    need(type(spec.title) == "string", "a dialog needs a title")
+    need(type(spec.title) == "string" or type(spec.title) == "table", "a dialog needs a title: a string or a text component table")
     need(spec.onClose == nil or type(spec.onClose) == "function", "onClose must be a function")
 
     local token = randomToken()

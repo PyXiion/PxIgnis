@@ -1,6 +1,7 @@
 package ru.pyxiion.ignis.api
 
 import com.google.gson.JsonElement
+import java.util.IdentityHashMap
 import com.mojang.brigadier.exceptions.CommandSyntaxException
 import com.mojang.serialization.JsonOps
 import net.minecraft.core.Holder
@@ -15,11 +16,13 @@ import net.minecraft.resources.ResourceKey
 import net.minecraft.server.dialog.Dialog
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.item.ItemStack
+import net.minecraft.network.chat.ComponentSerialization
 import ru.pyxiion.luanova.vm2.LuaError
 import ru.pyxiion.luanova.vm2.LuaTable
 import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.luanova.vm2.Varargs
 import ru.pyxiion.ignis.api.util.ItemStackCodec
+import ru.pyxiion.ignis.api.util.Text
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.storage.LuaJson
 
@@ -48,11 +51,42 @@ object DialogApi {
         decode(registries, spec)
     }
 
+    /** Dialog fields that hold a text component. A string stays a string; a table goes through [Text]. */
+    private val COMPONENT_KEYS = setOf("title", "external_title", "label", "tooltip", "contents", "display")
+
     private fun decode(registries: HolderLookup.Provider, spec: LuaTable): Dialog {
         val ops = RegistryOps.create(JsonOps.INSTANCE, registries)
-        val json = LuaJson.toJson(spec, "dialog") { t -> itemJson(ops, t) }
+        val components = IdentityHashMap<LuaTable, JsonElement>()
+        collectComponents(spec, ops, components, IdentityHashMap())
+        val json = LuaJson.toJson(spec, "dialog") { t -> components[t] ?: itemJson(ops, t) }
         val result = Dialog.DIRECT_CODEC.parse(ops, json)
         return result.result().orElseThrow { LuaError("showDialog: ${ItemStackCodec.codecError(result)}") }
+    }
+
+    /**
+     * Every table under a [COMPONENT_KEYS] key is a text component in the shape `Text.fromLua` reads (the one item
+     * names and `tellraw` use: `text`, `color`, `extra`, `object` sprites, ...), so a label can carry an icon.
+     * [found] maps each such table to the JSON the dialog codec reads.
+     */
+    private fun collectComponents(
+        t: LuaTable,
+        ops: RegistryOps<JsonElement>,
+        found: IdentityHashMap<LuaTable, JsonElement>,
+        seen: IdentityHashMap<LuaTable, Unit>,
+    ) {
+        if (seen.put(t, Unit) != null) return
+        for (key in t.keys()) {
+            val child = t.rawget(key)
+            if (!child.istable() || (key.isstring() && key.tojstring() == "item")) continue
+            val table = child.checktable()
+            if (key.isstring() && key.tojstring() in COMPONENT_KEYS) {
+                val component = Text.fromLua(table, "dialog ${key.tojstring()}")
+                val result = ComponentSerialization.CODEC.encodeStart(ops, component)
+                found[table] = result.result().orElseThrow { LuaError("showDialog: ${ItemStackCodec.codecError(result)}") }
+            } else {
+                collectComponents(table, ops, found, seen)
+            }
+        }
     }
 
     private fun itemJson(ops: RegistryOps<JsonElement>, t: LuaTable): JsonElement? {
