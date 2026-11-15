@@ -40,11 +40,12 @@ p:remove()           -- removes displays and disconnects every binding
 | `world` | Default: the overworld. |
 | `theme` | Styles, see below. |
 | `reach` | Hover and click distance, default 8. |
+| `hover`, `press` | `"viewer"` (default) or `"shared"`, see [Input](#input). |
 | `range` | Per-player panels: distance within which a player gets a tree, default 24. |
 
 `tree` is a node, a list of nodes (layers, like `stack`), or `function(player)` returning a node: one tree per player
 within `range`, shown only to that player and removed when the player leaves. A plain panel is shown to everyone near
-it and has one hover and press state, shared by all viewers.
+it; `hover` and `press` decide whether hover and press looks are per viewer or shared.
 
 `p:get(id, player?)` returns the widget with that `id` (the `player` selects the tree of a per-player panel).
 `widget:set { text = "x", disabled = true }` sets plain props. `p:remove()` removes all displays and disconnects every
@@ -97,6 +98,10 @@ Scale and z lift animate on the client through `interp`.
 
 - Hover: each tick, for every viewer, the ray `eyePos` + `dir` is intersected with the panel plane and mapped to the
   widget under it. A block between the eye and the hit point cancels the hover.
+- `hover` / `press` on a plain panel: `"viewer"` draws the look as an overlay (a second set of displays in the `hover`
+  or `press` style) that only the player concerned sees, so players hovering or pressing different widgets do not
+  affect each other. `"shared"` restyles the widget itself, for everyone. Any widget takes `hover = ` and `press = ` to
+  override the panel's mode. A per-player panel restyles the widget itself, only its player sees it.
 - Click: a transparent interaction display covers the panel; `onClick` and `onAttack` (main hand) resolve the widget
   with the same ray. A click that misses every widget does nothing; disabled widgets ignore clicks.
 

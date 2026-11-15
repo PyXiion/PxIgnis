@@ -30,6 +30,7 @@ local DEFAULT_RANGE = 24
 local PRESS_TICKS = 4
 local HOVER_INTERP = 3
 local DEPTH = 0.003      -- distance between stacked layers of one widget
+local OVERLAY_LIFT = 0.01 -- overlays sit this far in front of the widget
 
 -- ── Geometry (pure) ────────────────────────────────────────────────────
 
@@ -431,6 +432,37 @@ function Node:render(interp)
     local style = ui.resolveStyle(self.ctx.theme, self.p.style or self.kind, stateOf(self))
     self.placed = { self.rect.x, self.rect.y, self.rect.w, self.rect.h }
     kind.render(self, inst.frame, style, interp or 0)
+    if self.overlays then
+        for which in pairs(self.overlays) do self:renderOverlay(which, interp) end
+    end
+end
+
+-- Per-viewer looks of a widget on a shared panel: an overlay is a second set of displays in the hover (`"hover"`) or
+-- press (`"press"`) style on top of the widget, with manual viewers, shown only to the players it concerns. It is a
+-- view of the node (`__index`) with its own displays; the kind's render function draws into it unchanged.
+function Node:renderOverlay(which, interp)
+    local style = ui.resolveStyle(self.ctx.theme, self.p.style or self.kind, which)
+    style.z = (style.z or 0) + OVERLAY_LIFT
+    KINDS[self.kind].render(self.overlays[which], self.ctx.inst.frame, style, interp or 0)
+end
+
+function Node:ensureOverlay(which)
+    self.overlays = self.overlays or {}
+    if self.overlays[which] then return self.overlays[which] end
+    local ctx = setmetatable({ viewers = "manual" }, { __index = self.ctx })
+    self.overlays[which] = setmetatable({ vis = false, handles = {}, ctx = ctx }, { __index = self })
+    self:renderOverlay(which, 0)
+    return self.overlays[which]
+end
+
+function Node:overlayShow(which, player)
+    for _, h in ipairs(self:ensureOverlay(which).handles) do h:show(player) end
+end
+
+function Node:overlayHide(which, player)
+    local o = self.overlays and self.overlays[which]
+    if not o then return end
+    for _, h in ipairs(o.handles) do h:hide(player) end
 end
 
 --- Sets props (plain values) and refreshes.
@@ -455,9 +487,20 @@ function Node:dispose()
         if h.h.valid then h:remove() end
     end
     self.handles = {}
+    for _, o in pairs(self.overlays or {}) do
+        for _, h in ipairs(o.handles) do
+            if h.h.valid then h:remove() end
+        end
+    end
+    self.overlays = nil
 end
 
 local function truthy(v) return v ~= nil and v ~= false end
+
+-- "viewer" (an overlay only the player concerned sees) or "shared" (the widget itself changes, for everyone).
+local function modeOf(node, what)
+    return node.p[what] or node.ctx.inst.panel[what]
+end
 
 --- Calls `apply(value)` now and on every change of `source` (plain value, Ref or function); returns the first value.
 local function bindSource(node, source, apply)
@@ -626,14 +669,35 @@ function Instance:activate(node, player)
         if node.handlers.change then node.handlers.change(new, player) end
         return
     end
-    node.pressed = true
-    node:render(HOVER_INTERP)
-    mc.schedule(PRESS_TICKS, function()
-        if node.removed then return end
-        node.pressed = false
+    if self.viewers or modeOf(node, "press") == "shared" then
+        node.pressed = true
         node:render(HOVER_INTERP)
-    end)
+        mc.schedule(PRESS_TICKS, function()
+            if node.removed then return end
+            node.pressed = false
+            node:render(HOVER_INTERP)
+        end)
+    else
+        self:pressFor(node, player)
+    end
     if node.handlers.click then node.handlers.click(player) end
+end
+
+-- Press look for one player of a shared panel; their hover overlay on that widget gives way meanwhile.
+function Instance:pressFor(node, player)
+    local key = player.uuid
+    if self.shown[key] == node then
+        node:overlayHide("hover", player)
+        self.shown[key] = nil
+    end
+    local token = { node = node }
+    self.pressing[key] = token
+    node:overlayShow("press", player)
+    mc.schedule(PRESS_TICKS, function()
+        if self.pressing[key] == token then self.pressing[key] = nil end
+        if node.removed or self.removed then return end
+        node:overlayHide("press", player)
+    end)
 end
 
 --- The interactive node a player's view ray points at (no occlusion check).
@@ -668,7 +732,48 @@ function Instance:hovered(player)
     return node
 end
 
+-- Shared panel: a widget in "viewer" hover mode shows its hover overlay to the players pointing at it; one in "shared"
+-- mode takes the hover look itself while any player points at it.
+function Instance:tickShared()
+    local shown, pressing, seen, sharedHover = self.shown, self.pressing, {}, {}
+    for _, player in ipairs(mc.players) do
+        local key = player.uuid
+        seen[key] = true
+        local want = self:hovered(player)
+        if want and want.p.disabled then want = nil end
+        if want and modeOf(want, "hover") == "shared" then
+            sharedHover[want] = true
+            want = nil
+        end
+        if want and pressing[key] and pressing[key].node == want then want = nil end
+        local cur = shown[key]
+        if cur and cur.removed then cur = nil end
+        if cur ~= want then
+            if cur then cur:overlayHide("hover", player) end
+            if want then want:overlayShow("hover", player) end
+            shown[key] = want
+        end
+    end
+    -- players that left, died or changed world lose their overlay viewers with the display manager
+    for key in pairs(shown) do
+        if not seen[key] then shown[key] = nil end
+    end
+    for key in pairs(pressing) do
+        if not seen[key] then pressing[key] = nil end
+    end
+    walk(self.root, function(node)
+        if node.interactive then
+            local now = sharedHover[node] == true
+            if (node.hovered or false) ~= now then
+                node.hovered = now
+                node:render(HOVER_INTERP)
+            end
+        end
+    end)
+end
+
 function Instance:tick()
+    if not self.viewers then return self:tickShared() end
     local hovered = {}
     for _, player in ipairs(self.viewers or mc.players) do
         local node = self:hovered(player)
@@ -697,7 +802,7 @@ Panel.__index = Panel
 
 local function newInstance(panel, tree, player)
     local viewers = player and { player } or nil
-    local inst = setmetatable({ panel = panel, viewers = viewers, player = player }, Instance)
+    local inst = setmetatable({ panel = panel, viewers = viewers, player = player, shown = {}, pressing = {} }, Instance)
     local ctx = {
         inst = inst, world = panel.world, at = panel.at, theme = panel.theme,
         viewers = viewers or "auto",
@@ -774,8 +879,15 @@ function ui.panel(opts)
     if not FACING[opts.facing or "south"] then
         error("ui3d.panel: unknown facing '" .. tostring(opts.facing) .. "' (north, south, east, west)", 2)
     end
+    for _, what in ipairs { "hover", "press" } do
+        local m = opts[what]
+        if m ~= nil and m ~= "viewer" and m ~= "shared" then
+            error("ui3d.panel: " .. what .. " must be \"viewer\" or \"shared\", got " .. tostring(m), 2)
+        end
+    end
     return function(tree)
         local panel = setmetatable({
+            hover = opts.hover or "viewer", press = opts.press or "viewer",
             at = { x = opts.at.x, y = opts.at.y, z = opts.at.z },
             facing = opts.facing or "south", width = opts.width, height = opts.height,
             world = opts.world or mc.world("minecraft.overworld"),

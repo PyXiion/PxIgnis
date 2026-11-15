@@ -23,6 +23,8 @@
 ---@field h? Ui3dProp<number>
 ---@field grow? Ui3dProp<number|boolean>
 ---@field style? string
+---@field hover? "viewer"|"shared"   -- interactive widgets: overrides the panel's mode
+---@field press? "viewer"|"shared"
 
 ---@class Ui3dContainerProps : Ui3dCommon
 ---@field gap? Ui3dProp<number>
@@ -66,6 +68,8 @@
 ---@field world? World             -- default: the overworld
 ---@field theme? table<string, Ui3dStyle>
 ---@field reach? number            -- hover/click distance (default 8)
+---@field hover? "viewer"|"shared" -- hover look: an overlay only the hovering player sees (default), or the widget itself
+---@field press? "viewer"|"shared" -- same for the press look
 ---@field range? number            -- per-player panels: players within this distance get a tree (default 24)
 
 ---@class Ui3dWidget

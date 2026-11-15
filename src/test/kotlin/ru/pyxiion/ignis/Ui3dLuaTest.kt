@@ -42,8 +42,8 @@ class Ui3dLuaTest {
             function Core:moveTo(pos) self.pos = pos end
             function Core:attach() end
             function Core:detach() end
-            function Core:show() end
-            function Core:hide() end
+            function Core:show(p) self.shownTo[p.uuid] = true end
+            function Core:hide(p) self.shownTo[p.uuid] = nil end
             function Core:remove() self.valid = false end
             function Core:onClick(fn) self.click = fn end
             function Core:onAttack(fn) self.attack = fn end
@@ -53,7 +53,7 @@ class Ui3dLuaTest {
             world = {
                 name = "overworld",
                 display = function(_, kind, pos, props)
-                    local c = setmetatable({ kind = kind, pos = pos, props = {}, sets = 0, valid = true }, Core)
+                    local c = setmetatable({ kind = kind, pos = pos, props = {}, sets = 0, valid = true, shownTo = {} }, Core)
                     for k, v in pairs(props or {}) do c.props[k] = v end
                     cores[#cores + 1] = c
                     return c
@@ -68,10 +68,10 @@ class Ui3dLuaTest {
             function liveCores() local c = 0; for _, k in ipairs(cores) do if k.valid then c = c + 1 end end; return c end
             function withBackground(argb)
                 local c = 0
-                for _, k in ipairs(cores) do if k.valid and k.kind == "text" and k.props.background == argb then c = c + 1 end end
+                for _, k in ipairs(cores) do if k.valid and k.kind == "text" and k.props.background == argb and (k.props.viewers ~= "manual" or next(k.shownTo)) then c = c + 1 end end
                 return c
             end
-            function shield() for _, k in ipairs(cores) do if k.kind == "interaction" then return k end end end
+            function shield() for i = #cores, 1, -1 do local k = cores[i]; if k.kind == "interaction" and k.valid then return k end end end
             function player(x, y, z, dx, dy, dz)
                 return { uuid = "p" .. x, eyePos = { x = x, y = y, z = z }, dir = { x = dx, y = dy, z = dz }, pos = { x = x, y = y - 1.6, z = z } }
             end
@@ -239,6 +239,7 @@ class Ui3dLuaTest {
             tick(1)
             eq(withBackground(0xFF3A3A3A), 1, "looked away")
             viewer.dir = { x = 0, y = 0, z = 1 }
+            tick(1)
 
             local s = shield()
             near(s.props.hitbox.w, 3); assert(s.props.hitbox.h > 0.5)
@@ -246,7 +247,7 @@ class Ui3dLuaTest {
             eq(clicks, 0, "off hand ignored")
             s.click(viewer, "main")
             eq(clicks, 1); eq(last, viewer)
-            eq(withBackground(0xFF262626), 1, "pressed")
+            eq(withBackground(0xFF262626), 1, "pressed: only the press overlay is visible")
             tick(4)
             eq(withBackground(0xFF262626), 0, "press released")
             s.attack(viewer)
@@ -383,6 +384,167 @@ class Ui3dLuaTest {
             tick(1)
             assert(liveCores() < live, "tree dropped on world change")
             q:remove()
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `viewers of a shared panel hover different widgets through their own overlays`() {
+        run(
+            """
+            local p = ui.panel { at = { x = 0, y = 64, z = 0 }, width = 3, world = world } {
+                ui.col { pad = 0.1,
+                    ui.row { gap = 0.1,
+                        ui.button { id = "a", "A", grow = true },
+                        ui.button { id = "b", "B", grow = true },
+                    },
+                },
+            }
+            local v1, v2 = player(-0.8, 64, 3, 0, 0, -1), player(0.8, 64, 3, 0, 0, -1)
+            mc.players[1], mc.players[2] = v1, v2
+            local function manual(fn)
+                local n = 0
+                for _, k in ipairs(cores) do
+                    if k.valid and k.props.viewers == "manual" and fn(k.shownTo) then n = n + 1 end
+                end
+                return n
+            end
+            eq(manual(function() return true end), 0, "overlays are created on demand")
+            eq(withBackground(0xFF3A3A3A), 2, "both buttons idle")
+            tick(1)
+            -- each overlay is a quad plus a label; v1 sees A's, v2 sees B's, nobody sees both
+            eq(manual(function(t) return t["p-0.8"] end), 2)
+            eq(manual(function(t) return t["p0.8"] end), 2)
+            eq(manual(function(t) return t["p-0.8"] and t["p0.8"] end), 0, "different widgets")
+            eq(withBackground(0xFF3A3A3A), 2, "base buttons stay idle")
+            -- v1 moves to B: both see the same overlay, A's overlay is hidden
+            v1.eyePos = { x = 0.8, y = 64, z = 3 }
+            tick(1)
+            eq(manual(function(t) return t["p-0.8"] and t["p0.8"] end), 2, "both on B")
+            eq(manual(function(t) return next(t) end), 2, "A's overlay hidden")
+            -- a block in front of v2 hides only v2's hover
+            rayResult = { hit = { x = 0.8, y = 64, z = 2 } }
+            tick(1)
+            eq(manual(function(t) return next(t) end), 0, "all occluded")
+            rayResult = nil
+            tick(1)
+            -- v2 leaves
+            mc.players[2] = nil
+            tick(1)
+            eq(manual(function(t) return t["p-0.8"] end), 2, "v1 still hovers B")
+            p:remove()
+            eq(liveCores(), 0, "overlays removed with the panel")
+            """.trimIndent()
+        )
+    }
+
+    private val twoButtons = """
+        local function build(opts, a, b)
+            opts.at, opts.width, opts.world = { x = 0, y = 64, z = 0 }, 3, world
+            return ui.panel(opts) {
+                ui.col { pad = 0.1,
+                    ui.row { gap = 0.1,
+                        ui.button(a), ui.button(b),
+                    },
+                },
+            }
+        end
+        local v1, v2 = player(-0.8, 64, 3, 0, 0, -1), player(0.8, 64, 3, 0, 0, -1)
+        mc.players[1], mc.players[2] = v1, v2
+        -- manual-viewer displays shown to `uuid` (an overlay is a quad plus a label)
+        local function overlaysOf(uuid)
+            local n = 0
+            for _, k in ipairs(cores) do
+                if k.valid and k.props.viewers == "manual" and k.shownTo[uuid] then n = n + 1 end
+            end
+            return n
+        end
+        local function overlays()
+            local n = 0
+            for _, k in ipairs(cores) do if k.props.viewers == "manual" then n = n + 1 end end
+            return n
+        end
+    """.trimIndent() + "\n"
+
+    @Test
+    fun `hover mode shared restyles the widget for everyone, viewer mode uses overlays, widgets override the panel`() {
+        run(
+            twoButtons + """
+            -- shared: both buttons take the hover look, no overlay exists
+            local p = build({ hover = "shared" }, { "A", grow = true }, { "B", grow = true })
+            tick(1)
+            eq(withBackground(0xFF565656), 2, "both hovered on the widgets themselves")
+            eq(overlays(), 0)
+            p:remove()
+
+            -- viewer (the default): the widgets stay idle, each player sees their own overlay
+            p = build({}, { "A", grow = true }, { "B", grow = true })
+            tick(1)
+            eq(withBackground(0xFF3A3A3A), 2, "widgets idle")
+            eq(overlaysOf("p-0.8"), 2); eq(overlaysOf("p0.8"), 2)
+            p:remove()
+
+            -- per-widget override: B is shared inside a viewer panel, A is viewer inside a shared panel
+            p = build({}, { "A", grow = true }, { "B", grow = true, hover = "shared" })
+            tick(1)
+            eq(overlaysOf("p-0.8"), 2, "A uses an overlay"); eq(overlaysOf("p0.8"), 0, "B does not")
+            eq(withBackground(0xFF565656), 2, "overlay of A plus B itself")
+            p:remove()
+            p = build({ hover = "shared" }, { "A", grow = true, hover = "viewer" }, { "B", grow = true })
+            tick(1)
+            eq(overlaysOf("p-0.8"), 2); eq(overlaysOf("p0.8"), 0)
+            p:remove()
+            local ok = pcall(ui.panel, { at = { x = 0, y = 0, z = 0 }, hover = "both" })
+            assert(not ok, "bad mode rejected")
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `press mode viewer shows the press look only to the clicker, shared presses the widget`() {
+        run(
+            twoButtons + """
+            local clicks = 0
+            local function count() clicks = clicks + 1 end
+            -- viewer: v1 presses A, v2 does not see it
+            local p = build({}, { "A", grow = true, onClick = count }, { "B", grow = true, onClick = count })
+            tick(1)
+            shield().click(v1, "main")
+            eq(clicks, 1)
+            eq(withBackground(0xFF262626), 1, "one press overlay")
+            local pressOverlayShown = 0
+            for _, k in ipairs(cores) do
+                if k.valid and k.props.background == 0xFF262626 and k.shownTo["p-0.8"] and not k.shownTo["p0.8"] then
+                    pressOverlayShown = pressOverlayShown + 1
+                end
+            end
+            eq(pressOverlayShown, 1, "only the clicker sees it")
+            tick(4)
+            eq(withBackground(0xFF262626), 0, "released")
+            p:remove()
+
+            -- shared: the widget itself is pressed
+            p = build({ press = "shared" }, { "A", grow = true, onClick = count }, { "B", grow = true, onClick = count })
+            local before = overlays()
+            shield().click(v1, "main")
+            eq(withBackground(0xFF262626), 1, "button pressed for everyone")
+            eq(overlays(), before, "no press overlay")
+            tick(4)
+            eq(withBackground(0xFF262626), 0)
+            p:remove()
+
+            -- per-widget override
+            p = build({}, { "A", grow = true, onClick = count, press = "shared" }, { "B", grow = true, onClick = count })
+            before = overlays()
+            shield().click(v1, "main")
+            eq(withBackground(0xFF262626), 1, "A presses itself inside a viewer panel")
+            eq(overlays(), before)
+            tick(4)
+            shield().click(v2, "main")
+            eq(withBackground(0xFF262626), 1, "B uses an overlay")
+            assert(overlays() > before)
+            p:remove()
+            eq(liveCores(), 0, "everything removed")
             """.trimIndent()
         )
     }
