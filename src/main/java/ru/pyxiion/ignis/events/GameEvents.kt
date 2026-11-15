@@ -20,6 +20,7 @@ import ru.pyxiion.ignis.EventResult
 import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.DialogApi
 import ru.pyxiion.ignis.api.Vector
+import ru.pyxiion.ignis.api.util.Slots
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
@@ -148,7 +149,7 @@ object GameEvents {
             val type = action.name
             val swap = type == "SWAP" && (button in 0..8 || button == 40)
             it["player"] = PlayerWrap.wrap(player)
-            it["slot"] = if (inWindow) LuaValue.valueOf(slot + 1) else LuaValue.NIL
+            it["slot"] = if (inWindow) LuaValue.valueOf(Slots.toLua(slot)) else LuaValue.NIL
             it["clickType"] = LuaValue.valueOf(type.lowercase())
             it["slotItem"] = copied(clicked?.item)
             it["cursorItem"] = copied(menu.carried)

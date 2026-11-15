@@ -93,13 +93,13 @@ end
 
 -- ── Inventory ──────────────────────────────────────────────────────────────
 
--- Player inventory slots: 0-35 main, 36-39 armor, 40 offhand.
-local LAST_SLOT = 40
+-- Player inventory slots (1-based): 1-36 main and hotbar, 37-40 armor, 41 offhand.
+local LAST_SLOT = 41
 
 -- Saves the player's items in player.data and empties the inventory.
 local function stash(player)
     local saved = {}
-    for slot = 0, LAST_SLOT do
+    for slot = 1, LAST_SLOT do
         local item = player:getItem(slot)
         if item then
             saved[tostring(slot)] = item:serialise()

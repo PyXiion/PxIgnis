@@ -5,6 +5,16 @@ description: Release history for PxIgnis.
 
 ## Unreleased
 
+### Breaking
+
+- **Every slot number is 1-based now.** `player:getItem(slot)`, `player:setItem(slot, item)`, `player.selectedSlot`
+  and the `slot` argument of an `onInventoryTick` template callback used Minecraft's 0-based indices, while
+  `inv:getItem`, `inv:setItem`, `container:onClick` and `player.container_click` were already 1-based. Now the whole API
+  agrees: the player inventory is 1–9 hotbar, 10–36 main, 37–40 armor (feet to head), 41 offhand, and `selectedSlot`
+  is 1–9. Scripts that loop `for slot = 0, 40` or compare `selectedSlot` with a 0-based number must add 1
+  (`for slot = 1, 41`). Equipment stays name-based (`player.mainhand`, `head`, …). The conversion lives in one helper,
+  `Slots`, at the API boundary.
+
 ### Added
 
 - `mob.pathReaches` tells a complete path from a partial one (the closest reachable point). `entity.followRange` reads and

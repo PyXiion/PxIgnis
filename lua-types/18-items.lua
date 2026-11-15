@@ -16,7 +16,7 @@
 ---@field onPickup? fun(player: Player, item: Item, count: integer, template: ItemTemplate): (boolean|nil)
 ---@field onInteractEntity? fun(player: Player, entity: Entity, hand: string, item: Item, template: ItemTemplate): (boolean|nil)
 ---@field onTick? fun(player: Player, item: Item, hand: "main"|"off", template: ItemTemplate): nil
----@field onInventoryTick? fun(player: Player, item: Item, slot: integer, template: ItemTemplate): nil
+---@field onInventoryTick? fun(player: Player, item: Item, slot: integer, template: ItemTemplate): nil  -- slot is 1-based, as player:getItem
 local ItemTemplate = {}
 
 ---Creates an item stack with this template's properties.

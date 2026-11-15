@@ -27,6 +27,7 @@ Player.xpProgress = nil
 ---@type boolean
 Player.isOp = nil
 
+---Selected hotbar slot, 1-based (1..9). Read-only.
 ---@type integer
 Player.selectedSlot = nil
 
@@ -117,11 +118,13 @@ function Player:getCooldown(group) end
 ---@param group string
 function Player:clearCooldown(group) end
 
----Sets an inventory slot directly. Slot index 0-based; nil to clear.
+---Sets a player inventory slot, 1-based: 1-9 hotbar, 10-36 main inventory, 37-40 armor (feet to head), 41 offhand.
+---A slot outside 1..41 is an error. nil clears the slot.
 ---@param slot integer
 ---@param item? Item
 function Player:setItem(slot, item) end
 
+---Gets a player inventory slot (1-based, same layout as `setItem`); nil if empty or out of range.
 ---@param slot integer
 ---@return Item|nil
 function Player:getItem(slot) end

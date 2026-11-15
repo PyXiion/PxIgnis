@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.network.chat.Component
 import ru.pyxiion.luanova.vm2.LuaValue
 import ru.pyxiion.ignis.PxIgnis
+import ru.pyxiion.ignis.api.util.Slots
 import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
@@ -111,7 +112,7 @@ class ContainerManager {
         val inWindow = slot >= 0 && slot < sh.slots.size
         val inGui = slot >= 0 && slot < wrapper.inventory.containerSize
 
-        val luaSlot = if (inWindow) LuaValue.valueOf(slot + 1) else LuaValue.NIL
+        val luaSlot = if (inWindow) LuaValue.valueOf(Slots.toLua(slot)) else LuaValue.NIL
         val slotStack = if (inWindow) sh.getSlot(slot).item else ItemStack.EMPTY
         val luaItem = if (slotStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(slotStack.copy())
         val cursorStack = sh.carried
