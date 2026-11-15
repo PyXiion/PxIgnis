@@ -36,13 +36,27 @@ class AsyncLib(
     // The Lua state is rebuilt on every script reload and does not exist yet when LuaMcApi is constructed.
     private val luaState: LuaState get() = stateProvider()
 
+    /** Bumped by [invalidate]; work tagged with an older value belongs to a discarded script state. */
     @Volatile
-    private var generation = 0
+    var generation = 0
+        private set
 
     private val queue = ConcurrentLinkedQueue<Runnable>()
 
     /** Queues [work] for the server thread. Safe from any thread. */
     val dispatch: (Runnable) -> Unit = { queue.add(it) }
+
+    /**
+     * Resume handler for a script state's main thread. Queued, never inline: resolving a promise must not run its
+     * waiters inside `resolve`. Tagged with the generation current when it is created (before the state is
+     * built), so a resume that outlives a script reload is dropped instead of running the old state's code.
+     */
+    fun newResumeHandler(): LuaThread.ResumeHandler {
+        val gen = generation
+        return LuaThread.ResumeHandler { thread, args ->
+            dispatch { if (gen == generation) thread.resumeOrLog(args, "async callback") }
+        }
+    }
 
     /**
      * Runs the queued work on the server thread, in rounds: a round runs what was queued before it began, so work

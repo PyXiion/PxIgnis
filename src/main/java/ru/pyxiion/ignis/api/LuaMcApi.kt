@@ -272,10 +272,7 @@ class LuaMcApi(
         MetaTableRegistry.init()
 
         val state = stateProvider()
-        // Queued, never inline: resolving a promise must not run its waiters inside `resolve`.
-        state.getMainThread().resumeHandler = LuaThread.ResumeHandler { thread: LuaThread, args: Varargs ->
-            asyncLib.dispatch { thread.resumeOrLog(args, "async callback") }
-        }
+        state.getMainThread().resumeHandler = asyncLib.newResumeHandler()
 
         val mcMeta = LuaTable()
         mcMeta.rawset("__index", luaFunction { _, key ->
