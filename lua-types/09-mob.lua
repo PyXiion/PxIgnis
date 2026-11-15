@@ -31,6 +31,10 @@ Mob.pathRemaining = nil
 ---@type boolean
 Mob.pathFound = nil
 
+---Whether the active path ends at the target (`true`), or only at the closest reachable point (`false`). `nil` when no path is active.
+---@type boolean|nil
+Mob.pathReaches = nil
+
 ---@param id string|fun(...)  -- behaviour id or function; nil to clear
 function Mob:setAI(id) end
 

@@ -108,7 +108,7 @@ Entity.maxHealth = nil
 ---Attribute getters/setters (LivingEntity only, `nil` on others):
 ---  speed, armor, armorToughness, attackDamage, attackSpeed,
 ---  knockbackResistance, luck, stepHeight, blockBreakSpeed,
----  gravity, scale, safeFallDistance, flyingSpeed
+---  gravity, scale, safeFallDistance, flyingSpeed, followRange
 ---@type number|nil
 Entity.speed = nil
 ---@type number|nil
@@ -135,6 +135,9 @@ Entity.scale = nil
 Entity.safeFallDistance = nil
 ---@type number|nil
 Entity.flyingSpeed = nil
+---Mob path search range in blocks (vanilla `follow_range`); the path finder also visits up to 16x this many nodes.
+---@type number|nil
+Entity.followRange = nil
 
 ---Equipment slot accessors (LivingEntity only):
 ---  mainhand, offhand, head, chest, legs, feet

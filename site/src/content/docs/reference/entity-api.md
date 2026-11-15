@@ -240,6 +240,13 @@ Safe fall distance.
 
 Flying speed.
 
+### `entity.followRange`
+
+**type:** `number`
+
+Mob path search range in blocks (`follow_range`). The vanilla path finder visits at most 16 times this many nodes, so a larger
+value lets a mob find a long way around a wide obstacle.
+
 ## Tags
 
 ### `entity.tags`

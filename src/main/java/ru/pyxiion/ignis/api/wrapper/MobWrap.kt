@@ -62,6 +62,10 @@ object MobWrap {
             } else LuaValue.valueOf(0.0)
         }
         prop("pathFound") { LuaValue.valueOf(!navigation.isDone) }
+        prop("pathReaches") {
+            val path = navigation.path
+            if (navigation.isDone || path == null) LuaValue.NIL else LuaValue.valueOf(path.canReach())
+        }
 
         method("setAI") { args ->
             val self = args.arg(1).checktable()

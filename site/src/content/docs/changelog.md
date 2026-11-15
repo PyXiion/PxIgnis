@@ -7,6 +7,8 @@ description: Release history for PxIgnis.
 
 ### Added
 
+- `mob.pathReaches` tells a complete path from a partial one (the closest reachable point). `entity.followRange` reads and
+  writes the `follow_range` attribute, which also caps how many nodes the path finder may visit.
 - **`entity.drops`** (cancellable): a death's loot step. Cancel it to drop no items, equipment or XP; write `e.xp` to
   change the XP. Lets a script turn drops off for its own mobs or dimension instead of the server-wide `mob_drops`
   gamerule. See [Events](/reference/events).

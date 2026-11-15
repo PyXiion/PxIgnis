@@ -50,6 +50,7 @@ object EntityWrap {
         "scale" to Attributes.SCALE,
         "safeFallDistance" to Attributes.SAFE_FALL_DISTANCE,
         "flyingSpeed" to Attributes.FLYING_SPEED,
+        "followRange" to Attributes.FOLLOW_RANGE,
     )
 
     private val equipmentSlots = mapOf(

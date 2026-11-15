@@ -50,6 +50,7 @@ behaviour id and does not stop the AI.
 | `mob.age` | number | Mob age in ticks. Read-only. |
 | `mob.pathRemaining` | number | Path completion progress (0–1) |
 | `mob.pathFound` | boolean | Whether a valid path was found |
+| `mob.pathReaches` | boolean or nil | `true` if the active path ends at the target, `false` if it only reaches the closest point (the target is walled off, or the search budget ran out); `nil` when no path is active |
 | `mob.aiActive` | boolean | Whether a behaviour is currently running |
 | `mob.noAi` | boolean | Vanilla AI off: the mob stands still unless you move it. Read/write. Independent of the Lua `setAI` behaviours |
 
