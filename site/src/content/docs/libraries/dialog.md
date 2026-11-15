@@ -101,10 +101,9 @@ dialog.button({ text = "", extra = { dialog.sprite("minecraft:item/diamond"), " 
 dialog.command({ text = "", extra = { dialog.sprite("mypack:item/ruby"), " Ruby" } }, "give @s minecraft:emerald")
 ```
 
-Sprites need a 1.21.9+ client. The sprite must exist in the atlas (a resource pack texture under `textures/item` is
-`mypack:item/ruby` in `minecraft:items`); a missing one shows the "missing texture" square. A malformed component is an
-error from `dialog.show`. Vanilla has no separate icon field on a button; an item can be shown only in the dialog
-body (`dialog.item`).
+A sprite must exist in the atlas (a resource pack texture under `textures/item` is `mypack:item/ruby` in
+`minecraft:items`); a missing one shows the "missing texture" square. A malformed component is an error from
+`dialog.show`.
 
 ### Checked input
 

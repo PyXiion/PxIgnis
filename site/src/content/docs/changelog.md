@@ -38,8 +38,8 @@ description: Release history for PxIgnis.
   [Events](/reference/events).
 - **Icons in dialog buttons.** A `core:dialog` button label (and tooltip, and the dialog title) can be a text component
   table instead of a string, so it can carry a sprite: `{ text = "", extra = { dialog.sprite("minecraft:item/diamond"),
-  " Buy" } }`. `dialog.sprite(sprite, atlas?)` builds the `{ type = "object", atlas, sprite }` component (1.21.9+
-  client). The raw `player:showDialog` converts component tables in the same fields through the shared text converter.
+  " Buy" } }`. `dialog.sprite(sprite, atlas?)` builds the `{ type = "object", atlas, sprite }` component. The raw
+  `player:showDialog` converts component tables in the same fields through the shared text converter.
   See [core:dialog](/libraries/dialog).
 
 ### Fixed
