@@ -66,6 +66,15 @@ config and internals are allowed and expected whenever they make the design simp
 - Script errors/warnings go through `runtime/ScriptErrors` (log + chat to `px.ignis.prompt_errors`, rate-limited),
   not `logger` directly.
 
+## Writing docs (mandatory)
+
+Docs describe the current state only. History belongs in the changelog and commit messages.
+- No change narration: never "X instead of Y", "we have X, not Y", "no longer does Y", "now does X", "was removed",
+  "previously", "new". Write what the thing is and does.
+- No caveats below the supported minimum (1.21.11): no "needs a 1.21.9+ client" and similar.
+- No restating vanilla facts or obvious consequences; keep only what a script author needs to use the API.
+- When you change or delete behaviour, rewrite the affected doc text in place; don't append a note about the change.
+
 ## Releases
 
 Bump `mod_version` in `gradle.properties` and the badge in `README.md`, add the changelog entry, tag `v<version>`.
