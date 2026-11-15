@@ -1463,11 +1463,14 @@ public class LuaTable extends LuaValue implements Metatable {
         }
 
         public Slot remove(StrongSlot target) {
+            // Цель удаления лежит дальше по цепочке: пробрасываем remove и когда слабый ключ этой записи уже собран GC
+            // (раньше тут возвращали next как есть — цель не удалялась, а hashEntries уменьшался: «живая» запись пряталась от get).
+            Slot rest = (next != null) ? next.remove(target) : null;
             if (key() != null) {
-                next = next.remove(target);
+                next = rest;
                 return this;
             } else {
-                return next;
+                return rest;
             }
         }
 

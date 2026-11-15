@@ -317,4 +317,27 @@ public class TableHashTest extends TestCase {
 		}
 		assertEquals( 5, numEntries );
 	}
+
+	/**
+	 * Регрессия: DeadSlot с собранным GC слабым ключом (длинные строки) возвращал next без remove(target) —
+	 * цель не удалялась, а hashEntries уменьшался; «живая» запись пряталась от get (реестр mobs в Planefall терял врагов).
+	 * Детерминированно: проверка каждой записи после каждой операции на случайной серии set/delete длинными ключами.
+	 */
+	public void testRemoveBehindCollectedDeadSlot() {
+		java.util.Random r = new java.util.Random(7);
+		for (int trial = 0; trial < 200; trial++) {
+			LuaTable t = new LuaTable();
+			java.util.HashSet<Integer> live = new java.util.HashSet<Integer>();
+			for (int round = 0; round < 3000; round++) {
+				int k = r.nextInt(40);
+				LuaValue key = LuaString.valueOf("key-long-enough-to-be-a-large-key-" + k);
+				if (r.nextInt(10) < 5) { t.rawset(key, LuaInteger.valueOf(k)); live.add(k); }
+				else { t.rawset(key, LuaValue.NIL); live.remove(k); }
+				for (int q = 0; q < 40; q++) {
+					boolean has = !t.rawget(LuaString.valueOf("key-long-enough-to-be-a-large-key-" + q)).isnil();
+					assertEquals("trial " + trial + " round " + round + " key " + q, live.contains(q), has);
+				}
+			}
+		}
+	}
 }
