@@ -157,7 +157,7 @@ class DisplayHandle internal constructor(
         detachInternal(notify = false)
         host = target
         hostOffset = offset?.let { Vector3f(it.x.toFloat(), it.y.toFloat(), it.z.toFloat()) }
-        pos = target.position()
+        pos = target.getPassengerRidingPosition(entity)
         DisplayManager.registerPassenger(target.id, id)
         attachSeen.clear()
         applyTransform()
@@ -198,7 +198,7 @@ class DisplayHandle internal constructor(
             out.add(ClientboundRemoveEntitiesPacket(id))
         }
         viewers.add(player, world)
-        addSpawnPackets(out)
+        addSpawnPackets(out, player)
         PacketBatch.deliver(player, out)
     }
 
@@ -230,14 +230,28 @@ class DisplayHandle internal constructor(
         DisplayManager.unregister(this)
     }
 
-    private fun addSpawnPackets(out: MutableList<ClientPacket>) {
+    /** Where the client will put this display once mounted: the host's passenger attachment point, else [pos]. */
+    private fun mountPos(): Vec3 = host?.getPassengerRidingPosition(entity) ?: pos
+
+    /**
+     * Spawn, entity data and, for an attached display whose host [viewer] tracks, the host's passenger list, so the
+     * client never sees the display at an unmounted position.
+     */
+    private fun addSpawnPackets(out: MutableList<ClientPacket>, viewer: ServerPlayer) {
+        val at = mountPos()
         out.add(
             ClientboundAddEntityPacket(
-                id, entity.uuid, pos.x, pos.y, pos.z, pitch, yaw, entity.type, 0, Vec3.ZERO, 0.0,
+                id, entity.uuid, at.x, at.y, at.z, pitch, yaw, entity.type, 0, Vec3.ZERO, 0.0,
             )
         )
         val values = entity.entityData.nonDefaultValues
         if (!values.isNullOrEmpty()) out.add(ClientboundSetEntityDataPacket(id, values))
+        val h = host ?: return
+        if (h.isRemoved || h.level() !== world) return
+        if (h === viewer || PlayerLookup.tracking(h).contains(viewer)) {
+            out.add(ClientboundSetPassengersPacket(h))
+            attachSeen.add(viewer.uuid)
+        }
     }
 
     // -- per-tick work, called by DisplayManager -----------------------------------------------------------------
@@ -269,7 +283,7 @@ class DisplayHandle internal constructor(
             if (p.distanceToSqr(pos) > enterR) continue
             viewers.add(p, world)
             val out = ArrayList<ClientPacket>(3)
-            addSpawnPackets(out)
+            addSpawnPackets(out, p)
             for (pk in out) batch.add(p, pk)
         }
     }
