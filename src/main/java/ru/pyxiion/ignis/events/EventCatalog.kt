@@ -69,6 +69,7 @@ object GlobalEvents {
             EventDef("entity.hurt", true),
             EventDef("entity.damaged", false),
             EventDef("entity.death", true),
+            EventDef("entity.drops", true),
         ),
     )
 }

@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.nbt.Tag
 import net.minecraft.resources.Identifier
+import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.damagesource.DamageSource
@@ -209,5 +210,21 @@ object GameEvents {
         it["source"] = damageType(source)
         it["amount"] = LuaValue.valueOf(amount.toDouble())
         it["attacker"] = source.entity?.let(EntityFactory::wrap) ?: LuaValue.NIL
+    }
+
+    /**
+     * `entity.drops`: a death is about to drop its loot. Returns the XP to drop, or [DeathDrops.CANCELLED] when a
+     * handler cancelled (no items, equipment or XP). `e.xp` starts at the vanilla amount and is writable.
+     */
+    @JvmStatic
+    fun drops(entity: LivingEntity, level: ServerLevel, source: DamageSource): Int {
+        val vanilla = entity.getExperienceReward(level, source.entity)
+        val r = post("entity.drops") {
+            it.entity(entity)
+            it["source"] = damageType(source)
+            it["attacker"] = source.entity?.let(EntityFactory::wrap) ?: LuaValue.NIL
+            it["xp"] = LuaValue.valueOf(vanilla.toDouble())
+        }
+        return DeathDrops.xp(r, vanilla)
     }
 }

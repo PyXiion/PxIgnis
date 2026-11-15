@@ -15,6 +15,7 @@
     "PackRepositoryMixin",
     "LivingEntityConsumeMixin",
     "LivingEntityHurtMixin",
+    "LivingEntityDropsMixin",
     "ItemEntityPickup",
     "BlockItemMixin",
     "SetPassengersPacketMixin",

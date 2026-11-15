@@ -108,6 +108,7 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
 | `entity.hurt`         | `entity`, `player?`, `source`, `amount`, `attacker`            | ✅ |
 | `entity.damaged`      | `entity`, `player?`, `source`, `amount`, `attacker`, `blocked` |   |
 | `entity.death`        | `entity`, `player?`, `source`, `amount`, `attacker`            | ✅ |
+| `entity.drops`        | `entity`, `player?`, `source`, `attacker`, `xp`                | ✅ |
 
 ### Fields
 
@@ -150,6 +151,11 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
   or less behaves as a cancel.
 - `entity.death` fires on fatal damage, before a totem of undying gets a chance to save the entity. Cancelling it
   keeps the entity alive.
+- `entity.drops` fires once per death that reaches vanilla's loot step, before anything is dropped. Cancelling it
+  drops nothing at all: no loot table items, no equipment, no XP orbs. `e.xp` starts at the XP vanilla would drop and
+  is writable (0 keeps the items but drops no XP; it cannot create XP where vanilla drops none, such as a mob that
+  was not killed by a player). Unlike the `mob_drops` gamerule it is per entity, so a script can limit it to its own
+  mobs or dimension. A handler error cancels, so nothing drops.
 
 ## Custom events: `mc.emit(event, ...)`
 

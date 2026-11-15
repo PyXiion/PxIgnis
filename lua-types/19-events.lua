@@ -91,6 +91,11 @@ function Event:cancel(reason) end
 ---@class EntityDamagedEvent : EntityDamageEvent
 ---@field blocked boolean      -- blocked by a shield
 
+---@class EntityDropsEvent : EntityEvent
+---@field source string        -- damage type of the killing blow
+---@field attacker Entity|nil
+---@field xp integer           -- XP that will drop; writable (0 = no XP). `e:cancel()` drops no items, equipment or XP
+
 ---@class RegionEvent : Event
 ---@field region Region
 
@@ -139,6 +144,7 @@ function Event:cancel(reason) end
 ---@overload fun(event: '"entity.despawn"', handler: fun(e: EntityEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"entity.hurt"', handler: fun(e: EntityDamageEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"entity.death"', handler: fun(e: EntityDamageEvent), opts?: EventOptions): integer
+---@overload fun(event: '"entity.drops"', handler: fun(e: EntityDropsEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"entity.damaged"', handler: fun(e: EntityDamagedEvent), opts?: EventOptions): integer
 function mc.on(event, handler, opts) end
 

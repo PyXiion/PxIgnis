@@ -7,6 +7,9 @@ description: Release history for PxIgnis.
 
 ### Added
 
+- **`entity.drops`** (cancellable): a death's loot step. Cancel it to drop no items, equipment or XP; write `e.xp` to
+  change the XP. Lets a script turn drops off for its own mobs or dimension instead of the server-wide `mob_drops`
+  gamerule. See [Events](/reference/events).
 - `entity:swing(hand?)` plays the arm swing animation of a living entity or player (also shown to the player itself).
 - **Virtual display entities.** `world:display(kind, pos, props)` (`item`, `block`, `text`, `interaction`) creates a
   display that exists only in packets: nothing is saved to chunks, a script reload or shutdown removes it from every
