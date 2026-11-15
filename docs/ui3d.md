@@ -1,28 +1,41 @@
 # ui3d: in-world 3D UI panels
 
-`core:ui3d` builds flat UI panels in the world from virtual displays: buttons, labels, bars and hover/press
-animations, with values bound to `core:ref`.
+`core:ui3d` builds flat UI panels in the world: buttons, labels, bars, icons and toggles, with hover and press
+animations. Widget values can be bound to `core:ref`.
 
-## Building blocks
+## How it works
 
-- Visuals: virtual displays from `world:display` (text quads for rectangles, text for labels, item displays for icons).
-  Packet-only, per-viewer, batched once per tick.
-- Input: hybrid.
-  - **Hover**: every tick, for each viewer, the ray `entity.eyePos` + `entity.dir` is intersected with the panel plane,
-    then mapped to panel-local coordinates and the widget under it. Only if the plane is hit, a block raycast
-    (`world:raycast`) from the eye to the hit point checks occlusion: no hover through walls.
-  - **Click**: one interaction display ("shield") covers the panel. `onClick`/`onAttack` on it give the player; the
-    same ray math picks the widget. The shield is axis-aligned, so per-button interaction boxes would misalign on
-    rotated panels; the ray resolves the button exactly at any orientation.
-- `entity.eyePos` (core, read-only): `Entity.getEyePosition()`; correct for any entity type and pose.
+### Visuals
+
+Panels are drawn with virtual displays from `world:display`: text quads for rectangles, text displays for labels,
+item displays for 3D icons. The displays exist only as packets, are sent per viewer, and are batched once per tick.
+
+### Input
+
+Input combines two mechanisms.
+
+**Hover** is computed every tick for each viewer:
+
+1. Cast the ray `entity.eyePos` + `entity.dir` against the panel plane.
+2. Convert the hit point to panel-local coordinates and find the widget under it.
+3. Only if the plane was hit, run a block raycast (`world:raycast`) from the eye to the hit point. A block in between
+   means no hover, so players cannot hover through walls.
+
+**Click** goes through one interaction display (the "shield") that covers the whole panel. Its `onClick` and
+`onAttack` events tell us which player clicked; the same ray math then picks the widget.
+
+Interaction boxes are axis-aligned, so per-button boxes would not line up with buttons on a rotated panel. One shield
+covering the panel works at any orientation: the ray picks the widget.
+
+`entity.eyePos` (core, read-only) is `Entity.getEyePosition()`. It is correct for any entity type and pose.
 
 ## Units
 
-1 unit = 1 block. Sizes, gaps and paddings are in blocks (e.g. `gap = 0.05`).
+1 unit = 1 block. Sizes, gaps and paddings are in blocks (for example `gap = 0.05`).
 
 ## DSL
 
-Declarative tree with a small layout engine. Positional first element is the content shorthand.
+A panel is a declarative tree with a small layout engine. The first positional element of a node is its content.
 
 ```lua
 local ref = require "core:ref"
@@ -42,42 +55,92 @@ local p = ui.panel { at = pos, facing = "north", width = 3 } {
     },
   },
 }
-p:get("id")          -- widget by `id`
-p:remove()           -- removes displays and disconnects every binding
+p:get("id")          -- widget with that `id`
+p:remove()           -- removes the displays and disconnects every binding
 ```
 
-- Containers: `col`, `row`, `stack` (layers on top of each other). Props: `gap`, `pad`, `align`, fixed or `grow` size.
-- Widgets (stage 1): `text`, `button`, `icon`, `bar`, `toggle`.
-- Icons are text-component glyphs, not item displays: `ui.icon { item = | sprite =, atlas = | glyph =, font = |
-  head = player|profile }` is one object/font component in a text display (`{type = "object", atlas, sprite}`, item
-  id `ns:path` -> sprite `ns:item/path`); `model = true` gives a 3D item display. `theme.icons` names them
-  (`ui.icon "coin"`). In `ui.text { "Price: ", ui.icon "coin", " 10" }` icons sit inline in one component. The glyph
-  box is `display.ICON` (8 x 8 px; advance 8 px from `AtlasGlyphProvider`); width of mixed lines is estimated.
-- Structure changes: `ui.show(cond, node)`, `ui.each(listRef, fn)`; only that subtree is rebuilt.
-- Per-player state: `ui.panel{...}(function(player) return tree end)` builds one tree per viewer.
+### Containers
+
+`col`, `row`, and `stack` (children layered on top of each other). Props: `gap`, `pad`, `align`, and either a fixed
+size or `grow`.
+
+### Widgets
+
+`text`, `button`, `icon`, `bar`, `toggle`.
+
+### Icons
+
+Icons are glyphs inside a text component, not item displays. Pick the source with one of:
+
+```lua
+ui.icon { item = "ns:path" }                 -- item sprite
+ui.icon { sprite = ..., atlas = ... }        -- atlas sprite
+ui.icon { glyph = ..., font = ... }          -- font glyph
+ui.icon { head = player }                    -- player head (or a profile)
+```
+
+- An item id `ns:path` maps to the sprite `ns:item/path`. Under the hood this is one `object` or font component in a
+  text display (`{type = "object", atlas, sprite}`).
+- `model = true` renders a real 3D item display instead.
+- `theme.icons` gives icons names: `ui.icon "coin"`.
+- Icons can sit inline in text: `ui.text { "Price: ", ui.icon "coin", " 10" }` is a single component.
+- A glyph is `display.ICON` in size: 8 x 8 px, with an 8 px advance (from `AtlasGlyphProvider`). The width of lines
+  that mix text and icons is an estimate.
+
+### Changing structure
+
+- `ui.show(cond, node)` shows the node while `cond` is true.
+- `ui.each(listRef, fn)` builds one node per list item.
+
+Only the affected subtree is rebuilt.
+
+### Per-player trees
+
+`ui.panel{...}(function(player) return tree end)` builds a separate tree for each viewer.
 
 ## Reactivity
 
 Every widget prop accepts a plain value, a `Ref`, or a function.
 
-- `Ref`: the widget watches it and updates only that prop (`handle:set{...}`). No tree diffing.
-- Function: computed. `core:ref` tracks which refs were read via `get()` while it ran and re-runs it when any changes
-  (dependency set refreshed on each run). The tracking hook lives in `core:ref` so `net.shared` (#13) works the same.
-- Every watch returns a disconnect; `p:remove()` calls all of them.
+- **`Ref`**: the widget watches it and updates just that prop (`handle:set{...}`). The tree is never diffed.
+- **Function**: a computed value. `core:ref` records which refs the function read with `get()` and re-runs it when any
+  of them changes. The recorded set is refreshed on every run. The tracking lives in `core:ref`, so `net.shared` (#13)
+  works the same way.
+- Every watch returns a disconnect function. `p:remove()` calls all of them.
+
+`ui.text` and `ui.button` also accept a format string with arguments: `ui.text("Score: %s", score)`. The text is
+`string.format` of the string and the arguments; each argument is a plain value, a `Ref` or a function. The widget
+wraps this in one computed value, so it follows the same rules as a function prop.
 
 ## Styles and animation
 
-- `theme` table on the panel; named styles (`style = "danger"`).
-- A style has a base and `hover`, `press`, `disabled` overrides (`bg`, `fg`, `scale`, `z`).
-- Transforms (scale, z lift) animate client-side via `interp`.
-- `sound = { hover, press, disabled, volume, pitch }` in a style (id or `false`): default click on press, hover and
-  disabled silent. Played to the player alone in `"viewer"` mode, at the widget for nearby players in `"shared"` mode
-  (`Player:playSound` / `World:playSound`). Disabled widgets play only `disabled`.
-- `hover` and `press` panel options (overridable per widget): `"viewer"` (default) shows the state only to the
-  player causing it, through a per-player highlight display; `"shared"` shows it to every viewer.
-- Hover/press colour changes interpolate together with the transform (one `interp` per display per tick).
+### Styles
+
+- The panel has a `theme` table of named styles; a widget picks one with `style = "danger"`.
+- A style has base values plus `hover`, `press` and `disabled` overrides. Overridable fields: `bg`, `fg`, `scale`, `z`.
+
+### Animation
+
+Scale and z lift animate on the client through `interp`. Colour changes from hover and press interpolate in the same
+step, so each display gets one `interp` per tick.
+
+### Hover and press visibility
+
+The panel options `hover` and `press` (each overridable per widget) take:
+
+- `"viewer"` (default): only the player causing the state sees it, through a per-player highlight display.
+- `"shared"`: every viewer sees it.
+
+### Sounds
+
+A style may set `sound = { hover, press, disabled, volume, pitch }`. Each sound is a sound id or `false`.
+
+- Defaults: a click sound on press; hover and disabled are silent.
+- A disabled widget plays only `disabled`.
+- In `"viewer"` mode the sound plays to that player alone (`Player:playSound`). In `"shared"` mode it plays at the
+  widget for nearby players (`World:playSound`).
 
 ## Stage 2
 
-- mapcanvas pixel layer on the panel plane (input still via shield + ray).
-- Panels attached to entities / following the player's view.
+- A mapcanvas pixel layer on the panel plane. Input still uses the shield and the ray.
+- Panels attached to entities, or following the player's view.

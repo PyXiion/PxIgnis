@@ -95,6 +95,15 @@ ui.icon { item = "minecraft:diamond", model = true } -- 3D item display
 Every widget prop accepts a plain value, a `Ref` or a function. A `Ref` updates that prop when it changes. A function
 is a computed value: refs read inside it with `get()` are tracked and it re-runs when one changes.
 
+`ui.text` and `ui.button` also take a format string followed by arguments. The text is `string.format` of the string
+with the arguments, and each argument may be a plain value, a `Ref` or a function. `%d` needs integral values; use
+`%s` or `%g` for other numbers:
+
+```lua
+ui.text("HP: %s/%d", hp, 20)
+ui.button("Buy (%s)", function() return price:get() .. "$" end)
+```
+
 - `ui.show(cond, node)`: the node exists while `cond` is truthy.
 - `ui.each(list, fn)`: one `fn(item, index)` node per entry; the group rebuilds when `list` changes.
 

@@ -713,9 +713,24 @@ local function leaf(kind, primary)
 end
 
 -- text and button: one content value (string, Ref or function) is the `text` prop; several values, or an icon among
--- them, are `parts`, shown as one line of text with the icons inline.
+-- them, are `parts`, shown as one line of text with the icons inline. `ui.text("fmt", a, b)` formats the string with
+-- `string.format`; each argument is a plain value, a Ref or a function, so the text follows them.
+local function formatted(fmt, ...)
+    local args = table.pack(...)
+    return function()
+        local vals = {}
+        for i = 1, args.n do
+            local a = args[i]
+            if ref.isRef(a) then a = a:get() elseif type(a) == "function" then a = a() end
+            vals[i] = a
+        end
+        return string.format(fmt, table.unpack(vals, 1, args.n))
+    end
+end
+
 local function textual(kind)
-    return function(props)
+    return function(props, ...)
+        if type(props) == "string" and select("#", ...) > 0 then props = { formatted(props, ...) } end
         if type(props) ~= "table" or ref.isRef(props) then props = { props } end
         local d, parts = { kind = kind }, {}
         for k, v in pairs(props) do

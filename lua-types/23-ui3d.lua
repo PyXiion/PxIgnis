@@ -146,12 +146,17 @@ function Ui3dLib.row(props) end
 ---@return Ui3dNode
 function Ui3dLib.stack(props) end
 
+---`ui.text("Score: %s", score)` formats with `string.format`; each argument is a value, a `Ref` or a function.
+---`%d` needs integral values.
+---@overload fun(fmt: string, ...: any): Ui3dNode
 ---@param props Ui3dProp<string|number>|Ui3dTextProps
 ---@return Ui3dNode
-function Ui3dLib.text(props) end
+function Ui3dLib.text(props, ...) end
+---Also `ui.button("Buy %s", price)`, formatted like `ui.text`.
+---@overload fun(fmt: string, ...: any): Ui3dNode
 ---@param props Ui3dButtonProps
 ---@return Ui3dNode
-function Ui3dLib.button(props) end
+function Ui3dLib.button(props, ...) end
 ---@param props string|Ui3dIconProps
 ---@return Ui3dNode
 function Ui3dLib.icon(props) end
