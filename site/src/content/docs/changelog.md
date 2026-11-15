@@ -3,66 +3,153 @@ title: Changelog
 description: Release history for PxIgnis.
 ---
 
-## Unreleased
+## 0.20.0 — ui3d panels, core:ref, virtual displays (2026-11-15)
 
 ### Breaking
 
-- **Every slot number is 1-based now.** `player:getItem(slot)`, `player:setItem(slot, item)`, `player.selectedSlot`
-  and the `slot` argument of an `onInventoryTick` template callback used Minecraft's 0-based indices, while
-  `inv:getItem`, `inv:setItem`, `container:onClick` and `player.container_click` were already 1-based. Now the whole API
-  agrees: the player inventory is 1–9 hotbar, 10–36 main, 37–40 armor (feet to head), 41 offhand, and `selectedSlot`
-  is 1–9. Scripts that loop `for slot = 0, 40` or compare `selectedSlot` with a 0-based number must add 1
-  (`for slot = 1, 41`). Equipment stays name-based (`player.mainhand`, `head`, …). The conversion lives in one helper,
-  `Slots`, at the API boundary.
+- **Slot numbers are 1-based everywhere.** `player:getItem(slot)`, `player:setItem(slot, item)`, `player.selectedSlot`
+  and the `slot` argument of `onInventoryTick` templates used Minecraft's 0-based indices, while `inv:getItem`,
+  `inv:setItem`, `container:onClick` and `player.container_click` were already 1-based. Now the whole API agrees:
+  - Player inventory: 1–9 hotbar, 10–36 main, 37–40 armor (feet to head), 41 offhand.
+  - `selectedSlot`: 1–9.
+  - Equipment stays name-based (`player.mainhand`, `head`, …).
+
+  To update a script, add 1 to any hard-coded 0-based slot and compare `selectedSlot` with a 1-based number. The
+  conversion lives in one helper, `Slots`, at the API boundary.
+
+  ```lua
+  -- before
+  for slot = 0, 40 do local item = player:getItem(slot) end
+  -- after
+  for slot = 1, 41 do local item = player:getItem(slot) end
+  ```
 
 ### Added
 
 - **`core:ref`**: local reactive values (`ref.new`, `get`, `set`, `update`, `watch`) plus auto-tracking `ref.effect` and
   `ref.computed`. See [ref](/libraries/ref).
-- **`core:ui3d`**: in-world UI panels built from virtual displays: `col`/`row`/`stack` layout, `text`, `button`, `icon`,
-  `bar` and `toggle` widgets, `ui.show`/`ui.each`, styles with hover/press/disabled states, props bound to `core:ref`,
-  hover by ray against the panel plane and clicks through one interaction display, `hover`/`press` modes
-  (`"viewer"`: shown only to the player causing it, default; `"shared"`: shown to every viewer; per panel or widget),
-  button sounds (`sound` in a style: click on press by default, optional hover and disabled sounds, per player or at
-  the widget following the mode), icons as text components (item sprite, sprite, font glyph, player head, `theme.icons`
-  names, inline in text; `model = true` for a 3D item), per-player panels from a `function(player)` tree. See [ui3d](/libraries/ui3d).
-- **`entity.eyePos`** (read-only): the eye position of any entity, for its type and pose.
-- **`player:saveData()`**: writes this player's data to disk now, if it changed since the last write. See [Storage](/reference/storage).
-- `mob.pathReaches` tells a complete path from a partial one (the closest reachable point). `entity.followRange` reads and
-  writes the `follow_range` attribute, which also caps how many nodes the path finder may visit.
-- **`entity.drops`** (cancellable): a death's loot step. `e.drops` is the editable list of Items vanilla would drop (loot
-  plus a mob's equipment): remove, replace or append entries and the final list is what spawns. Cancel it to drop no
-  items, equipment or XP; write `e.xp` to change the XP. Lets a script turn drops off or rewrite them for its own mobs
-  or dimension instead of the server-wide `mob_drops` gamerule. Captured by redirecting `Entity.spawnAtLocation` during
-  `dropAllDeathLoot`. See [Events](/reference/events).
-- `entity:swing(hand?)` plays the arm swing animation of a living entity or player (also shown to the player itself).
+
+  ```lua
+  local ref = require "core:ref"
+  local price, qty = ref.new(3), ref.new(2)
+  local total = ref.computed(function() return price:get() * qty:get() end)
+  total:watch(function(new) print("total", new) end)
+  qty:set(5)   -- prints "total 15"
+  ```
+- **`core:ui3d`**: UI panels you can build in the world out of virtual displays. See [ui3d](/libraries/ui3d). It has:
+  - Layout with `col`, `row` and `stack`, and the widgets `text`, `button`, `icon`, `bar` and `toggle`.
+  - `ui.show` and `ui.each` for content that changes.
+  - Styles with hover, press and disabled states. Any prop can be a plain value, a `Ref` or a function.
+  - Hover by ray against the panel plane; clicks through one interaction display.
+  - `hover` and `press` modes, per panel or per widget: `"viewer"` (default) shows the state only to the player
+    causing it, `"shared"` shows it to everyone.
+  - Button sounds: a click on press by default, with optional hover and disabled sounds, played to the player or at
+    the widget depending on the mode.
+  - Icons as text components: item sprite, sprite, font glyph, player head, or a name from `theme.icons`. They can
+    sit inline in text, and `model = true` gives a 3D item.
+  - Format strings: `ui.text("HP: %s", hp)`, where each argument is a value, a `Ref` or a function.
+  - Per-player panels from a `function(player)` tree.
+
+  ```lua
+  local ref, ui = require "core:ref", require "core:ui3d"
+  local score = ref.new(0)
+
+  ui.panel { at = pos, facing = "north", width = 3 } {
+    ui.col { gap = 0.05, pad = 0.1,
+      ui.text("Score: %s", score),
+      ui.button { "+1", onClick = function(player) score:update(function(n) return n + 1 end) end },
+    },
+  }
+  ```
+- **`entity.eyePos`** (read-only): the eye position of any entity, correct for its type and pose.
+
+  ```lua
+  local eye = player.eyePos              -- sneaking or swimming lowers it; a mob uses its own eye height
+  local hit = player:raycast(20)
+  ```
+- **`player:saveData()`** writes a player's data to disk right away, if it changed since the last write. See
+  [Storage](/reference/storage).
+
+  ```lua
+  player:saveData()
+  ```
+- **`mob.pathReaches`** tells a complete path from a partial one (one that only gets to the closest reachable point).
+  **`entity.followRange`** reads and writes the `follow_range` attribute, which also caps how many nodes the path
+  finder may visit.
+
+  ```lua
+  mob.followRange = 40
+  if mob.pathReaches == false then print("target is walled off") end
+  ```
+- **`entity.drops`** (cancellable) is the loot step of a death. `e.drops` is the list of items vanilla would drop (loot
+  plus a mob's equipment), and you can remove, replace or add entries; the final list is what spawns.
+  - Cancel it to drop no items, equipment or XP.
+  - Write `e.xp` to change the XP.
+  - Use it to turn drops off or rewrite them for your own mobs or dimension, instead of changing the server-wide
+    `mob_drops` gamerule.
+
+  See [Events](/reference/events).
+
+  ```lua
+  mc.on("entity.drops", function(e)
+      e.drops = {}                       -- no items
+      e.xp = 0                           -- no XP
+  end)
+  ```
+- **`entity:swing(hand?)`** plays the arm swing of a living entity or player (the player sees it too).
+
+  ```lua
+  zombie:swing()
+  player:swing("off")
+  ```
 - **Virtual display entities.** `world:display(kind, pos, props)` (`item`, `block`, `text`, `interaction`) creates a
-  display that exists only in packets: nothing is saved to chunks, a script reload or shutdown removes it from every
-  client, and visibility is per player (`viewers = "auto" | "manual" | {players}`). One flat `props` dictionary for
-  spawn and `set`; changes made during a tick go out as one entity-data packet per viewer. `h:moveTo`, `h:attach`
-  (a virtual passenger that rides an entity), `h:show`/`hide`, and `onClick`/`onAttack` on `interaction` hitboxes.
-  New library `core:display` with quaternion/matrix math, `item`/`block`/`text`/`quad` helpers,
-  `animate`/`spin`/`flyTo`/`fade`/`life`, rigs (`group`), timelines (`timeline`/`play`) and a `bar` widget.
-  `mc.displays()` lists the live ones. See [Display](/reference/display-api) and [core:display](/libraries/display).
-- **`player.container_click`** (cancellable) runs for every click in any open menu (chests, crafters, anvils, crafting
-  grids, the player's own inventory) before vanilla applies it, so a script can keep items out of containers. See
-  [Events](/reference/events).
-- **Icons in dialog buttons.** A `core:dialog` button label (and tooltip, and the dialog title) can be a text component
-  table instead of a string, so it can carry a sprite: `{ text = "", extra = { dialog.sprite("minecraft:item/diamond"),
-  " Buy" } }`. `dialog.sprite(sprite, atlas?)` builds the `{ type = "object", atlas, sprite }` component. The raw
-  `player:showDialog` converts component tables in the same fields through the shared text converter.
-  See [core:dialog](/libraries/dialog).
-- **`player.swap_hands`** (cancellable) fires when the swap-offhand key (F) is pressed in the world, before the hands are
-  exchanged. `main` and `off` hold the items before the swap. See [Events](/reference/events).
+  display that exists only as packets. See [Display](/reference/display-api) and [core:display](/libraries/display).
+  - Nothing is saved to chunks; a script reload or shutdown removes the display from every client.
+  - Visibility is per player: `viewers = "auto" | "manual" | {players}`.
+  - One flat `props` table is used for both spawn and `set`. Changes made during a tick go out as one entity-data
+    packet per viewer.
+  - `h:moveTo`, `h:attach` (a virtual passenger that rides an entity), `h:show`/`hide`, and `onClick`/`onAttack` on
+    `interaction` hitboxes.
+  - `mc.displays()` lists the live ones.
+  - The new library `core:display` adds quaternion and matrix math, `item`/`block`/`text`/`quad` helpers,
+    `animate`/`spin`/`flyTo`/`fade`/`life`, rigs (`group`), timelines (`timeline`/`play`) and a `bar` widget.
+
+  ```lua
+  local label = world:display("text", pos, { text = "Hello", billboard = "center" })
+  label:set { text = "Hi again" }
+  label:moveTo(pos + vec(0, 1, 0))
+  label:remove()
+  ```
+- **`player.container_click`** (cancellable) fires for every click in any open menu (chests, crafters, anvils,
+  crafting grids, the player's own inventory) before vanilla handles it, so a script can keep items out of containers.
+  See [Events](/reference/events).
+
+  ```lua
+  -- keep items out of chests
+  mc.on("player.container_click", function(e)
+      if not e.inPlayer then e:cancel() end
+  end)
+  ```
+- **Icons in dialog buttons.** A `core:dialog` button label, tooltip or title can now be a text component table, so it
+  can carry a sprite: `{ text = "", extra = { dialog.sprite("minecraft:item/diamond"), " Buy" } }`.
+  `dialog.sprite(sprite, atlas?)` builds the `{ type = "object", atlas, sprite }` component. The raw
+  `player:showDialog` converts component tables in the same fields. See [core:dialog](/libraries/dialog).
+- **`player.swap_hands`** (cancellable) fires when the player presses the swap-offhand key (F) in the world, before
+  the hands are exchanged. `main` and `off` hold the items before the swap. See [Events](/reference/events).
+
+  ```lua
+  mc.on("player.swap_hands", function(e) e:cancel() end)
+  ```
 
 ### Fixed
 
-- Virtual displays no longer leave frozen ghosts on a client after the player respawns far away: viewers are tracked
-  by UUID, a respawn or world change sends a remove, and `remove()`/`hide` reach every connected client that was sent
-  the display.
-- **Numbers no longer follow the server locale.** `string.format` (`%f`, `%e`, `%g`, `%a`, `%q`) and `string.upper` /
-  `string.lower` used the JVM default locale, so a server with a Russian locale wrote `71,250649` and broke
-  `@e[x=…]` selectors. They now always use `.` and `Locale.ROOT`. Servers on builds older than this one need the new jar.
+- **Virtual displays no longer leave frozen ghosts** on a client after the player respawns far away. Viewers are now
+  tracked by UUID, a respawn or world change sends a remove, and `remove()` and `hide` reach every connected client
+  that was sent the display.
+- **Numbers no longer follow the server locale.** `string.format` (`%f`, `%e`, `%g`, `%a`, `%q`) and
+  `string.upper`/`string.lower` used the JVM default locale, so a server with a Russian locale wrote `71,250649` and
+  broke `@e[x=…]` selectors. They now always use `.` and `Locale.ROOT`. Servers on builds older than this one need the
+  new jar.
 
 ## 0.19.0 — Script packages, plugins and ignis-voice (2026-11-13)
 
