@@ -99,6 +99,7 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
 | `player.consume`      | `player`, `item`                                               | ✅ |
 | `player.pickup`       | `player`, `item`, `count`                                      | ✅ |
 | `player.drop`         | `player`, `item`, `count`                                      | ✅ |
+| `player.swap_hands`   | `player`, `main`, `off`                                        | ✅ |
 | `player.container_click` | `player`, `slot`, `clickType`, `slotItem`, `cursorItem`, `inPlayer`, `swapItem`, `playerMenu` | ✅ |
 | `player.custom_click` | `player`, `id`, `payload`                                      |   |
 | `block.break`         | `player`, `pos`, `block`                                       | ✅ |
@@ -124,6 +125,8 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
 - **block** — block ID, e.g. `"minecraft:stone"`.
 - **item** — an [ItemStack](/reference/itemstack-api) (`nil` on `player.use_item` with an empty hand); **itemId** is
   its ID string.
+- **main**, **off** — on `player.swap_hands`, the [ItemStacks](/reference/itemstack-api) of the main and offhand before the
+  swap: copies, `nil` for an empty hand.
 - **hand** — `"main"` or `"off"`.
 - **id**, **payload** — on `player.custom_click`: the id of the clicked dialog button's `custom` action and the values of
   the dialog's inputs as a table (`nil` without inputs; a boolean input arrives as `0`/`1`). It comes from the client and
@@ -139,6 +142,8 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
   (not the block that was clicked) and `block` is the block that is placed. Cancelling prevents the placement.
 - `player.pickup` fires once per pickup attempt, after the pickup delay has passed.
 - `player.consume` is for players only. Cancelling stops the use and resends the player's inventory.
+- `player.swap_hands` fires when the swap-offhand key (F by default) is pressed in the world. Spectators never fire it.
+  Cancelling keeps both hands as they are. In an open container screen F swaps a slot instead; see `player.container_click`.
 - `player.container_click` fires for every click in every open menu, the player's own inventory included, before
   vanilla applies it. Cancelling keeps the stacks where they are and resends the menu. A menu made with `inv:open`
   calls its `onClick` callback only if the event was not cancelled. `slot` is 1-based, `nil` outside the window;

@@ -140,6 +140,17 @@ object GameEvents {
     }
 
     /**
+     * `player.swap_hands`: the swap-offhand key (F) in the world, before the hands are exchanged. `main` and `off`
+     * are copies of what each hand holds now. Cancelling leaves both hands as they are.
+     */
+    @JvmStatic
+    fun swapHands(player: ServerPlayer) = allowed("player.swap_hands") {
+        it["player"] = PlayerWrap.wrap(player)
+        it["main"] = copied(player.mainHandItem)
+        it["off"] = copied(player.offhandItem)
+    }
+
+    /**
      * `player.container_click`: a click in any open menu, before vanilla applies it. Called by
      * [ru.pyxiion.ignis.api.manager.ContainerManager.shouldAllowClick] for every menu, the player's own inventory
      * included. `e.slot` is 1-based and nil outside the window; the other fields are documented in events.md.

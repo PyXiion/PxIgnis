@@ -90,6 +90,19 @@ public abstract class ServerPlayNetworkHandlerMixin {
             }
     }
 
+    // player.swap_hands — intercept SWAP_ITEM_WITH_OFFHAND (F). Runs after vanilla's idle-timer reset, so a cancelled
+    // press still counts as activity. Spectators cannot swap and raise no event.
+    @Inject(
+        method = "handlePlayerAction",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;resetLastActionTime()V", shift = At.Shift.AFTER),
+        cancellable = true
+    )
+    private void pxrp$onSwapHands(ServerboundPlayerActionPacket packet, CallbackInfo ci) {
+        if (packet.getAction() != ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND) return;
+        if (player.isSpectator()) return;
+        if (!GameEvents.swapHands(player)) ci.cancel();
+    }
+
     @Unique
     private boolean fireDropEvent(ItemStack stack, int count) {
         return !GameEvents.drop(player, stack, count);

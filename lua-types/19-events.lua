@@ -75,6 +75,10 @@ function Event:cancel(reason) end
 ---@field swapItem? Item         -- on "swap": the player's inventory item exchanged with the slot
 ---@field playerMenu boolean     -- the open menu is the player's own inventory screen
 
+---@class PlayerSwapHandsEvent : PlayerEvent
+---@field main Item|nil  -- the main-hand item before the swap, nil when the hand is empty
+---@field off Item|nil   -- the offhand item before the swap, nil when the hand is empty
+
 ---@class BlockEvent : PlayerEvent
 ---@field pos Vec
 ---@field block string  -- block id, e.g. "minecraft:stone"
@@ -137,6 +141,7 @@ function Event:cancel(reason) end
 ---@overload fun(event: '"player.consume"', handler: fun(e: PlayerItemEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.pickup"', handler: fun(e: PlayerItemCountEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.drop"', handler: fun(e: PlayerItemCountEvent), opts?: EventOptions): integer
+---@overload fun(event: '"player.swap_hands"', handler: fun(e: PlayerSwapHandsEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.container_click"', handler: fun(e: PlayerContainerClickEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.custom_click"', handler: fun(e: PlayerCustomClickEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"block.break"', handler: fun(e: BlockEvent), opts?: EventOptions): integer
