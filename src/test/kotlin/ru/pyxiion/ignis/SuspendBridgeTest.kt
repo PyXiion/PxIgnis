@@ -1,5 +1,6 @@
 package ru.pyxiion.ignis
 
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -27,10 +28,14 @@ class SuspendBridgeTest {
         try {
             val state = JsePlatform.standardState()
             val results = LinkedBlockingQueue<Varargs>()
+            // The handler may fire from a scope thread before the initial co.resume() has
+            // returned (fast suspend bodies); resuming a still-running coroutine fails.
+            val firstResumeReturned = CountDownLatch(1)
 
             state.getMainThread().resumeHandler = LuaThread.ResumeHandler { thread: LuaThread, args: Varargs ->
                 exec.execute {
                     try {
+                        firstResumeReturned.await()
                         results.put(thread.resumeOrThrow(args))
                     } catch (e: Throwable) {
                         results.put(LuaValue.varargsOf(LuaValue.FALSE, LuaValue.valueOf(e.message ?: "error")))
@@ -43,7 +48,11 @@ class SuspendBridgeTest {
             val func = state.load(script, "test").checkfunction()
             val co = LuaThread(state, func)
 
-            var result = co.resume(LuaValue.NONE)
+            var result = try {
+                co.resume(LuaValue.NONE)
+            } finally {
+                firstResumeReturned.countDown()
+            }
             check(result.arg1().toboolean()) { "coroutine error: ${result.arg(2)}" }
 
             while (co.status != "dead") {
