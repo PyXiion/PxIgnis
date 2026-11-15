@@ -19,9 +19,11 @@ description: Release history for PxIgnis.
 
 - `mob.pathReaches` tells a complete path from a partial one (the closest reachable point). `entity.followRange` reads and
   writes the `follow_range` attribute, which also caps how many nodes the path finder may visit.
-- **`entity.drops`** (cancellable): a death's loot step. Cancel it to drop no items, equipment or XP; write `e.xp` to
-  change the XP. Lets a script turn drops off for its own mobs or dimension instead of the server-wide `mob_drops`
-  gamerule. See [Events](/reference/events).
+- **`entity.drops`** (cancellable): a death's loot step. `e.drops` is the editable list of Items vanilla would drop (loot
+  plus a mob's equipment): remove, replace or append entries and the final list is what spawns. Cancel it to drop no
+  items, equipment or XP; write `e.xp` to change the XP. Lets a script turn drops off or rewrite them for its own mobs
+  or dimension instead of the server-wide `mob_drops` gamerule. Captured by redirecting `Entity.spawnAtLocation` during
+  `dropAllDeathLoot`. See [Events](/reference/events).
 - `entity:swing(hand?)` plays the arm swing animation of a living entity or player (also shown to the player itself).
 - **Virtual display entities.** `world:display(kind, pos, props)` (`item`, `block`, `text`, `interaction`) creates a
   display that exists only in packets: nothing is saved to chunks, a script reload or shutdown removes it from every

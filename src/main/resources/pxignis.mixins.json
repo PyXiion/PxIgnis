@@ -16,6 +16,7 @@
     "LivingEntityConsumeMixin",
     "LivingEntityHurtMixin",
     "LivingEntityDropsMixin",
+    "PlayerDropsMixin",
     "ItemEntityPickup",
     "BlockItemMixin",
     "SetPassengersPacketMixin",

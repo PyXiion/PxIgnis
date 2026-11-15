@@ -24,6 +24,8 @@ import ru.pyxiion.ignis.api.util.Slots
 import ru.pyxiion.ignis.api.wrapper.EntityFactory
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
+import ru.pyxiion.ignis.runtime.ScriptErrors
+import ru.pyxiion.ignis.toLuaArray
 
 /**
  * Turns Minecraft callbacks into [GlobalEvents]. Each function returns true when the action may go ahead
@@ -214,18 +216,22 @@ object GameEvents {
     }
 
     /**
-     * `entity.drops`: a death is about to drop its loot. Returns the XP to drop, or [DeathDrops.CANCELLED] when a
-     * handler cancelled (no items, equipment or XP). `e.xp` starts at the vanilla amount and is writable.
+     * `entity.drops`: a death has run vanilla's loot step, [stacks] is what it would spawn (loot and mob equipment).
+     * Handlers see them as the list `e.drops` and may remove, replace or append; `e.xp` starts at the vanilla amount.
+     * Returns what finally drops, or null when a handler cancelled (no items, equipment or XP).
      */
     @JvmStatic
-    fun drops(entity: LivingEntity, level: ServerLevel, source: DamageSource): Int {
+    fun drops(entity: LivingEntity, level: ServerLevel, source: DamageSource, stacks: List<ItemStack>): DeathDrops.Outcome<ItemStack>? {
         val vanilla = entity.getExperienceReward(level, source.entity)
         val r = post("entity.drops") {
             it.entity(entity)
             it["source"] = damageType(source)
             it["attacker"] = source.entity?.let(EntityFactory::wrap) ?: LuaValue.NIL
             it["xp"] = LuaValue.valueOf(vanilla.toDouble())
+            it["drops"] = stacks.map(ItemStackWrap::wrap).toLuaArray()
         }
-        return DeathDrops.xp(r, vanilla)
+        return DeathDrops.outcome(r, vanilla, stacks, ItemStackWrap::unwrap) {
+            ScriptErrors.error("entity.drops", "e.drops: expected a list of Items, skipped ${it.typename()} '${it.tojstring()}'")
+        }
     }
 }
