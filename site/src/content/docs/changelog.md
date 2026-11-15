@@ -22,6 +22,9 @@ description: Release history for PxIgnis.
 - Virtual displays no longer leave frozen ghosts on a client after the player respawns far away: viewers are tracked
   by UUID, a respawn or world change sends a remove, and `remove()`/`hide` reach every connected client that was sent
   the display.
+- **Numbers no longer follow the server locale.** `string.format` (`%f`, `%e`, `%g`, `%a`, `%q`) and `string.upper` /
+  `string.lower` used the JVM default locale, so a server with a Russian locale wrote `71,250649` and broke
+  `@e[x=…]` selectors. They now always use `.` and `Locale.ROOT`. Servers on builds older than this one need the new jar.
 
 ## 0.19.0 — Script packages, plugins and ignis-voice (2026-11-13)
 
