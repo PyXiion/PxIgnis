@@ -17,6 +17,8 @@ description: Release history for PxIgnis.
 
 ### Added
 
+- **`core:ref`**: local reactive values (`ref.new`, `get`, `set`, `update`, `watch`) plus auto-tracking `ref.effect` and
+  `ref.computed`. See [ref](/libraries/ref).
 - `mob.pathReaches` tells a complete path from a partial one (the closest reachable point). `entity.followRange` reads and
   writes the `follow_range` attribute, which also caps how many nodes the path finder may visit.
 - **`entity.drops`** (cancellable): a death's loot step. `e.drops` is the editable list of Items vanilla would drop (loot

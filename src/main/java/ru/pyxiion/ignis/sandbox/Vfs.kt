@@ -29,6 +29,7 @@ class Vfs(val roots: List<Path>) {
         "particles" to Module(loadResource("/particles.lua"), "@particles.lua"),
         "dialog" to Module(loadResource("/dialog.lua"), "@dialog.lua"),
         "display" to Module(loadResource("/display.lua"), "@display.lua"),
+        "ref" to Module(loadResource("/ref.lua"), "@ref.lua"),
     )
 
     /** A built-in module, or null for an unknown name (the caller lists [builtinNames]). */

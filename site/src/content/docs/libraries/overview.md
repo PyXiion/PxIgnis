@@ -13,6 +13,7 @@ local items = require "core:items"
 local fx = require "core:particles"
 local dialog = require "core:dialog"
 local display = require "core:display"
+local ref = require "core:ref"
 ```
 
 ## Available Libraries
@@ -26,6 +27,7 @@ local display = require "core:display"
 | [particles](/libraries/particles) | Tick-driven particle effects: shapes, sequences, loops |
 | [dialog](/libraries/dialog)     | Server dialogs with inputs and click handlers |
 | [display](/libraries/display)   | Virtual display entities: items, blocks, text, rigs, timelines, bars |
+| [ref](/libraries/ref)           | Reactive values: watchers, effects, computed values |
 
 ## Loading from Subdirectories
 
