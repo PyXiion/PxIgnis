@@ -10,7 +10,7 @@ import ru.pyxiion.ignis.unwrapOrNull
 import java.io.IOException
 import javax.imageio.ImageIO
 
-/** `require("ext:voice")` for one environment. See docs/voice.md. */
+/** `require("ext:voice")` for one environment. See docs/plugins.md. */
 class VoiceModule(private val v: VoiceEnv) {
     private val env = v.env
     private val backends = v.service.backends

@@ -1,10 +1,10 @@
 # Plugins and script packages
 
-Status: implemented (core: `plugin/`, `packages/`, `sandbox/LuaPackage.kt`; first plugin: `ignis-voice`).
+Design: plugin lifecycle and script packages. Reference: `site/src/content/docs/reference/` (Lua API/types per plugin).
 
 Two extension layers:
 
-- **Plugins**: separate Fabric mods that add Lua modules backed by Kotlin. The first one is `ignis-voice` ([voice.md](./voice.md)).  Also `ignis-mapcanvas` ([mapcanvas.md](./mapcanvas.md)).
+- **Plugins**: separate Fabric mods that add Lua modules backed by Kotlin (e.g. `plugins/voice`, `plugins/mapcanvas`).
 - **Script packages**: folders of Lua code with a manifest, a basic version of issue #5. Packages can declare that they
   need a plugin.
 
@@ -150,9 +150,8 @@ Module paths use `.` everywhere, like plain Lua `require`; `/` appears only in s
 never passed to `require`. The first segment after `pkg:` is always the id and the rest is a path inside the package,
 so it is always clear which part is the root. Ids are `[a-z0-9_-]+`, so they contain neither `.` nor `/`.
 
-Namespaces are a closed set: `core:`, `pkg:`, `ext:`. Any other `x:` is an error. **Breaking:** today `Vfs.resolve`
-maps any unknown `ns:a.b` to the folder `<root>/ns/a/b.lua`. That fallback is removed, because it would let a user
-folder named `pkg` or `ext` shadow the namespaces; such scripts switch to `require("ns.a.b")`.
+Namespaces are a closed set: `core:`, `pkg:`, `ext:`. Any other `x:` is an error. A user folder named `pkg` or `ext`
+does not form a namespace module; scripts require such folders as plain modules (`ns.a.b`).
 
 Sources (local folder now; `gh:Owner/repo@tag` later) belong only to installation, never to `require`. A future
 installer (`/ignis pkg install gh:PyXiion/super-module@v1.2`) downloads into `packages/<id>/`, and the id comes from
