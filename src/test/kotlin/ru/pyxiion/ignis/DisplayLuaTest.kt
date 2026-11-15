@@ -112,7 +112,9 @@ class DisplayLuaTest {
         eq(cores[3].props.billboard, "center"); eq(cores[3].props.text, "hi")
         local qd = display.quad(world, {0, 0, 0}, 0xFFFF0000, 2, 0.5)
         eq(cores[4].props.background, 0xFFFF0000); eq(cores[4].props.text, " ")
-        near(cores[4].props.transform.s.x, 16); near(cores[4].props.transform.s.y, 0.5 * 4 / 0.9)
+        near(cores[4].props.transform.s.x, 16); near(cores[4].props.transform.s.y, 0.5 * 4)
+        -- the rectangle spans -0.4w .. 0.6w around the origin, so the origin is shifted to centre it
+        near(cores[4].props.transform.t.x, -0.2)
         """
     ).let {}
 
@@ -262,9 +264,10 @@ class DisplayLuaTest {
         bar:set(0.5, 10)
         local m = last(fg).transform
         eq(last(fg).interp, 10)
-        -- left edge stays at -w/2: translation.x - scale.x/2 (in blocks) is constant
-        local function left(tr) return tr[4] - tr[1] / 8 / 2 end
+        -- the visible rectangle starts 0.4 of its width left of the origin: the left edge stays at -w/2
+        local function left(tr) return tr[4] - 0.4 * tr[1] / 8 end
         near(left(m), left(full), "left edge")
+        near(left(full), -1.0, "left edge at -w/2")
         near(m[1] * 2, full[1], "half width")
         bar:attach("mob", {0, 2, 0})
         eq(fg.attached[1], "mob"); eq(bg.attached[1], "mob")

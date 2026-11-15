@@ -21,8 +21,9 @@ local ui = {}
 
 -- ── Constants ──────────────────────────────────────────────────────────
 
--- A text display holding one space draws a rectangle of ~5 x 9 font pixels (0.025 blocks each) at scale 1.
-local QUAD_X, QUAD_Y = 8.0, 1 / (9 * 0.025)
+-- Scales that make a text-display background `w` x `h` blocks, and how far left of the quad's origin its rectangle
+-- begins (fraction of `w`): see `core:display`.
+local QUAD_X, QUAD_Y, QUAD_SKEW = display.QUAD.x, display.QUAD.y, display.QUAD.skew
 local LINE = 9 * 0.025   -- line height at scale 1
 local CHAR = 6 * 0.025   -- average glyph advance at scale 1
 local DEFAULT_REACH = 8
@@ -313,12 +314,14 @@ local function centre(node, frame)
     return r.x + r.w / 2 - frame.w / 2, frame.h / 2 - (r.y + r.h / 2)
 end
 
+-- Draws the rectangle of `w` x `hh` blocks centred on (u, v): the quad's origin is the bottom centre of that rectangle.
 local function quadSet(h, frame, u, v, z, w, hh, argb, interp)
+    w, hh = math.max(w, 1e-4), math.max(hh, 1e-4)
     h:set {
         interp = interp, background = argb,
         transform = {
-            t = ui.offset(frame, u, v - hh / 2, z), l = frame.q,
-            s = { x = QUAD_X * math.max(w, 1e-4), y = QUAD_Y * math.max(hh, 1e-4), z = 1 },
+            t = ui.offset(frame, u - QUAD_SKEW * w, v - hh / 2, z), l = frame.q,
+            s = { x = QUAD_X * w, y = QUAD_Y * hh, z = 1 },
         },
     }
 end

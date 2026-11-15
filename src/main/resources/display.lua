@@ -337,12 +337,18 @@ function display.text(world, pos, text, opts)
     return make("text", world, pos, opts, { text = text, billboard = "center" })
 end
 
--- A text display holding one space draws a plain rectangle of about 5 x 9 font pixels (0.025 blocks each) at
--- scale 1; these scales make it `w` x `h` blocks. The rectangle's origin is its bottom centre.
-local QUAD_X, QUAD_Y = 8.0, 1 / (9 * 0.025)
+-- A text display holding one space draws a rectangle of 5 x 10 font pixels (0.025 blocks each) at scale 1: the
+-- background spans x -W/2 .. W/2 + 1 and y 0 .. H + 1 around the entity origin (W = 4 text width, H = 9 text height,
+-- 1 pixel of padding on the right and at the top). These scales make it `w` x `h` blocks; the rectangle is not
+-- centred on its origin, it begins `QUAD_SKEW * w` further left, so a quad's translation is shifted by that much to
+-- make the origin the bottom centre of the visible rectangle.
+local QUAD_X, QUAD_Y, QUAD_SKEW = 8.0, 4.0, 0.1
+display.QUAD = { x = QUAD_X, y = QUAD_Y, skew = QUAD_SKEW }
 
 local function quadTransform(w, h, t)
-    return { t = t, s = { x = QUAD_X * w, y = QUAD_Y * h, z = 1 } }
+    local o = t and vec3(t, "offset") or { x = 0, y = 0, z = 0 }
+    o.x = o.x - QUAD_SKEW * w
+    return { t = o, s = { x = QUAD_X * w, y = QUAD_Y * h, z = 1 } }
 end
 
 --- Coloured rectangle (`argb`) of `w` x `h` blocks.
@@ -606,7 +612,7 @@ function Bar:set(frac, ticks)
     frac = math.max(0, math.min(1, frac))
     local w, h = self._w, self._h
     local width = math.max(w * frac, 1e-4)
-    local tr = { t = { x = -w / 2 + width / 2, y = 0, z = 0.002 }, s = { x = QUAD_X * width, y = QUAD_Y * h, z = 1 } }
+    local tr = { t = { x = -w / 2 + width / 2 - QUAD_SKEW * width, y = 0, z = 0.002 }, s = { x = QUAD_X * width, y = QUAD_Y * h, z = 1 } }
     self.frac = frac
     self.rig:node("fg"):animate({ transform = tr }, ticks or 0)
 end
@@ -632,7 +638,7 @@ function display.bar(world, pos, opts)
     local function node(color, z)
         local n = copy(opts)
         n.kind, n.text, n.background, n.billboard = "text", " ", color, "center"
-        n.transform = { t = { x = 0, y = 0, z = z }, s = { x = QUAD_X * w, y = QUAD_Y * h, z = 1 } }
+        n.transform = { t = { x = -QUAD_SKEW * w, y = 0, z = z }, s = { x = QUAD_X * w, y = QUAD_Y * h, z = 1 } }
         return n
     end
     local rig = display.group(world, pos, { bg = node(bg, 0), fg = node(fg, 0.002) })

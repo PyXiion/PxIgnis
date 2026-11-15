@@ -548,4 +548,74 @@ class Ui3dLuaTest {
             """.trimIndent()
         )
     }
+
+    // The rectangle a quad display draws, in panel layout coordinates (south-facing panel at x = 0): the background
+    // spans -0.4 .. 0.6 of its width around the origin horizontally and 0 .. 1 of its height upwards.
+    private val visual = """
+        function visual(core, W, H)
+            local t, s = core.props.transform.t, core.props.transform.s
+            local w, h = s.x / 8, s.y / 4
+            return { x0 = t.x - 0.4 * w + W / 2, x1 = t.x + 0.6 * w + W / 2, y0 = H / 2 - (t.y + h), y1 = H / 2 - t.y }
+        end
+        function quadsWith(argb)
+            local out = {}
+            for _, k in ipairs(cores) do if k.valid and k.props.background == argb then out[#out + 1] = k end end
+            return out
+        end
+    """.trimIndent() + "\n"
+
+    @Test
+    fun `bar fill keeps its left edge for every value`() {
+        run(
+            visual + """
+            local v = ref.new(1)
+            local p = ui.panel { at = { x = 0, y = 64, z = 0 }, width = 2, world = world } { ui.bar { value = v } }
+            local W, H = 2, 0.12
+            for _, value in ipairs { 1, 0.75, 0.5, 0.25, 0.1 } do
+                v:set(value)
+                local fill = visual(quadsWith(0xFF33CC33)[1], W, H)
+                near(fill.x0, 0, "left edge at value " .. value)
+                near(fill.x1, 2 * value, "right edge at value " .. value)
+                near(fill.y0, 0); near(fill.y1, H)
+            end
+            local track = visual(quadsWith(0x80000000)[1], W, H)
+            near(track.x0, 0); near(track.x1, 2, "track spans the panel")
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `visual rectangle and hit rectangle are the same numbers`() {
+        run(
+            twoButtons + visual + """
+            local p = build({}, { "A", id = "a", grow = true }, { "Longer", id = "b", grow = true })
+            local inst = p.instances.shared
+            local f = inst.frame
+            for _, id in ipairs { "a", "b" } do
+                local node = p:get(id)
+                local r = node.rect
+                -- the background quad of this widget: same size as its layout rectangle
+                local best
+                for _, k in ipairs(cores) do
+                    if k.valid and k.props.background == 0xFF3A3A3A then
+                        local q = visual(k, f.w, f.h)
+                        if math.abs(q.x0 - r.x) < 1e-6 then best = q end
+                    end
+                end
+                assert(best, "quad for " .. id)
+                near(best.x1, r.x + r.w, id .. " right"); near(best.y0, r.y, id .. " top"); near(best.y1, r.y + r.h, id .. " bottom")
+                -- just inside every visual edge, the ray picks the widget
+                local e = 0.005
+                for _, pt in ipairs { { best.x0 + e, best.y0 + e }, { best.x1 - e, best.y0 + e }, { best.x0 + e, best.y1 - e }, { best.x1 - e, best.y1 - e } } do
+                    local eye = { x = pt[1] - f.w / 2, y = 64 + f.h / 2 - pt[2], z = 3 }
+                    local x, y = ui.project(f, eye, { x = 0, y = 0, z = -1 })
+                    eq(ui.hit(inst.root, x, y), node, id .. " edge " .. pt[1] .. "," .. pt[2])
+                end
+                -- and just outside a visual edge it does not
+                local x, y = ui.project(f, { x = best.x0 - e - f.w / 2, y = 64, z = 3 }, { x = 0, y = 0, z = -1 })
+                assert(ui.hit(inst.root, x, y) ~= node, id .. " outside")
+            end
+            """.trimIndent()
+        )
+    }
 }
