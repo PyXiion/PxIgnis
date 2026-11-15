@@ -751,8 +751,7 @@ class Ui3dLuaTest {
             eq(label.props.text.extra[1].text, "Price: ")
             eq(label.props.text.extra[2].text, "C"); eq(label.props.text.extra[2].font, "a:b")
             eq(label.props.text.extra[3].text, " 10")
-            local s = label.props.transform.s.x
-            local centre = label.props.transform.t.x + 0.025 * s + f.w / 2
+            local centre = label.props.transform.t.x + f.w / 2
             near(centre, line.rect.x + line.rect.w / 2, "label centred on the layout rectangle")
 
             -- a standalone icon: scale * glyph width == the layout rectangle

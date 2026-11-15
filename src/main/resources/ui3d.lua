@@ -26,8 +26,6 @@ local ui = {}
 local QUAD_X, QUAD_Y, QUAD_SKEW = display.QUAD.x, display.QUAD.y, display.QUAD.skew
 -- Size of an icon glyph in a text display at scale 1 (the one source of layout width, render size and hit rectangle).
 local ICON_W, ICON_H = display.ICON.w, display.ICON.h
--- The text of a text display starts 1 px right of the entity origin (the 1 px padding of its background is on the left).
-local TEXT_SHIFT = 0.025
 local LINE = 9 * 0.025   -- line height at scale 1
 local CHAR = 6 * 0.025   -- average glyph advance at scale 1
 local DEFAULT_REACH = 8
@@ -410,7 +408,7 @@ local function labelSet(node, h, frame, u, v, z, parts, argb, k, interp)
     local s = sizeOf(node) / LINE * k
     h:set {
         interp = interp, text = component(parts, argb, node.ctx.theme),
-        transform = { t = ui.offset(frame, u - TEXT_SHIFT * s, v - LINE * s / 2, z), l = frame.q, s = { x = s, y = s, z = 1 } },
+        transform = { t = ui.offset(frame, u, v - LINE * s / 2, z), l = frame.q, s = { x = s, y = s, z = 1 } },
     }
 end
 
@@ -506,7 +504,7 @@ KINDS.icon = {
         if c.text and not c.type then c.color = hex(node.p.fg or st.fg or 0xFFFFFFFF) end
         node.vis[1]:set {
             interp = interp, text = c,
-            transform = { t = ui.offset(frame, u - TEXT_SHIFT * s, v - LINE * s / 2, st.z or 0), l = frame.q, s = { x = s, y = s, z = 1 } },
+            transform = { t = ui.offset(frame, u, v - LINE * s / 2, st.z or 0), l = frame.q, s = { x = s, y = s, z = 1 } },
         }
     end,
 }
