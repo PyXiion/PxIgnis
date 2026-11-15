@@ -89,6 +89,7 @@ object EntityWrap {
         )
 
         prop("dir") { Vector.fromMc(lookAngle).toLuaValue() }
+        prop("eyePos") { Vector.fromMc(eyePosition).toLuaValue() }
         prop("bodyDir") { Vector.fromRotation(visualRotationYInDegrees, 0.0f).toLuaValue() }
 
         prop(

@@ -38,6 +38,10 @@ Entity.pos = nil
 ---@type Vec
 Entity.dir = nil
 
+---Eye position, accounting for the entity's type and pose. Read-only.
+---@type Vec
+Entity.eyePos = nil
+
 ---Body direction (horizontal-only, ignores pitch).
 ---@type Vec
 Entity.bodyDir = nil

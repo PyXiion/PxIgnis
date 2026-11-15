@@ -48,6 +48,12 @@ Entity type (e.g. `"minecraft:zombie"`).
 
 The direction of the head.
 
+### `entity.eyePos`
+
+**type:** [Vector](/reference/vector-api) (read-only)
+
+Eye position, accounting for the entity's type and pose.
+
 ### `entity.bodyDir`
 
 **type:** [Vector](/reference/vector-api)
