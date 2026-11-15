@@ -194,4 +194,32 @@ class StorageTest {
         m.saveAll()
         assertEquals("b", StorageManager(JsonBackend(dir)).getGlobalData().get(2).tojstring())
     }
+
+    @Test
+    fun `save writes only the named key`() {
+        val dir = tempDir()
+        val m = StorageManager(JsonBackend(dir))
+        m.getPlayerData("a").set("n", 1)
+        m.getPlayerData("b").set("n", 1)
+        m.save("a")
+        m.save("nobody")
+        assertTrue(dir.resolve("players/a.json").exists())
+        assertFalse(dir.resolve("players/b.json").exists())
+        assertFalse(dir.resolve("players/nobody.json").exists())
+    }
+
+    @Test
+    fun `save skips a table that did not change`() {
+        val dir = tempDir()
+        val m = StorageManager(JsonBackend(dir))
+        m.getPlayerData("a").set("n", 1)
+        m.save("a")
+        val file = dir.resolve("players/a.json")
+        Files.delete(file)
+        m.save("a")
+        assertFalse(file.exists())
+        m.getPlayerData("a").set("n", 2)
+        m.save("a")
+        assertEquals(2, StorageManager(JsonBackend(dir)).getPlayerData("a").get("n").toint())
+    }
 }

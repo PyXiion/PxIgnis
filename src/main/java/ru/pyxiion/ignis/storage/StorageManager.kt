@@ -47,7 +47,8 @@ class StorageManager(private val backend: JsonBackend) {
         Entry(table, LuaJson.toJsonObject(table, rootName(key)))
     }
 
-    private fun save(key: String) {
+    /** Writes [key]'s table if its JSON differs from the last write. A key that is not loaded does nothing. */
+    fun save(key: String) {
         val entry = entries[key] ?: return
         val json = LuaJson.toJsonObject(entry.table, rootName(key))
         if (json == entry.lastSaved) return
