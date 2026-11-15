@@ -58,6 +58,7 @@ object GlobalEvents {
             EventDef("player.consume", true),
             EventDef("player.pickup", true),
             EventDef("player.drop", true),
+            EventDef("player.container_click", true),
             EventDef("player.custom_click", false),
 
             EventDef("block.break", true),

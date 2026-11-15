@@ -9,6 +9,7 @@ import net.minecraft.world.InteractionHand
 import net.minecraft.world.damagesource.DamageSource
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.inventory.AbstractContainerMenu
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.phys.Vec3
 import ru.pyxiion.luanova.vm2.LuaTable
@@ -39,6 +40,7 @@ object GameEvents {
     private fun damageType(source: DamageSource): LuaValue = LuaValue.valueOf(source.msgId.substringAfterLast("."))
     private fun hand(hand: InteractionHand): LuaValue = LuaValue.valueOf(if (hand == InteractionHand.MAIN_HAND) "main" else "off")
     private fun item(stack: ItemStack): LuaValue = if (stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack)
+    private fun copied(stack: ItemStack?): LuaValue = if (stack == null || stack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(stack.copy())
     private fun pos(pos: BlockPos): LuaValue = Vector.of(pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble()).toLuaValue()
     private fun vec(v: Vec3): LuaValue = Vector.fromMc(v).toLuaValue()
 
@@ -132,6 +134,27 @@ object GameEvents {
         it["item"] = ItemStackWrap.wrap(stack)
         it["count"] = LuaValue.valueOf(count)
     }
+
+    /**
+     * `player.container_click`: a click in any open menu, before vanilla applies it. Called by
+     * [ru.pyxiion.ignis.api.manager.ContainerManager.shouldAllowClick] for every menu, the player's own inventory
+     * included. `e.slot` is 1-based and nil outside the window; the other fields are documented in events.md.
+     */
+    fun containerClick(player: ServerPlayer, menu: AbstractContainerMenu, slot: Int, button: Int, action: Enum<*>) =
+        allowed("player.container_click") {
+            val inWindow = slot >= 0 && slot < menu.slots.size
+            val clicked = if (inWindow) menu.getSlot(slot) else null
+            val type = action.name
+            val swap = type == "SWAP" && (button in 0..8 || button == 40)
+            it["player"] = PlayerWrap.wrap(player)
+            it["slot"] = if (inWindow) LuaValue.valueOf(slot + 1) else LuaValue.NIL
+            it["clickType"] = LuaValue.valueOf(type.lowercase())
+            it["slotItem"] = copied(clicked?.item)
+            it["cursorItem"] = copied(menu.carried)
+            it["inPlayer"] = LuaValue.valueOf(clicked != null && clicked.container === player.inventory)
+            it["swapItem"] = if (swap) copied(player.inventory.getItem(button)) else LuaValue.NIL
+            it["playerMenu"] = LuaValue.valueOf(menu === player.inventoryMenu)
+        }
 
     // --- blocks ---------------------------------------------------------------------------------------------
 

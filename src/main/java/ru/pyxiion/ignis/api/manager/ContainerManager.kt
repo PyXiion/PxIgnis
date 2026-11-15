@@ -15,6 +15,7 @@ import ru.pyxiion.ignis.PxIgnis
 import ru.pyxiion.ignis.api.wrapper.ContainerWrapper
 import ru.pyxiion.ignis.api.wrapper.ItemStackWrap
 import ru.pyxiion.ignis.api.wrapper.PlayerWrap
+import ru.pyxiion.ignis.events.GameEvents
 import ru.pyxiion.ignis.runtime.ScriptErrors
 import ru.pyxiion.ignis.runtime.ScriptWatchdog
 
@@ -82,10 +83,10 @@ class ContainerManager {
     }
 
     /**
-     * Every click in a menu that has an `onClick` callback is shown to it: GUI slots, the player's own inventory
-     * slots (menu slot numbers, `inGui = false`) and clicks outside the window (`slot = nil`). The click goes
-     * through only if the callback returns `true`; `nil`, `false` or a Lua error cancel it.
-     * A menu without a callback behaves like a vanilla chest.
+     * Every click in any open menu goes through `player.container_click` first. A menu that has an `onClick`
+     * callback then shows it its clicks: GUI slots, the player's own inventory slots (menu slot numbers,
+     * `inGui = false`) and clicks outside the window (`slot = nil`). The click goes through only if the callback
+     * returns `true`; `nil`, `false` or a Lua error cancel it. A menu without a callback behaves like a vanilla chest.
      */
     fun shouldAllowClick(
         sh: AbstractContainerMenu,
@@ -94,6 +95,16 @@ class ContainerManager {
         actionType: Enum<*>,
         player: ServerPlayer
     ): Boolean {
+        val allowed = GameEvents.containerClick(player, sh, slot, button, actionType) &&
+            callbackAllows(sh, slot, actionType, player)
+
+        // The client has already predicted the click; put it back in sync with the untouched server state.
+        if (!allowed) sh.sendAllDataToRemote()
+        return allowed
+    }
+
+    /** The `onClick` callback of a PxIgnis menu; a menu without one allows every click. */
+    private fun callbackAllows(sh: AbstractContainerMenu, slot: Int, actionType: Enum<*>, player: ServerPlayer): Boolean {
         val wrapper = containers[sh] ?: return true
         val cb = wrapper.onClickCallback ?: return true
 
@@ -106,7 +117,7 @@ class ContainerManager {
         val cursorStack = sh.carried
         val luaCursor = if (cursorStack.isEmpty) LuaValue.NIL else ItemStackWrap.wrap(cursorStack.copy())
 
-        val allowed = try {
+        return try {
             val result = ScriptWatchdog.guard {
                 cb.invoke(LuaValue.varargsOf(arrayOf(
                     PlayerWrap.wrap(player),
@@ -122,9 +133,5 @@ class ContainerManager {
             ScriptErrors.error("container click", e)
             false
         }
-
-        // The client has already predicted the click; put it back in sync with the untouched server state.
-        if (!allowed) sh.sendAllDataToRemote()
-        return allowed
     }
 }

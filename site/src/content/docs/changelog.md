@@ -16,6 +16,9 @@ description: Release history for PxIgnis.
   New library `core:display` with quaternion/matrix math, `item`/`block`/`text`/`quad` helpers,
   `animate`/`spin`/`flyTo`/`fade`/`life`, rigs (`group`), timelines (`timeline`/`play`) and a `bar` widget.
   `mc.displays()` lists the live ones. See [Display](/reference/display-api) and [core:display](/libraries/display).
+- **`player.container_click`** (cancellable) runs for every click in any open menu (chests, crafters, anvils, crafting
+  grids, the player's own inventory) before vanilla applies it, so a script can keep items out of containers. See
+  [Events](/reference/events).
 
 ### Fixed
 

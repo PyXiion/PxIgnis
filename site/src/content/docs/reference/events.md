@@ -99,6 +99,7 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
 | `player.consume`      | `player`, `item`                                               | ✅ |
 | `player.pickup`       | `player`, `item`, `count`                                      | ✅ |
 | `player.drop`         | `player`, `item`, `count`                                      | ✅ |
+| `player.container_click` | `player`, `slot`, `clickType`, `slotItem`, `cursorItem`, `inPlayer`, `swapItem`, `playerMenu` | ✅ |
 | `player.custom_click` | `player`, `id`, `payload`                                      |   |
 | `block.break`         | `player`, `pos`, `block`                                       | ✅ |
 | `block.place`         | `player`, `pos`, `block`                                       | ✅ |
@@ -137,6 +138,12 @@ Unknown option names are an error, so a typo like `{ receiveCanceled = true }` d
   (not the block that was clicked) and `block` is the block that is placed. Cancelling prevents the placement.
 - `player.pickup` fires once per pickup attempt, after the pickup delay has passed.
 - `player.consume` is for players only. Cancelling stops the use and resends the player's inventory.
+- `player.container_click` fires for every click in every open menu, the player's own inventory included, before
+  vanilla applies it. Cancelling keeps the stacks where they are and resends the menu. A menu made with `inv:open`
+  calls its `onClick` callback only if the event was not cancelled. `slot` is 1-based, `nil` outside the window;
+  `clickType` is as in `container:onClick`; `inPlayer` is true for the player's own slots (main, hotbar, armor,
+  offhand) and false for chests, crafting grids, the ender chest and trade slots; `swapItem` is the player's item that
+  a `swap` (number keys, F) exchanges with the clicked slot; `playerMenu` is true for the player's inventory screen.
 - `block.break`, `block.place` and `player.use_item` report namespaced ids (`minecraft:stone`).
 - `entity.hurt` runs before the damage is applied (cancel to prevent it); `entity.damaged` after. `e.amount` of
   `entity.hurt` is writable: the value after all handlers have run is the damage that is applied, and an amount of 0

@@ -66,6 +66,15 @@ function Event:cancel(reason) end
 ---@class PlayerItemCountEvent : PlayerItemEvent
 ---@field count integer
 
+---@class PlayerContainerClickEvent : PlayerEvent
+---@field slot? integer          -- 1-based menu slot; nil for a click outside the window
+---@field clickType string       -- "pickup", "quick_move", "swap", "clone", "throw", "quick_craft", "pickup_all"
+---@field slotItem? Item         -- the item in the clicked slot
+---@field cursorItem? Item       -- the item on the cursor
+---@field inPlayer boolean       -- the clicked slot is one of the player's inventory slots
+---@field swapItem? Item         -- on "swap": the player's inventory item exchanged with the slot
+---@field playerMenu boolean     -- the open menu is the player's own inventory screen
+
 ---@class BlockEvent : PlayerEvent
 ---@field pos Vec
 ---@field block string  -- block id, e.g. "minecraft:stone"
@@ -122,6 +131,7 @@ function Event:cancel(reason) end
 ---@overload fun(event: '"player.consume"', handler: fun(e: PlayerItemEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.pickup"', handler: fun(e: PlayerItemCountEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.drop"', handler: fun(e: PlayerItemCountEvent), opts?: EventOptions): integer
+---@overload fun(event: '"player.container_click"', handler: fun(e: PlayerContainerClickEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"player.custom_click"', handler: fun(e: PlayerCustomClickEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"block.break"', handler: fun(e: BlockEvent), opts?: EventOptions): integer
 ---@overload fun(event: '"block.place"', handler: fun(e: BlockEvent), opts?: EventOptions): integer

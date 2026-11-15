@@ -221,4 +221,9 @@ class EventModelTest {
         assertEquals("entity.hurt", GlobalEvents.CATALOG.suggest("entity_hurt"))
         assertNull(GlobalEvents.CATALOG.suggest("something_else_entirely"))
     }
+
+    @Test
+    fun `container click is a cancellable built-in event`() {
+        assertEquals(true, GlobalEvents.CATALOG.def("player.container_click")?.cancellable)
+    }
 }
