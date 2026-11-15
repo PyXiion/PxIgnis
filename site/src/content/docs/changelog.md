@@ -19,6 +19,15 @@ description: Release history for PxIgnis.
 
 - **`core:ref`**: local reactive values (`ref.new`, `get`, `set`, `update`, `watch`) plus auto-tracking `ref.effect` and
   `ref.computed`. See [ref](/libraries/ref).
+- **`core:ui3d`**: in-world UI panels built from virtual displays: `col`/`row`/`stack` layout, `text`, `button`, `icon`,
+  `bar` and `toggle` widgets, `ui.show`/`ui.each`, styles with hover/press/disabled states, props bound to `core:ref`,
+  hover by ray against the panel plane and clicks through one interaction display, `hover`/`press` modes
+  (`"viewer"`: shown only to the player causing it, default; `"shared"`: shown to every viewer; per panel or widget),
+  button sounds (`sound` in a style: click on press by default, optional hover and disabled sounds, per player or at
+  the widget following the mode), icons as text components (item sprite, sprite, font glyph, player head, `theme.icons`
+  names, inline in text; `model = true` for a 3D item), per-player panels from a `function(player)` tree. See [ui3d](/libraries/ui3d).
+- **`entity.eyePos`** (read-only): the eye position of any entity, for its type and pose.
+- **`player:saveData()`**: writes this player's data to disk now, if it changed since the last write. See [Storage](/reference/storage).
 - `mob.pathReaches` tells a complete path from a partial one (the closest reachable point). `entity.followRange` reads and
   writes the `follow_range` attribute, which also caps how many nodes the path finder may visit.
 - **`entity.drops`** (cancellable): a death's loot step. `e.drops` is the editable list of Items vanilla would drop (loot
@@ -43,6 +52,8 @@ description: Release history for PxIgnis.
   " Buy" } }`. `dialog.sprite(sprite, atlas?)` builds the `{ type = "object", atlas, sprite }` component. The raw
   `player:showDialog` converts component tables in the same fields through the shared text converter.
   See [core:dialog](/libraries/dialog).
+- **`player.swap_hands`** (cancellable) fires when the swap-offhand key (F) is pressed in the world, before the hands are
+  exchanged. `main` and `off` hold the items before the swap. See [Events](/reference/events).
 
 ### Fixed
 
