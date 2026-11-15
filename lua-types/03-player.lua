@@ -62,7 +62,7 @@ function Player:sendMessage(text) end
 ---@field strikethrough? boolean
 ---@field obfuscated? boolean
 ---@field extra? (TextComponent|string)[]
----@field type? string                  -- "object" with `atlas` and `sprite` is an icon (Minecraft 1.21.9+)
+---@field type? string                  -- "object" with `atlas` and `sprite` is an icon
 ---@field atlas? string                 -- "minecraft:items" for item icons, "minecraft:blocks" (default) for block textures
 ---@field sprite? string                -- e.g. "minecraft:item/diamond", "planefall:item/<id>"
 ---Any other field of the vanilla text component format (`translate`, `object`, `hover_event`, ...) is accepted too.
@@ -135,7 +135,7 @@ function Player:getItem(slot) end
 ---Clears the player's inventory.
 function Player:clear() end
 
----Shows a dialog (Minecraft 1.21.6+). `spec` is a registry dialog id (`"minecraft:server_links"`) or a table in the
+---Shows a dialog. `spec` is a registry dialog id (`"minecraft:server_links"`) or a table in the
 ---vanilla dialog JSON shape (`type`, `title`, `body`, `inputs`, `actions`, `after_action`, `exit_action`, ...); an Item
 ---is accepted wherever the JSON wants an item stack. A spec the game rejects raises an error with the codec's message.
 ---Clicks on `custom` actions arrive as `player.custom_click`. `require "core:dialog"` is the convenient layer.

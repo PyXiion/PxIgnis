@@ -203,9 +203,6 @@ close to a built-in one gets a hint:
 Otherwise the error reads
 `unknown event 'boss_killed'. Custom events must be namespaced, e.g. 'mymod:boss_killed'`.
 
-The names used up to 0.17 (`player_join`, `player_block_break`, ...) are unknown names too; the
-[changelog](/changelog#event-names-before-018) maps each one to its replacement.
-
 ## Time limit
 
 A handler (or any other Lua call on the server thread) that runs longer than 5 seconds is stopped with the error

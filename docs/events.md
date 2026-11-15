@@ -35,7 +35,7 @@ What `mc.on` / `region:on` do and why. The user-facing reference is `site/src/co
 - **Async handlers** return to the dispatcher at their first yield. Anything they do afterwards is too late to
   affect the event, so `e:cancel()` on a finished event throws instead of silently doing nothing.
 - **Names.** Built-in events use `category.action` (`player.join`, `block.break`, `entity.hurt`); lifecycle events
-  keep their old names (`init`, `tick`, ...) since they had no arguments and an extra `e` argument breaks nothing.
+  keep their names (`init`, `tick`, ...) since they had no arguments and an extra `e` argument breaks nothing.
   Region events drop the prefix (`enter`, `leave`, `move`, `death`). Damage is two events: `entity.hurt` (before,
   cancellable) and `entity.damaged` (after); `e.player` is set when the entity is a player instead of separate
   `player_*` variants.
@@ -44,8 +44,8 @@ What `mc.on` / `region:on` do and why. The user-facing reference is `site/src/co
   tried first and was easy to miss: the handler was registered and never ran. Requiring a namespace for custom events
   is what makes the check possible, since a bare unknown name is then always a mistake. `mc.emit` applies the same
   rule and also refuses built-in names (it would deliver positional args to handlers expecting `e`).
-- **No compatibility layer.** The 0.17 names are removed, not mapped onto the new events: the project is pre-1.0,
-  and views that rebuilt positional arguments doubled the dispatch paths. The changelog has the mapping table.
+- **No compatibility layer.** Names are not aliased: the project is pre-1.0,
+  and views that rebuilt positional arguments doubled the dispatch paths.
 - **Throttle** uses a clock (the bus's own tick counter, or `RegionManager.ticks` for regions) instead of
   per-handler countdowns, so it works whatever else is registered.
 

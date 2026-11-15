@@ -1,9 +1,9 @@
 ---
 title: dialog
-description: Server dialogs (Minecraft 1.21.6+) - text, numbers, options and buttons with checked input and click handlers.
+description: Server dialogs - text, numbers, options and buttons with checked input and click handlers.
 ---
 
-The `dialog` library shows the dialog screens of Minecraft 1.21.6+ and calls your function when a button is clicked.
+The `dialog` library shows the dialog screens of Minecraft and calls your function when a button is clicked.
 It builds the vanilla dialog, routes the clicks, and checks what the client sends back before your handler sees it.
 
 ## Loading
@@ -149,7 +149,7 @@ end)
 
 ## Notes
 
-- Needs a Minecraft 1.21.6+ client. Dialogs shown before joining (configuration phase) are not supported.
+- Dialogs shown before joining (configuration phase) are not supported.
 - Input labels and text in the body are plain strings; button labels, tooltips and the title can be components.
 - For anything the library does not cover use the raw [`player:showDialog(spec)`](/reference/player-api#playershowdialogspec)
   with the vanilla dialog JSON.

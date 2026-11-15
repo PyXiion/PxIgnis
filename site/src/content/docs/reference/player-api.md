@@ -207,7 +207,7 @@ player:clear()
 
 ## Dialogs
 
-Raw access to Minecraft 1.21.6+ dialogs. Most scripts want [`core:dialog`](/libraries/dialog), which builds the dialog,
+Raw access to Minecraft dialogs. Most scripts want [`core:dialog`](/libraries/dialog), which builds the dialog,
 routes the clicks and validates the input.
 
 ### `player:showDialog(spec)`

@@ -1,6 +1,6 @@
 # Dialogs
 
-Minecraft 1.21.6 added server dialogs: screens with text, inputs and buttons. PxIgnis exposes them in two layers.
+Minecraft server dialogs are screens with text, inputs and buttons. PxIgnis exposes them in two layers.
 
 ## Raw API and Lua library
 
@@ -45,7 +45,7 @@ phase dialogs are not supported.
 
 ## Why not `run_command`
 
-The vanilla `run_command` action in 1.21.6 shows a confirmation screen to a player who lacks permission for the command,
+The vanilla `run_command` action shows a confirmation screen to a player who lacks permission for the command,
 and would make every dialog button a chat command to guard. `dialog.command(label, cmd)` is a `custom` click that the
 server answers with `player:runCommand(cmd)`: the player's own command source, so their permissions, and no confirmation
 screen. `mc.execute(cmd, { as = player })` is not used for this: it keeps the console's permissions.
@@ -72,5 +72,5 @@ Dialog registries and tags are synchronised when a player joins, so a script can
 `config/pxignis/datapacks` (from the configured title and button) and a mixin on `PackRepository` offers it next to the
 server's other packs; it is enabled automatically like a built-in pack. Both tags are extended (`replace: false`). This
 needs no per-version resources besides the pack format number, read from the running game. The flag defaults to off. The file is read once per server start: vanilla `/reload` reloads tags but not the dialog
-registry, so a pack switched on by `/reload` produced tag errors (missing `pxignis:menu`); the decision is now fixed per
+registry, so a pack switched on by `/reload` would produce tag errors (missing `pxignis:menu`); the decision is fixed per
 pack repository and changes apply on restart. The button sends the custom click `pxignis:menu`.

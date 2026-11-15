@@ -199,7 +199,7 @@ function Async.sleep(ticks) end
 ---@return FetchResult
 function Async.fetch(request) end
 
--- `require "core:dialog"`: server dialogs (Minecraft 1.21.6+). See /libraries/dialog.
+-- `require "core:dialog"`: server dialogs. See /libraries/dialog.
 
 ---A piece of a dialog made by the constructors of `DialogLib`.
 ---@class DialogEntry
@@ -319,7 +319,7 @@ function Dialog.link(label, url) end
 function Dialog.copy(label, text) end
 
 ---An icon for a text component (a button label's `extra`): `{ type = "object", atlas, sprite }`. `atlas` defaults to
----"minecraft:items" (item icons); use "minecraft:blocks" for block textures. Needs a Minecraft 1.21.9+ client.
+---"minecraft:items" (item icons); use "minecraft:blocks" for block textures.
 ---@param sprite string  -- e.g. "minecraft:item/diamond"
 ---@param atlas? string
 ---@return TextComponent
