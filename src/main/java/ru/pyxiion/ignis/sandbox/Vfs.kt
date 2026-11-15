@@ -29,6 +29,7 @@ class Vfs(val roots: List<Path>) {
         "particles" to Module(loadResource("/particles.lua"), "@particles.lua"),
         "dialog" to Module(loadResource("/dialog.lua"), "@dialog.lua"),
         "display" to Module(loadResource("/display.lua"), "@display.lua"),
+        "ui3d" to Module(loadResource("/ui3d.lua"), "@ui3d.lua"),
         "ref" to Module(loadResource("/ref.lua"), "@ref.lua"),
     )
 

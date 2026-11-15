@@ -14,6 +14,7 @@ local fx = require "core:particles"
 local dialog = require "core:dialog"
 local display = require "core:display"
 local ref = require "core:ref"
+local ui = require "core:ui3d"
 ```
 
 ## Available Libraries
@@ -28,6 +29,7 @@ local ref = require "core:ref"
 | [dialog](/libraries/dialog)     | Server dialogs with inputs and click handlers |
 | [display](/libraries/display)   | Virtual display entities: items, blocks, text, rigs, timelines, bars |
 | [ref](/libraries/ref)           | Reactive values: watchers, effects, computed values |
+| [ui3d](/libraries/ui3d)         | In-world UI panels: layout, buttons, bars, hover and click, bound to refs |
 
 ## Loading from Subdirectories
 

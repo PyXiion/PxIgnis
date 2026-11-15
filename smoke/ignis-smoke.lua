@@ -458,6 +458,31 @@ local function displayPhase(w, mob)
             end)
         end)
     end)
+    step("ui3d: panel builds, reacts and removes", function()
+        local ref, ui = require "core:ref", require "core:ui3d"
+        local before = #mc.displays()
+        local score, flag = ref.new(0), ref.new(false)
+        local p = ui.panel { at = vec(0, 96, 4), facing = "north", width = 3, world = w } {
+            ui.col { gap = 0.05, pad = 0.1,
+                ui.text { id = "t", function() return "Score: " .. score:get() end },
+                ui.bar { value = function() return score:get() / 10 end },
+                ui.row { gap = 0.05,
+                    ui.button { "+1", onClick = function() score:update(function(n) return n + 1 end) end },
+                    ui.button { "Exit", style = "danger", disabled = function() return score:get() < 10 end },
+                    ui.toggle { value = flag },
+                    ui.icon("minecraft:apple"),
+                },
+                ui.show(flag, ui.text("shown")),
+                ui.each({ "a", "b" }, function(item) return ui.text(item) end),
+            },
+        }
+        assert(#mc.displays() > before + 8, "panel displays missing")
+        score:set(10)
+        flag:set(true)
+        assert(p:get("t").p.text == "Score: 10")
+        p:remove()
+        assert(#mc.displays() == before, "panel displays left behind")
+    end)
     persist = w:display("text", vec(0, 95, 0), { text = "persist", viewers = "manual" })
     mc.data.smoke_display_persist = true
 end

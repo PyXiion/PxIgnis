@@ -84,6 +84,7 @@ export default defineConfig({
             { label: "Particles", slug: "libraries/particles" },
             { label: "Dialog", slug: "libraries/dialog" },
             { label: "Display", slug: "libraries/display" },
+            { label: "ui3d", slug: "libraries/ui3d" },
           ],
         },
         {

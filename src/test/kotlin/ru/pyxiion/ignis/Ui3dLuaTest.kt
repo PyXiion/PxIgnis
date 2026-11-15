@@ -1,0 +1,362 @@
+package ru.pyxiion.ignis
+
+import ru.pyxiion.luanova.vm2.LuaState
+import ru.pyxiion.luanova.vm2.LuaValue
+import ru.pyxiion.luanova.vm2.lib.jse.JsePlatform
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+
+/** `core:ui3d` against a fake `world:display`, `mc` scheduler and players: layout, ray mapping, hit-test, bindings. */
+class Ui3dLuaTest {
+    private val state: LuaState = JsePlatform.standardState()
+
+    private fun resource(name: String): String = javaClass.getResource(name)!!.readText()
+
+    @BeforeTest
+    fun setup() {
+        run(
+            """
+            mc = { tasks = {}, n = 0, now = 0, players = {} }
+            function mc.schedule(d, cb) mc.n = mc.n + 1; mc.tasks[mc.n] = { at = mc.now + d, cb = cb }; return mc.n end
+            function mc.scheduleRepeating(d, i, cb)
+                mc.n = mc.n + 1; mc.tasks[mc.n] = { at = mc.now + d, every = i, cb = cb }; return mc.n
+            end
+            function mc.cancelTask(id) if mc.tasks[id] then mc.tasks[id].dead = true end end
+            function tick(n)
+                for _ = 1, n or 1 do
+                    mc.now = mc.now + 1
+                    for id = 1, mc.n do
+                        local t = mc.tasks[id]
+                        if t and not t.dead and t.at <= mc.now then
+                            if t.every then t.at = mc.now + t.every else t.dead = true end
+                            t.cb()
+                        end
+                    end
+                end
+            end
+            function liveTasks() local c = 0; for _, t in pairs(mc.tasks) do if not t.dead then c = c + 1 end end; return c end
+
+            Core = {}
+            Core.__index = Core
+            function Core:set(p) self.sets = self.sets + 1; for k, v in pairs(p) do self.props[k] = v end end
+            function Core:moveTo(pos) self.pos = pos end
+            function Core:attach() end
+            function Core:detach() end
+            function Core:show() end
+            function Core:hide() end
+            function Core:remove() self.valid = false end
+            function Core:onClick(fn) self.click = fn end
+            function Core:onAttack(fn) self.attack = fn end
+
+            cores = {}
+            rayResult = nil
+            world = {
+                display = function(_, kind, pos, props)
+                    local c = setmetatable({ kind = kind, pos = pos, props = {}, sets = 0, valid = true }, Core)
+                    for k, v in pairs(props or {}) do c.props[k] = v end
+                    cores[#cores + 1] = c
+                    return c
+                end,
+                raycast = function() return rayResult end,
+            }
+            function mc.world() return world end
+
+            function eq(a, b, what) assert(a == b, (what or "") .. ": expected " .. tostring(b) .. ", got " .. tostring(a)) end
+            function near(a, b, what) assert(math.abs(a - b) < 1e-6, (what or "") .. ": expected " .. tostring(b) .. ", got " .. tostring(a)) end
+            function totalSets() local c = 0; for _, k in ipairs(cores) do c = c + k.sets end; return c end
+            function liveCores() local c = 0; for _, k in ipairs(cores) do if k.valid then c = c + 1 end end; return c end
+            function withBackground(argb)
+                local c = 0
+                for _, k in ipairs(cores) do if k.valid and k.kind == "text" and k.props.background == argb then c = c + 1 end end
+                return c
+            end
+            function shield() for _, k in ipairs(cores) do if k.kind == "interaction" then return k end end end
+            function player(x, y, z, dx, dy, dz)
+                return { uuid = "p" .. x, eyePos = { x = x, y = y, z = z }, dir = { x = dx, y = dy, z = dz }, pos = { x = x, y = y - 1.6, z = z } }
+            end
+            """.trimIndent()
+        )
+        val mods = mapOf("core:ref" to "/ref.lua", "core:display" to "/display.lua")
+        val loaded = LuaValue.tableOf()
+        state.globals.set("package_loaded", loaded)
+        for ((name, res) in mods) loaded.set(name, state.load(resource(res), res.drop(1)).call())
+        run("function require(n) return package_loaded[n] end")
+        loaded.set("core:ui3d", state.load(resource("/ui3d.lua"), "ui3d.lua").call())
+        run("ref, ui = package_loaded['core:ref'], package_loaded['core:ui3d']")
+    }
+
+    private fun run(chunk: String): LuaValue = state.load(chunk, "t").call()
+
+    @Test
+    fun `layout stacks, gaps, pads and distributes grow space`() {
+        run(
+            """
+            local function box(w, h, grow) return { kind = "box", p = { w = w, h = h, grow = grow }, children = {} } end
+            local function node(kind, p, kids) return { kind = kind, p = p, children = kids } end
+
+            -- col: natural size, gap and pad
+            local a, b = box(1, 0.5), box(2, 0.25)
+            local col = node("col", { gap = 0.1, pad = 0.2 }, { a, b })
+            local w, h = ui.layout(col)
+            near(w, 2.4); near(h, 0.5 + 0.25 + 0.1 + 0.4)
+            near(a.rect.x, 0.2); near(a.rect.y, 0.2); near(b.rect.y, 0.2 + 0.5 + 0.1)
+            near(a.rect.w, 1, "fixed width"); near(b.rect.w, 2.0)
+
+            -- row with grow shares the free space by weight
+            local x, y, z = box(1, 1), box(0, 1, 1), box(0, 1, 3)
+            local row = node("row", { gap = 0.5 }, { x, y, z })
+            ui.layout(row, 10, 1)
+            near(y.rect.x, 1.5); near(y.rect.w, 2); near(z.rect.x, 4.0); near(z.rect.w, 6)
+            eq(z.rect.h, 1)
+
+            -- align
+            local c = box(1, 1)
+            local centered = node("col", { align = "center" }, { c, box(3, 1) })
+            ui.layout(centered)
+            near(c.rect.x, 1)
+            local e = box(1, 1)
+            ui.layout(node("col", { align = "end" }, { e, box(3, 1) }))
+            near(e.rect.x, 2)
+
+            -- stack layers share the rectangle; nested dynamic children are flattened into the parent
+            local s1, s2 = box(nil, nil), box(nil, nil)
+            ui.layout(node("stack", {}, { s1, s2 }), 4, 4)
+            near(s1.rect.w, 4); near(s2.rect.h, 4)
+            local d1, d2 = box(1, 1), box(1, 1)
+            local dyn = { kind = "each", dyn = true, p = {}, children = { d1, d2 } }
+            local r = node("row", {}, { box(1, 1), dyn })
+            local rw = ui.layout(r)
+            near(rw, 3); near(d2.rect.x, 2)
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `ray to panel local coordinates for every facing`() {
+        run(
+            """
+            -- north: the front faces -Z, the viewer stands at -Z looking +Z, their right is -X
+            local f = ui.frame({ x = 0, y = 64, z = 0 }, "north", 2, 1)
+            local x, y, t = ui.project(f, { x = 0.5, y = 64.25, z = -3 }, { x = 0, y = 0, z = 1 }, 8)
+            near(x, 0.5, "north x"); near(y, 0.25, "north y"); near(t, 3, "north t")
+            -- top-left of the panel is at the viewer's left/top
+            x, y = ui.project(f, { x = 0.99, y = 64.49, z = -2 }, { x = 0, y = 0, z = 1 })
+            near(x, 0.01); near(y, 0.01)
+            assert(ui.project(f, { x = 0, y = 64, z = 3 }, { x = 0, y = 0, z = -1 }) == nil, "back side")
+            assert(ui.project(f, { x = 1.5, y = 64, z = -3 }, { x = 0, y = 0, z = 1 }) == nil, "outside")
+            assert(ui.project(f, { x = 0, y = 64, z = -3 }, { x = 1, y = 0, z = 0 }) == nil, "parallel")
+            assert(ui.project(f, { x = 0, y = 64, z = -9 }, { x = 0, y = 0, z = 1 }, 8) == nil, "range")
+            assert(ui.project(f, { x = 0, y = 64, z = 3 }, { x = 0, y = 0, z = 1 }) == nil, "behind the eye")
+
+            local e = ui.frame({ x = 0, y = 64, z = 0 }, "east", 2, 1)
+            x, y = ui.project(e, { x = 3, y = 64, z = 0.5 }, { x = -1, y = 0, z = 0 })
+            near(x, 0.5, "east x")
+            local s = ui.frame({ x = 0, y = 64, z = 0 }, "south", 2, 1)
+            x = ui.project(s, { x = 0.5, y = 64, z = 3 }, { x = 0, y = 0, z = -1 })
+            near(x, 1.5, "south x")
+            local w = ui.frame({ x = 0, y = 64, z = 0 }, "west", 2, 1)
+            x = ui.project(w, { x = -3, y = 64, z = 0.5 }, { x = 1, y = 0, z = 0 })
+            near(x, 1.5, "west x")
+
+            -- oblique ray
+            x, y, t = ui.project(s, { x = -2, y = 64, z = 2 }, { x = math.sqrt(0.5), y = 0, z = -math.sqrt(0.5) })
+            near(x, 1, "oblique x"); near(t, 2 * math.sqrt(2), "oblique t") -- hits (0, 64, 0)
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `hit-test picks the topmost interactive node`() {
+        run(
+            """
+            local function btn(w, h) return { kind = "button", interactive = true, p = { w = w, h = h }, children = {} } end
+            local lbl = { kind = "text", p = { w = 1, h = 1 }, children = {} }
+            local b1, b2 = btn(1, 1), btn(1, 1)
+            local row = { kind = "row", p = { gap = 1 }, children = { b1, lbl, b2 } }
+            ui.layout(row)
+            eq(ui.hit(row, 0.5, 0.5), b1)
+            eq(ui.hit(row, 2.5, 0.5), nil, "label is not interactive")
+            eq(ui.hit(row, 4.5, 0.5), b2)
+            eq(ui.hit(row, 1.5, 0.5), nil, "gap")
+            eq(ui.hit(row, 9, 9), nil)
+            -- stack: the later layer wins
+            local below, above = btn(1, 1), btn(1, 1)
+            local st = { kind = "stack", p = {}, children = { below, above } }
+            ui.layout(st, 2, 2)
+            eq(ui.hit(st, 1, 1), above)
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `styles merge theme overrides per state`() {
+        run(
+            """
+            local th = ui.theme({ danger = { bg = 0xFF111111, hover = { scale = 2 } }, custom = { fg = 5 } })
+            local base = ui.resolveStyle(th, "danger", nil)
+            eq(base.bg, 0xFF111111); eq(base.fg, 0xFFFFFFFF)
+            local hov = ui.resolveStyle(th, "danger", "hover")
+            eq(hov.scale, 2); eq(hov.bg, 0xFFB02A2A, "inherited hover bg")
+            eq(ui.resolveStyle(th, "custom", "press").fg, 5)
+            eq(ui.resolveStyle(ui.theme(), "button", "disabled").fg, 0xFF808080)
+            """.trimIndent()
+        )
+    }
+
+    private val demo = """
+        local score = ref.new(0)
+        local clicks, last = 0, nil
+        local p = ui.panel { at = { x = 0, y = 64, z = 0 }, facing = "north", width = 3, world = world } {
+            ui.col { gap = 0.05, pad = 0.1,
+                ui.text { id = "title", function() return "Score: " .. score:get() end },
+                ui.button { id = "go", "+1", onClick = function(pl) clicks = clicks + 1; last = pl end,
+                            disabled = function() return score:get() >= 10 end },
+            },
+        }
+        local viewer = player(0, 64, -3, 0, 0, 1)
+        mc.players[1] = viewer
+    """.trimIndent() + "\n"
+
+    @Test
+    fun `hover needs a plane hit and no block in between, click goes through the shield`() {
+        run(
+            demo + """
+            eq(withBackground(0xFF3A3A3A), 1, "idle button")
+            tick(1)
+            eq(withBackground(0xFF565656), 1, "hovered")
+            -- a block between the eye and the panel cancels the hover
+            rayResult = { hit = { x = 0, y = 64, z = -1 } }
+            tick(1)
+            eq(withBackground(0xFF3A3A3A), 1, "occluded")
+            -- a block behind the panel plane does not
+            rayResult = { hit = { x = 0, y = 64, z = 2 } }
+            tick(1)
+            eq(withBackground(0xFF565656), 1, "block behind the panel")
+            rayResult = nil
+            -- looking away
+            viewer.dir = { x = 0, y = 0, z = -1 }
+            tick(1)
+            eq(withBackground(0xFF3A3A3A), 1, "looked away")
+            viewer.dir = { x = 0, y = 0, z = 1 }
+
+            local s = shield()
+            near(s.props.hitbox.w, 3); assert(s.props.hitbox.h > 0.5)
+            s.click(viewer, "off")
+            eq(clicks, 0, "off hand ignored")
+            s.click(viewer, "main")
+            eq(clicks, 1); eq(last, viewer)
+            eq(withBackground(0xFF262626), 1, "pressed")
+            tick(4)
+            eq(withBackground(0xFF262626), 0, "press released")
+            s.attack(viewer)
+            eq(clicks, 2, "attack clicks too")
+            -- a click outside every widget does nothing
+            s.click(player(1.45, 64, -3, 0, 0, 1), "main")
+            eq(clicks, 2)
+            s.click(player(0, 70, -3, 0, 0, 1), "main")
+            eq(clicks, 2, "missed the panel")
+            -- disabled buttons ignore clicks
+            score:set(10)
+            s.click(viewer, "main")
+            eq(clicks, 2, "disabled")
+            eq(withBackground(0xFF2A2A2A), 1, "disabled style")
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `props bind to refs and functions, remove disposes everything`() {
+        run(
+            demo + """
+            local title = p:get("title")
+            eq(title.p.text, "Score: 0")
+            local text
+            for _, c in ipairs(cores) do if c.kind == "text" and type(c.props.text) == "table" and c.props.text.text == "Score: 0" then text = c end end
+            assert(text, "label display")
+            score:set(3)
+            eq(title.p.text, "Score: 3")
+            eq(text.props.text.text, "Score: 3")
+            assert(liveCores() >= 3)
+            eq(liveTasks(), 1)
+
+            p:remove()
+            eq(liveCores(), 0, "every display removed")
+            eq(liveTasks(), 0, "hover task cancelled")
+            local before = totalSets()
+            score:set(5)
+            eq(totalSets(), before, "no binding survives remove")
+            p:remove() -- idempotent
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `show and each rebuild only their subtree`() {
+        run(
+            """
+            local flag, list = ref.new(false), ref.new({ "a" })
+            local p = ui.panel { at = { x = 0, y = 64, z = 0 }, width = 3, world = world } {
+                ui.col {
+                    ui.text { id = "static", "hello" },
+                    ui.show(flag, ui.button { id = "extra", "X" }),
+                    ui.each(list, function(item, i) return ui.text { id = "item" .. i, item } end),
+                },
+            }
+            local static = p:get("static")
+            local before = liveCores()
+            eq(p:get("extra"), nil); assert(p:get("item1")); eq(p:get("item2"), nil)
+            local staticSets = (function() for _, c in ipairs(cores) do if c.props.text and c.props.text.text == "hello" then return c.sets end end end)()
+            flag:set(true)
+            assert(p:get("extra"), "shown")
+            assert(liveCores() > before, "button displays added")
+            eq(p:get("static"), static, "untouched node survives")
+            list:set({ "a", "b", "c" })
+            assert(p:get("item3"))
+            list:set({})
+            eq(p:get("item1"), nil)
+            flag:set(false)
+            eq(p:get("extra"), nil)
+            eq(liveCores(), before - 1, "only the static label and the shield remain next to the removed ones")
+            p:remove()
+            eq(liveCores(), 0)
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `toggle writes its ref and a factory panel builds one tree per player`() {
+        run(
+            """
+            local on = ref.new(false)
+            local changes = 0
+            local p = ui.panel { at = { x = 0, y = 64, z = 0 }, width = 1, world = world } {
+                ui.toggle { id = "t", value = on, onChange = function(v) changes = changes + 1 end },
+            }
+            local viewer = player(0, 64, 3, 0, 0, -1)
+            mc.players[1] = viewer
+            shield().click(viewer, "main")
+            eq(on:get(), true); eq(changes, 1)
+            shield().click(viewer, "main")
+            eq(on:get(), false)
+            p:remove()
+
+            local built = {}
+            local q = ui.panel { at = { x = 0, y = 64, z = 0 }, width = 2, world = world } (function(pl)
+                built[#built + 1] = pl
+                return ui.text("hi " .. pl.uuid)
+            end)
+            eq(#built, 1)
+            local before = liveCores()
+            mc.players[2] = player(5, 64, 5, 0, 0, -1)
+            tick(1)
+            eq(#built, 2, "second player gets a tree")
+            assert(q:get("none", viewer) == nil)
+            mc.players[2] = nil
+            tick(1)
+            eq(liveCores(), before, "leaving player's displays removed")
+            q:remove()
+            eq(liveCores(), 0)
+            """.trimIndent()
+        )
+    }
+}
