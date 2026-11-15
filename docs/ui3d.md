@@ -64,7 +64,10 @@ Every widget prop accepts a plain value, a `Ref`, or a function.
 
 - `theme` table on the panel; named styles (`style = "danger"`).
 - A style has a base and `hover`, `press`, `disabled` overrides (`bg`, `fg`, `scale`, `z`).
-- Transforms (scale, z lift) animate client-side via `interp`; colors switch instantly.
+- Transforms (scale, z lift) animate client-side via `interp`.
+- `hover` and `press` panel options (overridable per widget): `"viewer"` (default) shows the state only to the
+  player causing it, through a per-player highlight display; `"shared"` shows it to every viewer.
+- Hover/press colour changes interpolate together with the transform (one `interp` per display per tick).
 
 ## Stage 2
 
