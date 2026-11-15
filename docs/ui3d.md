@@ -65,6 +65,9 @@ Every widget prop accepts a plain value, a `Ref`, or a function.
 - `theme` table on the panel; named styles (`style = "danger"`).
 - A style has a base and `hover`, `press`, `disabled` overrides (`bg`, `fg`, `scale`, `z`).
 - Transforms (scale, z lift) animate client-side via `interp`.
+- `sound = { hover, press, disabled, volume, pitch }` in a style (id or `false`): default click on press, hover and
+  disabled silent. Played to the player alone in `"viewer"` mode, at the widget for nearby players in `"shared"` mode
+  (`Player:playSound` / `World:playSound`). Disabled widgets play only `disabled`.
 - `hover` and `press` panel options (overridable per widget): `"viewer"` (default) shows the state only to the
   player causing it, through a per-player highlight display; `"shared"` shows it to every viewer.
 - Hover/press colour changes interpolate together with the transform (one `interp` per display per tick).

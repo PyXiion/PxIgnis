@@ -94,6 +94,18 @@ ui.panel { at = pos, theme = {
 
 Scale and z lift animate on the client through `interp`.
 
+### Sounds
+
+`sound = { hover = id|false, press = id|false, disabled = id|false, volume =, pitch = }` in a style. `button`, `danger`
+and `toggle` play `minecraft:ui.button.click` on a click; hover and disabled clicks are silent (`false`) until a theme
+sets an id. A disabled widget plays only its `disabled` sound, never `hover`. Where the sound is heard follows the mode
+of its look: `hover` sounds follow `hover`, `press` and `disabled` sounds follow `press`. `"viewer"` plays it to that
+player only; `"shared"` plays it at the widget for nearby players. A per-player panel always plays to its player.
+
+```lua
+ui.panel { at = pos, theme = { button = { sound = { hover = "minecraft:block.note_block.hat", volume = 0.3 } } } } { ... }
+```
+
 ## Input
 
 - Hover: each tick, for every viewer, the ray `eyePos` + `dir` is intersected with the panel plane and mapped to the

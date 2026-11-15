@@ -221,12 +221,14 @@ local DEFAULT_THEME = {
         hover = { bg = 0xFF565656, scale = 1.05, z = 0.02 },
         press = { bg = 0xFF262626, scale = 0.96 },
         disabled = { bg = 0xFF2A2A2A, fg = 0xFF808080 },
+        sound = { press = "minecraft:ui.button.click", hover = false, disabled = false, volume = 0.6, pitch = 1 },
     },
     danger = {
         bg = 0xFF8B2020, fg = 0xFFFFFFFF,
         hover = { bg = 0xFFB02A2A, scale = 1.05, z = 0.02 },
         press = { bg = 0xFF661818, scale = 0.96 },
         disabled = { bg = 0xFF3A2222, fg = 0xFF808080 },
+        sound = { press = "minecraft:ui.button.click", hover = false, disabled = false, volume = 0.6, pitch = 0.8 },
     },
     bar = { bg = 0x80000000, fg = 0xFF33CC33 },
     toggle = {
@@ -234,16 +236,25 @@ local DEFAULT_THEME = {
         hover = { scale = 1.05, z = 0.02 },
         press = { scale = 0.95 },
         disabled = { bg = 0xFF2A2A2A, on = 0xFF1A6619, fg = 0xFF808080 },
+        sound = { press = "minecraft:ui.button.click", hover = false, disabled = false, volume = 0.6, pitch = 1.2 },
     },
 }
 
+local function shallow(a, b)
+    local r = {}
+    for k, v in pairs(a or {}) do r[k] = v end
+    for k, v in pairs(b or {}) do r[k] = v end
+    return r
+end
+
+-- Fields of `b` over those of `a`; the state tables and `sound` merge field by field too.
 local function mergeStyle(a, b)
     local r = {}
     for k, v in pairs(a or {}) do
-        r[k] = STATES[k] and mergeStyle(v, nil) or v
+        if STATES[k] or k == "sound" then r[k] = shallow(v) else r[k] = v end
     end
     for k, v in pairs(b or {}) do
-        if STATES[k] then r[k] = mergeStyle(r[k], v) else r[k] = v end
+        if STATES[k] or k == "sound" then r[k] = shallow(r[k], v) else r[k] = v end
     end
     return r
 end
@@ -660,7 +671,11 @@ end
 
 function Instance:activate(node, player)
     local p = node.p
-    if p.disabled then return end
+    if p.disabled then
+        self:sound(node, "disabled", player)
+        return
+    end
+    self:sound(node, "press", player)
     if node.kind == "toggle" then
         local src, new = node.desc.value, not truthy(p.value)
         if ref.isRef(src) then
@@ -684,6 +699,24 @@ function Instance:activate(node, player)
         self:pressFor(node, player)
     end
     if node.handlers.click then node.handlers.click(player) end
+end
+
+-- Plays the style's `sound[which]` ("hover", "press", "disabled") for a widget: to `player` alone when the look is per
+-- viewer, at the widget for nearby players when it is shared. A per-player panel has one viewer: always that player.
+function Instance:sound(node, which, player)
+    if which == "hover" and node.p.disabled then return end
+    local snd = ui.resolveStyle(self.panel.theme, node.p.style or node.kind).sound
+    local id = snd and snd[which]
+    if not id then return end
+    local volume, pitch = snd.volume or 1, snd.pitch or 1
+    if self.viewers or modeOf(node, which == "hover" and "hover" or "press") == "viewer" then
+        (self.player or player):playSound(id, volume, pitch)
+    else
+        local panel = self.panel
+        local cu, cv = centre(node, self.frame)
+        local o = ui.offset(self.frame, cu, cv, 0)
+        panel.world:playSound(id, { x = panel.at.x + o.x, y = panel.at.y + o.y, z = panel.at.z + o.z }, volume, pitch)
+    end
 end
 
 -- Press look for one player of a shared panel; their hover overlay on that widget gives way meanwhile.
@@ -753,7 +786,10 @@ function Instance:tickShared()
         if cur and cur.removed then cur = nil end
         if cur ~= want then
             if cur then cur:overlayHide("hover", player) end
-            if want then want:overlayShow("hover", player) end
+            if want then
+                want:overlayShow("hover", player)
+                self:sound(want, "hover", player)
+            end
             shown[key] = want
         end
     end
@@ -770,6 +806,7 @@ function Instance:tickShared()
             if (node.hovered or false) ~= now then
                 node.hovered = now
                 node:render(HOVER_INTERP)
+                if now then self:sound(node, "hover") end
             end
         end
     end)
@@ -788,6 +825,7 @@ function Instance:tick()
             if (node.hovered or false) ~= now then
                 node.hovered = now
                 node:render(HOVER_INTERP)
+                if now then self:sound(node, "hover") end
             end
         end
     end)

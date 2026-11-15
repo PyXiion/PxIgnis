@@ -49,6 +49,7 @@ class Ui3dLuaTest {
             function Core:onAttack(fn) self.attack = fn end
 
             cores = {}
+            sounds = {}
             rayResult = nil
             world = {
                 name = "overworld",
@@ -59,6 +60,9 @@ class Ui3dLuaTest {
                     return c
                 end,
                 raycast = function() return rayResult end,
+                playSound = function(_, id, pos, volume, pitch)
+                    sounds[#sounds + 1] = { who = "world", id = id, pos = pos, volume = volume, pitch = pitch }
+                end,
             }
             function mc.world() return world end
 
@@ -73,7 +77,7 @@ class Ui3dLuaTest {
             end
             function shield() for i = #cores, 1, -1 do local k = cores[i]; if k.kind == "interaction" and k.valid then return k end end end
             function player(x, y, z, dx, dy, dz)
-                return { uuid = "p" .. x, eyePos = { x = x, y = y, z = z }, dir = { x = dx, y = dy, z = dz }, pos = { x = x, y = y - 1.6, z = z } }
+                return { uuid = "p" .. x, playSound = function(self, id, volume, pitch) sounds[#sounds + 1] = { who = self.uuid, id = id, volume = volume, pitch = pitch } end, eyePos = { x = x, y = y, z = z }, dir = { x = dx, y = dy, z = dz }, pos = { x = x, y = y - 1.6, z = z } }
             end
             """.trimIndent()
         )
@@ -615,6 +619,65 @@ class Ui3dLuaTest {
                 local x, y = ui.project(f, { x = best.x0 - e - f.w / 2, y = 64, z = 3 }, { x = 0, y = 0, z = -1 })
                 assert(ui.hit(inst.root, x, y) ~= node, id .. " outside")
             end
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `button sounds follow the press and hover modes, disabled widgets stay silent unless configured`() {
+        run(
+            twoButtons + """
+            local th = ui.theme({ button = { sound = { hover = "test:tick", disabled = "test:deny" } } })
+            eq(th.button.sound.press, "minecraft:ui.button.click", "theme merges sound fields")
+            eq(th.button.sound.volume, 0.6)
+
+            -- default theme: press clicks, hover is silent. viewer: only the clicker hears it
+            local p = build({}, { "A", grow = true }, { "B", grow = true })
+            tick(1)
+            eq(#sounds, 0, "hover is silent by default")
+            shield().click(v1, "main")
+            eq(#sounds, 1); eq(sounds[1].who, "p-0.8"); eq(sounds[1].id, "minecraft:ui.button.click")
+            near(sounds[1].volume, 0.6)
+            p:remove()
+
+            -- shared press: played at the widget for nearby players
+            sounds = {}
+            p = build({ press = "shared" }, { "A", grow = true }, { "B", grow = true })
+            shield().click(v1, "main")
+            eq(#sounds, 1); eq(sounds[1].who, "world")
+            near(sounds[1].pos.z, 0); near(sounds[1].pos.y, 64, "widget centre height")
+            assert(sounds[1].pos.x < 0, "at widget A, the left one")
+            p:remove()
+
+            -- hover sound (theme): viewer mode plays per player once per hover, shared plays once for the widget
+            sounds = {}
+            p = build({ theme = { button = { sound = { hover = "test:tick" } } } }, { "A", grow = true }, { "B", grow = true })
+            tick(3)
+            eq(#sounds, 2, "each viewer hears their own hover once")
+            local who = { sounds[1].who, sounds[2].who }; table.sort(who)
+            eq(who[1], "p-0.8"); eq(who[2], "p0.8"); eq(sounds[1].id, "test:tick")
+            p:remove()
+            sounds = {}
+            p = build({ hover = "shared", theme = { button = { sound = { hover = "test:tick" } } } }, { "A", grow = true }, { "A2", grow = true })
+            mc.players[2] = player(-0.7, 64, 3, 0, 0, -1)
+            tick(3)
+            eq(#sounds, 1, "one sound for the widget"); eq(sounds[1].who, "world")
+            p:remove()
+
+            -- disabled: silent by default, `sound.disabled` plays a deny sound; no hover sound either
+            sounds = {}
+            mc.players[2] = nil
+            p = build({}, { "A", grow = true, disabled = true }, { "B", grow = true })
+            tick(2)
+            shield().click(v1, "main")
+            eq(#sounds, 0, "disabled button is silent")
+            p:remove()
+            p = build({ theme = { button = { sound = { hover = "test:tick", disabled = "test:deny" } } } }, { "A", grow = true, disabled = true }, { "B", grow = true })
+            tick(2)
+            eq(#sounds, 0, "no hover sound on a disabled widget")
+            shield().click(v1, "main")
+            eq(#sounds, 1); eq(sounds[1].id, "test:deny"); eq(sounds[1].who, "p-0.8")
+            p:remove()
             """.trimIndent()
         )
     }

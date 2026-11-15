@@ -16,6 +16,15 @@
 ---@field hover? Ui3dStyle
 ---@field press? Ui3dStyle
 ---@field disabled? Ui3dStyle
+---@field sound? Ui3dSound
+
+---Sounds of an interactive widget; an id, or `false` for none.
+---@class Ui3dSound
+---@field hover? string|false      -- when a player starts pointing at the widget
+---@field press? string|false      -- on a click
+---@field disabled? string|false   -- on a click of a disabled widget
+---@field volume? number
+---@field pitch? number
 
 ---@class Ui3dCommon
 ---@field id? string
