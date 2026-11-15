@@ -1,0 +1,7 @@
+{
+  "id": "hello_world",
+  "version": "0.1.0",
+  "entry": "init.lua",
+  "depends": {},
+  "optional": {}
+}
